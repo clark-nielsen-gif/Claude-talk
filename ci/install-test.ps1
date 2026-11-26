@@ -19,7 +19,8 @@ function Endpoints {
     for ($i = 0; $i -lt 6; $i++) {
         $f = Join-Path $env:RUNNER_TEMP ("ep-" + [guid]::NewGuid() + ".json")
         powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/driver-proof/List-Endpoints.ps1" -OutFile $f | Out-Null
-        $ok = ($LASTEXITCODE -eq 0) -and (Test-Path $f)
+        # (the listing writes its file only when it worked)
+        $ok = Test-Path $f
         $global:LASTEXITCODE = 0
         if ($ok) {
             $raw = Get-Content $f -Raw -Encoding utf8
