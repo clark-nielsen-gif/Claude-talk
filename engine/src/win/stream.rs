@@ -491,6 +491,8 @@ fn resolve_pid(target: &ProcessTarget) -> Option<u32> {
 }
 
 fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> Ended {
+    // reopen everything if Windows' audio service restarts meanwhile
+    let service_gen = super::service::generation();
     // ---- open (may allocate) ----
     let mut proc_handle: Option<ProcHandle> = None;
     let fill_silence;
@@ -577,7 +579,7 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         if ctx.stopping() {
             break Ended::Stop;
         }
-        if ctx.take_restart() || ctx.paused() {
+        if ctx.take_restart() || ctx.paused() || super::service::current() != service_gen {
             break Ended::Restart;
         }
         if n_handles == 3 && w.0 == WAIT_OBJECT_0.0 + 2 {
@@ -651,6 +653,8 @@ fn finish(client: &IAudioClient, ended: Ended) -> Ended {
 }
 
 fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended {
+    // reopen everything if Windows' audio service restarts meanwhile
+    let service_gen = super::service::generation();
     // ---- open ----
     let (dev, info) = match devices::resolve(sel) {
         Ok(v) => v,
@@ -711,7 +715,7 @@ fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended
         if ctx.stopping() {
             break Ended::Stop;
         }
-        if ctx.take_restart() || ctx.paused() {
+        if ctx.take_restart() || ctx.paused() || super::service::current() != service_gen {
             break Ended::Restart;
         }
         if w == WAIT_TIMEOUT {

@@ -11,6 +11,7 @@ pub mod devices;
 pub mod host;
 pub mod policy;
 pub mod process;
+pub mod service;
 pub mod sessions;
 pub mod stream;
 
