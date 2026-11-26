@@ -62,6 +62,9 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory results | Out-Null
+          # Windows Server images ship with the audio service disabled.
+          Set-Service Audiosrv -StartupType Automatic; Start-Service Audiosrv
+          Get-Service Audiosrv, AudioEndpointBuilder | Format-Table Name, Status, StartType
           ci/driver-proof/Report-Audio.ps1 -OutFile results\01-baseline.json -Label baseline
 
       - name: Download official packages from vb-audio.com
@@ -108,26 +111,26 @@ jobs:
           "VB-Audio packages in DriverStore:"; $dirs.FullName
           ci/driver-proof/Assert-KernelSignature.ps1 -Path $dirs.FullName -OutFile results\05-signature-installed.json
 
-      - name: Rename the virtual microphone (Core Audio API, SYSTEM fallback)
+      - name: Rename the virtual microphone, then verify the name exactly as apps see it
         if: always()
         shell: powershell
         run: |
-          $d = [char]0x2013   # en dash; kept out of the YAML so PowerShell 5.1 cannot mis-decode it
-          $m = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc "Claude Talk $d til Discord" -NewInterface ''
-          "method=$m" | Tee-Object results\rename-method.txt
-
-      - name: Verify the name exactly as apps see it
-        if: always()
-        shell: powershell
-        run: |
-          $d = [char]0x2013
+          $d = [char]0x2013   # en dash; built here so PowerShell 5.1 cannot mis-decode it
           $want = "Claude Talk $d til Discord"
-          $rows = powershell -NoProfile -ExecutionPolicy Bypass -File ci/driver-proof/List-Endpoints.ps1 -OutFile results\06-endpoints-after-rename.json
-          $cap = Get-Content results\06-endpoints-after-rename.json -Raw -Encoding utf8 | ConvertFrom-Json | Where-Object Flow -eq 'Capture'
-          $cap | ForEach-Object { "capture endpoint: '$($_.FriendlyName)'" } | Tee-Object results\capture-names.txt
-          $hit = $cap | Where-Object { $_.FriendlyName -like "$want*" } | Select-Object -First 1
-          if (-not $hit) { throw "Virtual microphone '$want' not found." }
-          if ($hit.FriendlyName -ne $want) { "::warning::Name shown to apps is '$($hit.FriendlyName)', not exactly '$want'." } else { "EXACT name verified: '$want'" }
+          function Read-Capture([string] $file) {
+            powershell -NoProfile -ExecutionPolicy Bypass -File ci/driver-proof/List-Endpoints.ps1 -OutFile $file | Out-Null
+            (Get-Content $file -Raw -Encoding utf8 | ConvertFrom-Json) | ForEach-Object { $_ } | Where-Object Flow -eq 'Capture'
+          }
+          # Variant 1: device description + interface name, then also the composed friendly name.
+          $m = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc $want -NewInterface 'VB-Audio' -AlsoFriendlyName
+          $now = Read-Capture results\06a-after-rename.json
+          Restart-Service Audiosrv -Force; Start-Sleep 3
+          $afterRestart = Read-Capture results\06b-after-audiosrv-restart.json
+          @("method=$m") + ($now | ForEach-Object { "right after rename: '$($_.FriendlyName)'" }) + ($afterRestart | ForEach-Object { "after AudioSrv restart: '$($_.FriendlyName)'" }) |
+            Tee-Object results\rename-result.txt
+          $hit = $afterRestart | Where-Object { $_.FriendlyName -like "$want*" } | Select-Object -First 1
+          if (-not $hit) { throw "Virtual microphone '$want' not found after AudioSrv restart." }
+          if ($hit.FriendlyName -eq $want) { "EXACT name verified: '$want'" } else { "Name shown to apps: '$($hit.FriendlyName)'" }
 
       - name: Publish results
         if: always()

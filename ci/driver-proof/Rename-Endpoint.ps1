@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory)] [string] $MatchFriendlyName,   # regex on current PKEY_Device_FriendlyName
     [Parameter(Mandatory)] [string] $NewDeviceDesc,
     [string] $NewInterface,                              # optional: replaces the "(...)" suffix
+    [switch] $AlsoFriendlyName,                          # also write PKEY_Device_FriendlyName itself
     [switch] $RegistryOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -56,7 +57,7 @@ public static class EndpointRename {
     }
 
     // Returns one line per matched endpoint: "<id>|<old name>|<hresult of write+commit or 'readonly'>"
-    public static List<string> Rename(int flow, string pattern, string desc, string iface) {
+    public static List<string> Rename(int flow, string pattern, string desc, string iface, bool friendly) {
         var outp = new List<string>();
         var rx = new System.Text.RegularExpressions.Regex(pattern);
         var e = (IMMDeviceEnumerator)new MMDeviceEnumerator();
@@ -75,6 +76,7 @@ public static class EndpointRename {
             if (hr != 0) { outp.Add(id + "|" + name + "|open:0x" + hr.ToString("X8")); continue; }
             hr = Write(w, kDesc, desc);
             if (hr == 0 && iface != null) hr = Write(w, kIface, iface);
+            if (hr == 0 && friendly) hr = Write(w, kFriendly, desc);
             if (hr == 0) hr = w.Commit();
             outp.Add(id + "|" + name + "|0x" + hr.ToString("X8"));
         }
@@ -87,7 +89,7 @@ $flowId = if ($Flow -eq 'Render') { 0 } else { 1 }
 $iface = if ($PSBoundParameters.ContainsKey('NewInterface')) { $NewInterface } else { $null }
 $apiOk = $false
 if (-not $RegistryOnly) {
-    $lines = [EndpointRename]::Rename($flowId, $MatchFriendlyName, $NewDeviceDesc, $iface)
+    $lines = [EndpointRename]::Rename($flowId, $MatchFriendlyName, $NewDeviceDesc, $iface, [bool]$AlsoFriendlyName)
     if (-not $lines) { throw "No $Flow endpoint matches '$MatchFriendlyName'." }
     $lines | ForEach-Object { Write-Host "API rename: $_" }
     $apiOk = -not ($lines | Where-Object { $_ -notmatch '\|0x00000000$' })

@@ -52,3 +52,4 @@ foreach ($r in $results) {
 }
 $bad = $results | Where-Object { -not $_.ProductionOk }
 if ($bad -and -not $NoThrow) { throw "Not production-signed for kernel mode: $(($bad | ForEach-Object Driver) -join ', ')" }
+exit 0
