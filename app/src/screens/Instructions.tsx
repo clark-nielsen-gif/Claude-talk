@@ -100,6 +100,11 @@ export function Instructions() {
         <div className="row preview">
           <span className="small">{t.instructions.preview}</span>
           <p className={preview ? 'quote' : 'small'}>{preview || t.instructions.nothing}</p>
+          {preview && (
+            <button className="btn quiet" style={{ alignSelf: 'flex-start' }} onClick={() => {
+              navigator.clipboard.writeText(preview).then(() => toast(t.instructions.copied), () => toast(t.errors.generic));
+            }}>{t.instructions.copy}</button>
+          )}
         </div>
         {row(t.instructions.autoSend, ins.autoSend, (v) => change({ autoSend: v }))}
         <div className="row">

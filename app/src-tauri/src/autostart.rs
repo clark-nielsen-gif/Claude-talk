@@ -142,11 +142,11 @@ pub fn remove_entries(all_users: bool) {
             let mut doomed: Vec<Vec<u16>> = Vec::new();
             let mut i = 0u32;
             loop {
-                let mut name = [0u16; 512];
+                let mut name = vec![0u16; 16384];
                 let mut nlen = name.len() as u32;
-                let mut data = vec![0u8; 4096];
+                let mut data = vec![0u8; 65536];
                 let mut dlen = data.len() as u32;
-                if RegEnumValueW(
+                let r = RegEnumValueW(
                     key,
                     i,
                     Some(PWSTR(name.as_mut_ptr())),
@@ -155,9 +155,12 @@ pub fn remove_entries(all_users: bool) {
                     None,
                     Some(data.as_mut_ptr()),
                     Some(&mut dlen),
-                )
-                .is_err()
-                {
+                );
+                if r == windows::Win32::Foundation::ERROR_MORE_DATA {
+                    i += 1; // a huge value is not ours; look at the next
+                    continue;
+                }
+                if r.is_err() {
                     break;
                 }
                 let n = String::from_utf16_lossy(&name[..nlen as usize]).to_lowercase();

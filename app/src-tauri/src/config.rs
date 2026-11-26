@@ -207,6 +207,13 @@ pub struct Config {
     /// the program whose sound is Claude's voice (claude.exe, chrome.exe,
     /// msedge.exe), or none.
     pub external_claude: Option<String>,
+    /// The microphone the user speaks into (endpoint id), or None for
+    /// Windows' default microphone. Taken over from Discord when Discord
+    /// used a specific microphone, so the voice in the call stays the same.
+    pub microphone: Option<String>,
+    /// What the user had set as Discord's input in Windows' "App volume and
+    /// device preferences" before Claude Talk (given back on restore).
+    pub discord_own_input: Option<String>,
     pub instructions: Instructions,
     /// Claude hears the others in the call (off: only you). Enforced by the
     /// routing, not by asking Claude.
@@ -234,6 +241,8 @@ impl Default for Config {
             mixer: Mixer::default(),
             presets: Vec::new(),
             external_claude: None,
+            microphone: None,
+            discord_own_input: None,
             instructions: Instructions::default(),
             claude_hears_discord: true,
             close_hint_shown: false,
@@ -241,17 +250,34 @@ impl Default for Config {
     }
 }
 
+/// config.json exists but could not be read at start (see `Config::load`).
+static UNREAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 impl Config {
     /// Loads the file. A missing file gives the defaults. A damaged one, or
     /// one from a newer Claude Talk, keeps every setting that can still be
     /// read; a copy of the original is kept next to it (`.json.bad` /
     /// `.json.newer`) for going back and for the error report.
     pub fn load(path: &Path) -> Config {
-        let bytes = match std::fs::read(path) {
+        // an antivirus scan at sign-in can hold the file for a moment
+        let mut read = std::fs::read(path);
+        for _ in 0..10 {
+            match &read {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    read = std::fs::read(path);
+                }
+                _ => break,
+            }
+        }
+        let bytes = match read {
             Ok(b) => b,
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::NotFound {
+                    // the settings exist but can't be read: don't let the
+                    // first save replace them with defaults
                     log::warn!("config.json could not be read ({e}); using defaults");
+                    UNREAD.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 return Config::default();
             }
@@ -336,6 +362,11 @@ impl Config {
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
+        }
+        if UNREAD.load(std::sync::atomic::Ordering::Relaxed) {
+            // keep the settings that could not be read before writing over them
+            std::fs::copy(path, path.with_extension("json.unread"))?;
+            UNREAD.store(false, std::sync::atomic::Ordering::Relaxed);
         }
         let tmp = path.with_extension("json.tmp");
         std::fs::write(

@@ -25,6 +25,7 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
    - [ ] Claude reagerer ikke på sin egen stemme (Claude hører ikke sig selv)
 9. **Højttalere** (valgfrit). Skift til pc-højttalere. Der kommer en besked om højttalere, og ekkodæmpningen slås til.
    - [ ] Din ven hører ikke Claude to gange, og Claude hører ikke sig selv
+   - [ ] Også med bærbarens egne højttalere og mikrofon (K34)
 10. **Knapperne.** Tryk »Gør Claude stille« og derefter »Slå min mikrofon fra«.
     - [ ] Din ven hører ikke Claude, men du gør. Derefter hører hverken din ven eller Claude dig.
     - [ ] Genvejstasterne Ctrl+Shift+F9 og Ctrl+Shift+F10 gør det samme
@@ -44,8 +45,12 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
     - [ ] Inden for få sekunder spiller lyden igen i dine høretelefoner, og startsiden viser »Vi har sat din lyd tilbage«
 16. **Luk midt i opkaldet.** Højreklik på ikonet ved uret, og vælg »Luk Claude Talk«.
     - [ ] Claude Talk spørger, om Discord skal genstartes. Svar **Ja**: Discord starter igen, og din ven kan høre dig. Start Claude Talk igen bagefter.
-17. **Gendan.** Indstillinger → »Gendan normale lydindstillinger«.
+17. **Gendan.** Indstillinger → »Gendan normale lydindstillinger« (tryk to gange: »Ja, gendan«).
     - [ ] Discord bruger igen din almindelige mikrofon
+    - [ ] Feltet Discord siger »Discord bruger din egen mikrofon« uden advarsel, også i et opkald
+17b. **Mikrofon valgt i Discord.** Før installationen: vælg en bestemt mikrofon i Discord (ikke »Standard«), som ikke er Windows' standardmikrofon. Installer Claude Talk, og følg vejledningen.
+    - [ ] Vejledningen og feltet Dig viser den mikrofon, du valgte i Discord, og din ven hører den mikrofon
+    - [ ] Under Indstillinger → Din mikrofon kan du vælge en anden og gå tilbage til »Windows' standard«
 18. **Afinstaller** via Windows' »Installerede apps«.
     - [ ] Alle tekster i afinstallationen er på dansk. Sæt flueben ved »Slet også indstillinger og Claude-login«.
     - [ ] Claude Talk, »Claude Talk – til Discord«-mikrofonen og autostart er væk. Discord bruger din almindelige mikrofon. Åbner du Claude Talk igen efter en ny installation, skal du logge ind på Claude igen.

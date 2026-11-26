@@ -77,7 +77,7 @@ impl HostConfig {
     pub fn standard(claude_pid: Arc<AtomicU32>) -> Self {
         let own: Vec<String> = devices::patterns(devices::NOT_A_MICROPHONE);
         HostConfig {
-            mic: SourceKind::Microphone(DeviceSelector::DefaultExcluding(Flow::Capture, own)),
+            mic: SourceKind::Microphone(DeviceSelector::PreferredMicrophone(own)),
             to_discord: DeviceSelector::FirstMatching(Flow::Render, cable_render_patterns()),
             discord: ProcessTarget::ExeNames(discord_executables()),
             claude_pid,
@@ -610,9 +610,14 @@ impl AudioHost {
                     // read both as one: a push between the two reads would
                     // date this frame a frame too late
                     let (rest, newest) = loop {
+                        let seq = mic_stats.push_seq.load(Ordering::Acquire);
+                        if seq % 2 == 1 {
+                            std::thread::yield_now(); // a push is half done
+                            continue;
+                        }
                         let slots = raw.slots();
                         let newest = mic_stats.last_push_ns.load(Ordering::Acquire);
-                        if raw.slots() == slots {
+                        if mic_stats.push_seq.load(Ordering::Acquire) == seq {
                             break ((slots / ch) as u64, newest);
                         }
                     };
@@ -874,11 +879,9 @@ pub fn extra_cable() -> Option<ExtraCable> {
     })
 }
 
-/// Whether the virtual cable is installed (render side found).
+/// Whether the virtual cable is installed (render side found, also when it
+/// is disabled in Windows' sound settings: then it needs turning on, not
+/// installing).
 pub fn cable_installed() -> bool {
-    devices::resolve(&DeviceSelector::FirstMatching(
-        Flow::Render,
-        cable_render_patterns(),
-    ))
-    .is_ok()
+    devices::exists_enabled_or_disabled(Flow::Render, &cable_render_patterns())
 }

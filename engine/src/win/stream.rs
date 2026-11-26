@@ -96,6 +96,9 @@ pub struct StreamStatus {
     pub period_frames: AtomicU32,
     pub restarts: AtomicU32,
     pub discontinuities: AtomicU64,
+    /// Packets without a time from Windows: the timeline repair above can't
+    /// work for them (shown in the diagnostics).
+    pub untimed_packets: AtomicU64,
     pub silence_filled_frames: AtomicU64,
     /// Set by the control thread to make the stream reopen its device (e.g.
     /// the Windows default device changed).
@@ -551,9 +554,10 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         flags |= AUDCLNT_STREAMFLAGS_LOOPBACK;
     }
     let fmt = engine_format();
-    // 20 ms buffer: enough slack for the engine to schedule us.
+    // 100 ms of room: a late wake-up loses nothing (event mode, so packets
+    // are still taken as soon as they arrive: no extra delay).
     if let Err(e) =
-        unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 200_000, 0, &fmt, None) }
+        unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 1_000_000, 0, &fmt, None) }
     {
         return e.into();
     }
@@ -583,16 +587,18 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         2
     };
     let mut last_data = Instant::now();
-    // where the last packet's sound ended, in the packets' clock (100 ns QPC
-    // units). Silence continues from there, not from when the packet was
-    // received: a packet that came late would otherwise move the timeline.
-    let mut last_end = qpc_100ns();
+    // The timeline, in the packets' clock (100 ns QPC units): how far the
+    // sound pushed so far reaches – packets and the silence put in for them.
+    // A late packet overlaps silence already sent, and the overlap is
+    // dropped; a lost packet leaves a gap, and the gap is filled with
+    // silence. So the timeline (and the echo reference's delay) never moves.
+    let mut pos = qpc_100ns();
+    // pos comes from a packet or from silence (not just the start time)
+    let mut timed = false;
     // silence fed since the program went quiet: (from, frames sent), QPC
     let mut quiet: Option<(u64, u64)> = None;
-    // how far that silence reached, in the packets' clock (100 ns QPC units):
-    // a packet that was only late overlaps it, and the overlap is dropped so
-    // the timeline (and the echo reference's delay) does not grow
-    let mut silence_until: Option<u64> = None;
+    // the last sample pushed, to fade out into silence without a click
+    let mut last_sample = [0f32; ENGINE_CHANNELS];
     // A quiet program sends no packets; look every 5 ms so the silence that
     // replaces them is on time (late silence would make the routes underrun
     // and grow their buffers).
@@ -626,25 +632,38 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             } {
                 return finish(&client, e.into());
             }
-            // part of this packet was already played as silence (it came late)
-            let skip = match silence_until {
-                Some(end) if qpc != 0 && end > qpc => {
-                    (((end - qpc) as f64 * ENGINE_RATE as f64 / 1e7) as u32).min(frames)
-                }
-                _ => 0,
-            };
             if bflags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32 != 0 {
                 ctx.status.discontinuities.fetch_add(1, Ordering::Relaxed);
             }
-            if skip < frames {
-                // the rest of this packet (and all later ones) is new sound
-                silence_until = None;
+            if qpc == 0 {
+                ctx.status.untimed_packets.fetch_add(1, Ordering::Relaxed);
+            }
+            let to_frames = |d: u64| (d as f64 * ENGINE_RATE as f64 / 1e7) as u64;
+            // part of this packet was already played as silence (it came
+            // late); small differences (< 0.5 ms) are clock rounding
+            let skip = if fill_silence && timed && qpc != 0 && pos > qpc + 5_000 {
+                (to_frames(pos - qpc) as u32).min(frames)
+            } else {
+                0
+            };
+            // packets were lost before this one: the time passed all the same
+            let gap = if fill_silence && timed && qpc != 0 && qpc > pos + 10_000 {
+                to_frames(qpc - pos).min(ENGINE_RATE as u64 / 10) as usize
+            } else {
+                0
+            };
+            if gap > 0 {
+                push_silence_after(fanout, &mut last_sample, gap);
+                ctx.status
+                    .silence_filled_frames
+                    .fetch_add(gap as u64, Ordering::Relaxed);
             }
             let keep = (frames - skip) as usize;
             if keep == 0 {
                 // entirely covered by the silence already sent
             } else if bflags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
                 fanout.push(None, ENGINE_CHANNELS, keep);
+                last_sample = [0.0; ENGINE_CHANNELS];
             } else {
                 let samples = unsafe {
                     std::slice::from_raw_parts(
@@ -653,7 +672,8 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                     )
                 };
                 let kept = &samples[skip as usize * ENGINE_CHANNELS..];
-                if skip > 0 {
+                last_sample.copy_from_slice(&kept[(keep - 1) * ENGINE_CHANNELS..]);
+                if skip > 0 || gap > 0 {
                     // sound after silence starts mid-packet: fade it in over
                     // 1 ms instead of a hard cut (a click)
                     const FADE: usize = 48;
@@ -677,11 +697,15 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                     fanout.push(Some(kept), ENGINE_CHANNELS, keep);
                 }
             }
-            last_end = if qpc != 0 {
+            // A packet entirely covered by silence already sent ends before
+            // `pos`: the timeline stays where the silence reached.
+            let end = if qpc != 0 {
                 qpc + frames as u64 * 10_000_000 / ENGINE_RATE as u64
             } else {
                 qpc_100ns()
             };
+            pos = if timed { pos.max(end) } else { end };
+            timed = true;
             if let Err(e) = unsafe { capture.ReleaseBuffer(frames) } {
                 return finish(&client, e.into());
             }
@@ -697,13 +721,15 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             // sample in real time from the last packet, so mixing continues
             // and drift control stays locked.
             let now_qpc = qpc_100ns();
-            let (since, sent) = quiet.get_or_insert((last_end, 0));
+            let (since, sent) = quiet.get_or_insert((pos, 0));
             let due = (now_qpc.saturating_sub(*since) as f64 * ENGINE_RATE as f64 / 1e7) as u64;
             let frames = due.saturating_sub(*sent).min(ENGINE_RATE as u64 / 10) as usize;
             if frames > 0 {
-                fanout.push(None, ENGINE_CHANNELS, frames);
+                push_silence_after(fanout, &mut last_sample, frames);
                 *sent += frames as u64;
-                silence_until = Some(now_qpc);
+                // exactly as far as the silence sent reaches
+                pos = *since + *sent * 10_000_000 / ENGINE_RATE as u64;
+                timed = true;
                 ctx.status
                     .silence_filled_frames
                     .fetch_add(frames as u64, Ordering::Relaxed);
@@ -711,6 +737,33 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         }
     };
     finish(&client, ended)
+}
+
+/// Silence after sound: the first millisecond fades out from the last
+/// sample pushed instead of cutting to zero (a click on every route).
+fn push_silence_after(
+    fanout: &mut crate::mixer::SourceFanout,
+    last: &mut [f32; ENGINE_CHANNELS],
+    frames: usize,
+) {
+    const FADE: usize = 48;
+    let n = frames.min(FADE);
+    if last.iter().any(|v| *v != 0.0) && n > 0 {
+        let mut ramp = [0f32; FADE * ENGINE_CHANNELS];
+        for f in 0..n {
+            let g = 1.0 - (f + 1) as f32 / (n + 1) as f32;
+            for c in 0..ENGINE_CHANNELS {
+                ramp[f * ENGINE_CHANNELS + c] = last[c] * g;
+            }
+        }
+        fanout.push(Some(&ramp[..n * ENGINE_CHANNELS]), ENGINE_CHANNELS, n);
+        if frames > n {
+            fanout.push(None, ENGINE_CHANNELS, frames - n);
+        }
+    } else {
+        fanout.push(None, ENGINE_CHANNELS, frames);
+    }
+    *last = [0.0; ENGINE_CHANNELS];
 }
 
 /// Now on the clock WASAPI uses for packet positions (100 ns units).

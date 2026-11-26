@@ -7,8 +7,12 @@ pub fn app_dir() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir);
     base.join("Claude Talk")
 }
+/// In `%LOCALAPPDATA%`: logs must not travel with roaming profiles.
 pub fn logs_dir() -> PathBuf {
-    app_dir().join("logs")
+    std::env::var_os("LOCALAPPDATA")
+        .map(|p| PathBuf::from(p).join("Claude Talk"))
+        .unwrap_or_else(app_dir)
+        .join("logs")
 }
 pub fn config_file() -> PathBuf {
     app_dir().join("config.json")

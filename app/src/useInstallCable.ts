@@ -13,6 +13,7 @@ export function useInstallCable(): { installing: boolean; install: () => void } 
       .then((code) => {
         if (code === 2) toast(t.errors.cableNoInternet);
         else if (code === 6) toast(t.errors.cableNoArm);
+        else if (code === 7) toast(t.errors.cableBrokenBody);
         else if (code !== 0) toast(t.errors.cableInstallFailed);
       })
       .catch((e) => {

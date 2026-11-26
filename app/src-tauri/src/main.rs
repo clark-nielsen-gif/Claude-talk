@@ -74,6 +74,20 @@ pub fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
         .find(|w| w.label == "main")
         .cloned()
     {
+        let mut cfg = cfg;
+        // fit the screen at 150-175 % scaling (1920×1080 is then 1280×720 or
+        // less, minus the taskbar), so the bottom buttons stay reachable
+        if let Some(m) = app.primary_monitor().ok().flatten() {
+            let size = m.size().to_logical::<f64>(m.scale_factor());
+            let (w, h) = (
+                (size.width - 40.0).max(480.0),
+                (size.height - 80.0).max(480.0),
+            );
+            cfg.width = cfg.width.min(w);
+            cfg.height = cfg.height.min(h);
+            cfg.min_width = cfg.min_width.map(|v| v.min(w));
+            cfg.min_height = cfg.min_height.map(|v| v.min(h));
+        }
         tauri::WebviewWindowBuilder::from_config(app, &cfg)?.build()?;
     }
     Ok(())
@@ -104,6 +118,7 @@ pub fn request_quit(app: &AppHandle) {
                     shutdown_inner(app, true);
                     if let Err(e) = discord::restart() {
                         log::warn!("could not restart Discord on quit: {e}");
+                        tell_restart_discord_yourself(da);
                     }
                     finish(app);
                     return;
@@ -113,6 +128,35 @@ pub fn request_quit(app: &AppHandle) {
         }
     }
     shutdown(app);
+}
+
+/// Discord could not be restarted for the user: say so, or it would keep
+/// recording the silent Claude Talk microphone.
+#[cfg(windows)]
+fn tell_restart_discord_yourself(da: bool) {
+    use windows::core::HSTRING;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        MessageBoxW, MB_ICONWARNING, MB_OK, MB_SETFOREGROUND, MB_TOPMOST,
+    };
+    let (title, text) = if da {
+        (
+            "Genstart Discord selv",
+            "Claude Talk kunne ikke genstarte Discord. Luk Discord helt (højreklik på ikonet ved uret, og vælg »Quit Discord«), og start det igen. Ellers kan de andre ikke høre dig.",
+        )
+    } else {
+        (
+            "Restart Discord yourself",
+            "Claude Talk couldn't restart Discord. Quit Discord completely (right-click its icon by the clock and choose “Quit Discord”), and start it again. Otherwise the others can't hear you.",
+        )
+    };
+    unsafe {
+        MessageBoxW(
+            None,
+            &HSTRING::from(text),
+            &HSTRING::from(title),
+            MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST,
+        );
+    }
 }
 
 #[cfg(windows)]
@@ -295,6 +339,8 @@ fn main() {
             mixer::load_preset,
             mixer::delete_preset,
             mixer::set_external_claude,
+            commands::list_microphones,
+            commands::set_microphone,
             commands::get_matrix,
             commands::set_route,
             commands::set_unlocked,
@@ -318,7 +364,9 @@ fn main() {
             }
             updates::check_in_background(handle.clone());
             let autostart = handle.state::<AppState>().config.lock().map(|c| c.autostart).unwrap_or(true);
-            autostart::apply(&handle, autostart);
+            // on a PC Claude Talk cannot work on (Windows 10), don't start
+            // with Windows every day just to say so
+            autostart::apply(&handle, autostart && info.supported);
             #[cfg(feature = "ci-testpage")]
             if let Ok(v) = std::env::var("CLAUDE_TALK_TEST_OPEN_CLAUDE") {
                 // the value is a delay in ms ("1": right away)

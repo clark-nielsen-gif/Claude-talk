@@ -11,23 +11,27 @@ function Adder({ kind, onDone }: { kind: 'source' | 'output'; onDone: (added: bo
   const [choices, setChoices] = useState<MixerChoices | null>(null);
   const [pick, setPick] = useState('');
   const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
   useEffect(() => { api.mixerChoices().then(setChoices); }, []);
   if (!choices) return null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!pick) return;
+    if (!pick || busy) return;
     const at = pick.indexOf(':');
     const [type, value] = [pick.slice(0, at), pick.slice(at + 1)];
     const label = name.trim() || (kind === 'source'
       ? [...choices.inputs, ...choices.programs].find((c) => c.value === value)?.label ?? ''
       : choices.outputs.find((c) => c.value === value)?.label ?? '');
+    setBusy(true);
     try {
       if (kind === 'source') await api.addMixerSource(type as 'input' | 'program', value, label);
       else await api.addMixerOutput(value, label);
       onDone(true);
     } catch {
       toast(t.errors.generic);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -48,7 +52,7 @@ function Adder({ kind, onDone }: { kind: 'source' | 'output'; onDone: (added: bo
         ) : choices.outputs.map((c) => <option key={c.value} value={`output:${c.value}`}>{c.label}</option>)}
       </select>
       <input type="text" value={name} maxLength={40} placeholder={t.advanced.nameOptional} aria-label={t.advanced.nameOptional} onChange={(e) => setName(e.target.value)} />
-      <button type="submit" className="btn primary" disabled={!pick}>{t.advanced.add}</button>
+      <button type="submit" className="btn primary" disabled={!pick || busy}>{t.advanced.add}</button>
       <button type="button" className="btn quiet" onClick={() => onDone(false)}>{t.advanced.cancel}</button>
       {kind === 'source' && choices.programs.length === 0 && <p className="small hint">{t.advanced.noPrograms}</p>}
     </form>
@@ -62,10 +66,23 @@ function RemoveButton({ item, onRemove }: { item: Labeled; onRemove: () => void 
   return <button className="remove" onClick={onRemove} aria-label={label} title={label}>{Icon.close()}</button>;
 }
 
+/** Claude Talk's own sources and outputs, named in the UI's language. */
+const builtIn: Record<number, { da: string; en: string }> = {
+  1: { da: 'Mikrofon', en: 'Microphone' },
+  101: { da: 'Til Discord', en: 'To Discord' },
+  102: { da: 'Til Claude', en: 'To Claude' },
+  103: { da: 'Lyt med', en: 'Listen in' },
+};
+
 /** Sources × outputs, a volume per cell. Echo cells are locked, loops refused. */
 export function Advanced({ info }: { info: AppInfo }) {
   const t = useT();
-  const { config, update, toast } = useApp();
+  const { config, update, toast, lang } = useApp();
+  const name = (item: Labeled) => (item.removable ? item.label : builtIn[item.id]?.[lang] ?? item.label);
+  // every change: an error is shown, and the table shows what really is
+  const act = (f: () => Promise<unknown>) => async () => {
+    try { await f(); } catch { toast(t.errors.generic); } finally { reload(); }
+  };
   const [external, setExternal] = useState<string | null>(config.externalClaude ?? null);
   const chooseExternal = async (v: string) => {
     const exe = v === 'off' ? null : v;
@@ -86,6 +103,7 @@ export function Advanced({ info }: { info: AppInfo }) {
   const [adding, setAdding] = useState<null | 'source' | 'output'>(null);
   const [presets, setPresets] = useState(config.presets ?? []);
   const [presetName, setPresetName] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const reload = useCallback(() => { api.matrix().then(setM); }, []);
   useEffect(reload, [reload, config.advancedUnlocked]);
   const reloadPresets = () => api.getConfig().then((c) => setPresets(c.presets ?? []));
@@ -104,7 +122,7 @@ export function Advanced({ info }: { info: AppInfo }) {
       toast(t.errors.presetName);
     }
   };
-  const loadPreset = async (name: string) => { await api.loadPreset(name); reload(); };
+  const loadPreset = (preset: string) => act(() => api.loadPreset(preset))();
 
   return (
     <div className="page">
@@ -120,7 +138,7 @@ export function Advanced({ info }: { info: AppInfo }) {
               <th scope="col">{t.advanced.sources}</th>
               {m.outputs.map((o) => (
                 <th key={o.id} scope="col">
-                  <span className="headname"><span className="name">{o.label}</span><RemoveButton item={o} onRemove={async () => { await api.removeMixerOutput(o.id); reload(); }} /></span>
+                  <span className="headname"><span className="name">{name(o)}</span><RemoveButton item={o} onRemove={act(() => api.removeMixerOutput(o.id))} /></span>
                 </th>
               ))}
             </tr>
@@ -129,32 +147,35 @@ export function Advanced({ info }: { info: AppInfo }) {
             {m.sources.map((s) => (
               <tr key={s.id}>
                 <th scope="row">
-                  <span className="headname"><span className="name">{s.label}</span><RemoveButton item={s} onRemove={async () => { await api.removeMixerSource(s.id); reload(); }} /></span>
+                  <span className="headname"><span className="name">{name(s)}</span><RemoveButton item={s} onRemove={act(() => api.removeMixerSource(s.id))} /></span>
                 </th>
                 {m.outputs.map((o) => {
                   const c = cell(s.id, o.id);
                   if (!c) return <td key={o.id} />;
                   if (c.state === 'locked' || c.state === 'loop') {
+                    const why = c.state === 'loop' ? t.advanced.loop : c.who === 'Du' ? t.advanced.lockedYou : fill(t.advanced.locked, { who: c.who ?? '' });
                     return (
                       <td key={o.id}>
-                        <div className="cell locked" title={c.state === 'loop' ? t.advanced.loop : c.who === 'Du' ? t.advanced.lockedYou : fill(t.advanced.locked, { who: c.who ?? '' })}>
+                        <div className="cell locked" title={why}>
                           {c.state === 'loop' ? t.advanced.loopShort : t.advanced.lockedShort}
+                          <span className="sr-only">{`: ${why}`}</span>
                         </div>
                       </td>
                     );
                   }
                   const on = c.state === 'on';
-                  const label = `${s.label} → ${o.label}`;
+                  const label = `${name(s)} → ${name(o)}`;
                   return (
                     <td key={o.id}>
                       <div className="cell">
-                        <Switch small on={on} label={label} onChange={async (v) => { await api.setRoute(s.id, o.id, v, c.gainDb); reload(); }} />
+                        <Switch small on={on} label={label} onChange={(v) => act(() => api.setRoute(s.id, o.id, v, c.gainDb))()} />
                         {on ? (
                           <>
                             <input
                               type="range" min={-30} max={6} step={1} value={c.gainDb}
                               aria-label={`${t.advanced.gain}: ${label}`}
-                              onChange={async (e) => { await api.setRoute(s.id, o.id, true, Number(e.target.value)); reload(); }}
+                              aria-valuetext={`${c.gainDb} dB`}
+                              onChange={(e) => act(() => api.setRoute(s.id, o.id, true, Number(e.target.value)))()}
                             />
                             <span className="small gain">{`${c.gainDb > 0 ? '+' : ''}${c.gainDb} dB`}</span>
                           </>
@@ -194,7 +215,12 @@ export function Advanced({ info }: { info: AppInfo }) {
             return (
               <span key={p.name} className="preset">
                 <button className="btn secondary" onClick={() => loadPreset(p.name)}>{p.name}</button>
-                <button className="remove" aria-label={del} title={del} onClick={async () => { await api.deletePreset(p.name); reloadPresets(); }}>{Icon.close()}</button>
+                <button className="remove" aria-label={del} title={del} onClick={async () => {
+                  if (confirmDelete !== p.name) { setConfirmDelete(p.name); toast(fill(t.advanced.deletePresetAgain, { name: p.name })); return; }
+                  setConfirmDelete(null);
+                  try { await api.deletePreset(p.name); } catch { toast(t.errors.generic); }
+                  reloadPresets();
+                }}>{Icon.close()}</button>
               </span>
             );
           })}

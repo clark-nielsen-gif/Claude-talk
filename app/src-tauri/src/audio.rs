@@ -66,6 +66,10 @@ mod imp {
         // this thread; started minimized there is no window to set it up
         let _com = ct_engine::win::ComGuard::new();
         let state = app.state::<AppState>().inner().clone();
+        if let Ok(c) = state.config.lock() {
+            ct_engine::win::devices::set_preferred_microphone(c.microphone.clone());
+            ct_engine::win::policy::set_discord_own_input(c.discord_own_input.clone());
+        }
         #[allow(unused_mut)]
         let mut cfg = HostConfig::standard(state.claude_pid.clone());
         // CI builds only: the "microphone" is a test program's sound.
@@ -221,6 +225,20 @@ mod imp {
         }
     }
 
+    /// Records from this microphone from now on (None: Windows' default).
+    pub fn use_microphone(app: &AppHandle, id: Option<String>) {
+        log::info!(
+            "microphone chosen: {}",
+            id.as_deref().unwrap_or("Windows' default")
+        );
+        ct_engine::win::devices::set_preferred_microphone(id);
+        let state = app.state::<AppState>();
+        let guard = state.audio.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(host) = guard.as_ref() {
+            host.restart_source(ids::MIC);
+        }
+    }
+
     /// The main window is on screen: visible and not minimized.
     fn window_shown(app: &AppHandle) -> bool {
         app.get_webview_window("main")
@@ -266,7 +284,7 @@ mod imp {
                 let e = peaks.entry("echo".into()).or_insert(0.0);
                 *e = e.max(p);
             }
-            if last_diag.elapsed() >= Duration::from_secs(5) {
+            if last_diag.elapsed() >= Duration::from_secs(30) {
                 last_diag = std::time::Instant::now();
                 let db = |v: f32| if v > 0.0 { 20.0 * v.log10() } else { -120.0 };
                 let levels: Vec<String> = peaks
@@ -397,7 +415,7 @@ mod imp {
 }
 
 #[cfg(windows)]
-pub use imp::{apply_switches, refresh_mic, start, starts_muted};
+pub use imp::{apply_switches, refresh_mic, start, starts_muted, use_microphone};
 
 #[cfg(not(windows))]
 pub fn start(_app: &AppHandle) {}
@@ -405,3 +423,5 @@ pub fn start(_app: &AppHandle) {}
 pub fn apply_switches(_app: &AppHandle) {}
 #[cfg(not(windows))]
 pub fn refresh_mic(_app: &AppHandle) {}
+#[cfg(not(windows))]
+pub fn use_microphone(_app: &AppHandle, _id: Option<String>) {}

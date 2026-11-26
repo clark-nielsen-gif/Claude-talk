@@ -3,18 +3,24 @@ import { api, type EchoMode, type Hotkeys, type Theme } from '../api';
 import { Switch } from '../components';
 import { useApp, useT } from '../context';
 
-/** Records a key combination like "Ctrl+Alt+D". */
-function KeyPicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+/** Records a key combination like "Ctrl+Shift+D". Only one listens at a time. */
+function KeyPicker({ value, onChange, label, listening, setListening }: {
+  value: string; onChange: (v: string) => void; label: string; listening: boolean; setListening: (on: boolean) => void;
+}) {
   const t = useT();
-  const [listening, setListening] = useState(false);
+  const [refused, setRefused] = useState(false);
   useEffect(() => {
-    if (!listening) return;
+    if (!listening) { setRefused(false); return; }
     const down = (e: KeyboardEvent) => {
       e.preventDefault();
       if (e.key === 'Escape') { setListening(false); return; }
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
       const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean) as string[];
-      if (mods.length === 0) return; // a global shortcut needs a modifier
+      // A global shortcut takes the keys from every program: Shift+M would
+      // swallow every capital M, Alt+letter opens menus, Ctrl+Alt is AltGr
+      // on Danish keyboards (@, £, $, €), and Alt+F4 closes windows.
+      const ok = (e.ctrlKey || e.metaKey) && !(e.ctrlKey && e.altKey && !e.metaKey);
+      if (!ok) { setRefused(true); return; }
       // letters, digits, F-keys and Space only: other keys (Æ, Ø, Å, "+")
       // cannot be registered as global shortcuts reliably
       const key = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : e.code === 'Space' ? 'Space' : /^F\d{1,2}$/.test(e.code) && e.code !== 'F12' ? e.code : null;
@@ -27,15 +33,48 @@ function KeyPicker({ value, onChange, label }: { value: string; onChange: (v: st
   }, [listening, onChange]);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-      <span className="kbd" aria-live="polite">{listening ? t.settings.pressKeys : value}</span>
-      <button className="btn quiet" aria-label={`${t.settings.change}: ${label}`} onClick={() => setListening(true)}>{t.settings.change}</button>
+      <span className="kbd" aria-live="polite">{listening ? (refused ? t.settings.keyNeedsCtrl : t.settings.pressKeys) : value}</span>
+      {listening
+        ? <button className="btn quiet" onClick={() => setListening(false)}>{t.settings.cancel}</button>
+        : <button className="btn quiet" aria-label={`${t.settings.change}: ${label}`} onClick={() => setListening(true)}>{t.settings.change}</button>}
     </div>
+  );
+}
+
+/** Which microphone is "you" (Windows' default, or one the user picks). */
+function MicPicker() {
+  const t = useT();
+  const { config, status, toast } = useApp();
+  const [mics, setMics] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { api.listMicrophones().then(setMics).catch(() => {}); }, [status?.micName]);
+  const choose = async (id: string) => {
+    try { await api.setMicrophone(id || null); } catch { toast(t.errors.generic); }
+  };
+  const chosen = config.microphone ?? '';
+  const known = !chosen || mics.some((m) => m.id === chosen);
+  return (
+    <select aria-label={t.settings.microphone} value={chosen} onChange={(e) => choose(e.target.value)} className="field">
+      <option value="">{!chosen && status?.micName ? `${t.settings.micDefault} (${status.micName})` : t.settings.micDefault}</option>
+      {mics.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+      {!known && <option value={chosen}>{status?.micName || chosen}</option>}
+    </select>
   );
 }
 
 export function Settings() {
   const t = useT();
   const { config, update, toast } = useApp();
+  const [listening, setListening] = useState<string | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  useEffect(() => {
+    if (!confirmRestore) return;
+    const id = setTimeout(() => setConfirmRestore(false), 6000);
+    return () => clearTimeout(id);
+  }, [confirmRestore]);
+  const picker = (key: keyof Hotkeys, label: string) => (
+    <KeyPicker label={label} value={config.hotkeys[key]} onChange={(v) => hk({ [key]: v })}
+      listening={listening === key} setListening={(on) => setListening(on ? key : null)} />
+  );
 
   const hk = (patch: Partial<Hotkeys>) => update({ hotkeys: { ...config.hotkeys, ...patch } });
   const seg = <T extends string>(value: T, options: [T, string][], set: (v: T) => void, label: string) => (
@@ -62,6 +101,13 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
+          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{t.settings.microphoneHint}</span></div>
+          <MicPicker />
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="row">
           <div className="text"><span className="label">{t.settings.startup}</span><span className="small">{t.settings.startupHint}</span></div>
           <Switch on={config.autostart} label={t.settings.startup} onChange={(v) => update({ autostart: v })} />
         </div>
@@ -73,11 +119,11 @@ export function Settings() {
 
       <h2 className="section-title">{t.settings.hotkeys}</h2>
       <div className="panel">
-        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteClaude}</span></div><KeyPicker label={t.settings.hkMuteClaude} value={config.hotkeys.muteClaudeToDiscord} onChange={(v) => hk({ muteClaudeToDiscord: v })} /></div>
-        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteMic}</span></div><KeyPicker label={t.settings.hkMuteMic} value={config.hotkeys.muteMic} onChange={(v) => hk({ muteMic: v })} /></div>
-        <div className="row"><div className="text"><span className="label">{t.settings.hkPtt}</span></div><KeyPicker label={t.settings.hkPtt} value={config.hotkeys.pushToTalkClaude} onChange={(v) => hk({ pushToTalkClaude: v })} /></div>
+        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteClaude}</span></div>{picker('muteClaudeToDiscord', t.settings.hkMuteClaude)}</div>
+        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteMic}</span></div>{picker('muteMic', t.settings.hkMuteMic)}</div>
+        <div className="row"><div className="text"><span className="label">{t.settings.hkPtt}</span></div>{picker('pushToTalkClaude', t.settings.hkPtt)}</div>
         <div className="row">
-          <div className="text"><span className="label">{t.settings.pttEnable}</span></div>
+          <div className="text"><span className="label">{t.settings.pttEnable}</span><span className="small">{t.settings.pttEnableHint}</span></div>
           <Switch on={config.pushToTalk} label={t.settings.pttEnable} onChange={(v) => update({ pushToTalk: v })} />
         </div>
       </div>
@@ -85,7 +131,11 @@ export function Settings() {
       <div className="panel">
         <div className="row">
           <div className="text"><span className="label">{t.settings.restore}</span><span className="small">{t.settings.restoreHint}</span></div>
-          <button className="btn secondary" onClick={async () => { await api.restoreAudioSettings(); toast(t.settings.restored); }}>{t.settings.restore}</button>
+          <button className={confirmRestore ? 'btn primary' : 'btn secondary'} onClick={async () => {
+            if (!confirmRestore) { setConfirmRestore(true); return; }
+            setConfirmRestore(false);
+            try { await api.restoreAudioSettings(); toast(t.settings.restored); } catch { toast(t.errors.generic); }
+          }}>{confirmRestore ? t.settings.restoreSure : t.settings.restore}</button>
         </div>
       </div>
     </div>

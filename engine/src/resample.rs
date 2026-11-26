@@ -272,8 +272,14 @@ impl AdaptiveResampler {
         };
         if available.saturating_sub(ahead) as f64 > limit {
             // keep the target, but never less than one block plus margin
-            let keep = (self.target_frames as f64).max(1.5 * block_in + CHUNK as f64) as usize;
-            let skip = available.saturating_sub(ahead) - keep;
+            let floor = (1.5 * block_in + CHUNK as f64) as usize;
+            // a fixed route keeps the level its delay control holds (which
+            // already counts what is ahead), so the delay is right at once
+            let skip = if self.fixed {
+                available.saturating_sub(steady.max(floor))
+            } else {
+                available.saturating_sub(self.target_frames.max(floor))
+            };
             if let Ok(c) = ring.read_chunk(skip * ch) {
                 c.commit_all();
             }

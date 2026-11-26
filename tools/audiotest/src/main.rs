@@ -379,6 +379,7 @@ mod imp {
             "overflow": fan_h.stats.overflow_frames.load(Ordering::Relaxed),
             "silence_filled": cap.status.silence_filled_frames.load(Ordering::Relaxed),
             "discontinuities": cap.status.discontinuities.load(Ordering::Relaxed),
+            "untimed_packets": cap.status.untimed_packets.load(Ordering::Relaxed),
             "tap_underrun": tap.underrun_frames.load(Ordering::Relaxed),
             "tap_buffered_ms": tap.buffered_ms.load(),
             "recorded_peak": raw_peak,
@@ -1246,17 +1247,40 @@ mod imp {
                 .iter()
                 .map(|s| s.to_string())
                 .collect();
-            let mic = devices::resolve(&DeviceSelector::DefaultExcluding(Flow::Capture, own))
+            // make the cable Windows' default microphone and the chosen one,
+            // as a user could: the engine must still not record it
+            let before = devices::default_id(Flow::Capture);
+            let cable_mic = devices::resolve(&DeviceSelector::FirstMatching(
+                Flow::Capture,
+                ct_engine::win::host::cable_capture_patterns(),
+            ))
+            .ok()
+            .map(|(_, e)| e.id);
+            let made_default = cable_mic.as_deref().is_some_and(|id| {
+                [0, 1, 2]
+                    .into_iter()
+                    .all(|role| ct_engine::win::policy::set_default_endpoint_role(id, role).is_ok())
+            });
+            devices::set_preferred_microphone(cable_mic.clone());
+            let mic = devices::resolve(&DeviceSelector::PreferredMicrophone(own))
                 .map(|(_, e)| e.name)
                 .unwrap_or_default();
+            devices::set_preferred_microphone(None);
+            let default_then = devices::default_id(Flow::Capture);
+            if let Some(b) = before.as_deref() {
+                for role in [0, 1, 2] {
+                    let _ = ct_engine::win::policy::set_default_endpoint_role(b, role);
+                }
+            }
             let lower = mic.to_lowercase();
-            let pass = !devices::OWN_VIRTUAL_DEVICES
-                .iter()
-                .any(|p| lower.contains(p));
+            let pass = made_default
+                && !devices::OWN_VIRTUAL_DEVICES
+                    .iter()
+                    .any(|p| lower.contains(p));
             check(
                 "microphone_never_own_cable",
                 pass,
-                json!({"picked": mic, "default": devices::default_id(Flow::Capture)}),
+                json!({"picked": mic, "cable_made_default": made_default, "default_during_test": default_then}),
                 &mut report,
             );
             let player = play(
@@ -1476,7 +1500,8 @@ mod imp {
                 // (offline: Windows' audio service keeps the setting in
                 // memory; Claude Talk restores it when Discord next runs –
                 // reported, not required, see KNOWN_ISSUES K12)
-                again == sessions::DiscordMic::Cable && after == sessions::DiscordMic::Other,
+                again == sessions::DiscordMic::Cable
+                    && matches!(after, sessions::DiscordMic::Other(_)),
                 json!({"new_process": format!("{again:?}"), "new_process_records_from": again_where, "restored_entries": restored_n,
                        "after_restore": format!("{after:?}"), "after_restore_records_from": after_where,
                        "removed_while_closed": removed_offline, "after_offline_restore": format!("{offline_after:?}")}),

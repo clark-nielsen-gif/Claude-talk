@@ -98,4 +98,13 @@ En kilde, man selv tilføjer under **Avanceret** (en ekstra mikrofon eller et pr
 Vælger man en anden installationsmappe end Program Files, kan knappen »Installer Claude Talk-mikrofonen« i programmet ikke bruges (kør installeren igen i stedet). Har pc'en kun ét USB-headset som højttaler, og tages det ud midt i et opkald, kan Windows vælge »Claude Talk – intern« som højttaler. Claude Talk har så ingen anden enhed at sætte tilbage, før headsettet sættes i igen.
 
 ## K32 – Sjældne sene pakker og enheder, der kalder sig højttalere
-Kommer Claudes eller Discords lyd af og til over 15 ms for sent fra Windows, har ekkodæmperens reference et kort hul. Forsinkelsen flytter sig ikke længere (testen `late_packets.rs`), men i simuleringen fjernes så »kun« 19–47 dB ekko i stedet for 66 dB, og i værste 2 sekunder ned til ca. 11 dB. Det gælder kun med højttalere. Nogle USB-headsets og skærme med HDMI-lyd melder sig til Windows som »Højttalere«. Claude Talk tror så, at du bruger højttalere, viser en besked om det og slår ekkodæmpning til. Det koster ca. 10 ms ekstra forsinkelse, men giver ikke ekko.
+Kommer Claudes eller Discords lyd af og til over 15 ms for sent fra Windows, har ekkodæmperens reference et kort hul. Forsinkelsen flytter sig ikke (testen `late_packets.rs`, seks forskellige tidsforløb), men i revisorernes simuleringer fjernes så ca. 30–34 dB ekko i stedet for 66 dB, og i værste 2 sekunder ned til ca. 15 dB. Det gælder kun med højttalere. Nogle USB-headsets og skærme med HDMI-lyd melder sig til Windows som »Højttalere«. Claude Talk tror så, at du bruger højttalere, viser en besked om det og slår ekkodæmpning til. Det koster ca. 10 ms ekstra forsinkelse, men giver ikke ekko.
+
+## K33 – Programmer, der sender lyd sjældnere end hvert 10. ms
+Stilhed fyldes ind, når et program ikke har sendt lyd i 15 ms. Alle lydenheder, vi har målt på (CI og almindelige pc'er), leverer programlyd hvert 10. ms. Leverer en enhed sjældnere (f.eks. hvert 20. ms), bliver det meste af lyden fra Claude og Discord til stilhed. En grænse, der følger enhedens rytme, er ikke lavet, fordi den enkle udgave gjorde andre tilfælde værre (revisorens simulering, runde 9).
+
+## K34 – Ekkodæmpning med meget hurtige højttalere
+Ekkodæmperens reference ligger ca. 15 ms efter den lyd, Windows tager fra programmerne. Ekkoet skal derfor bruge mindst så lang tid gennem højttaler, luft og mikrofon. Det gør det på de pc'er, vi kender (typisk 30–60 ms), men en bærbar med meget lav forsinkelse i lydkortet kunne ligge under. Det er ikke målt på en rigtig pc; `MANUAL_TEST.md` trin 11 tjekker ekkoet med højttalere.
+
+## K35 – Windows' ordlyd for mikrofonadgang
+README og programmet skriver »Giv skrivebordsapps adgang til din mikrofon«. Den præcise danske ordlyd i Windows 11 er ikke tjekket på en dansk Windows (den kan hedde »Lad skrivebordsapps få adgang til din mikrofon«). Indstillingen findes samme sted, og knappen i programmet åbner den direkte.

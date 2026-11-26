@@ -106,6 +106,14 @@ const WHCP: &str = "Microsoft Windows Hardware Compatibility Publisher";
 pub fn install_cable() -> i32 {
     let _com = ComGuard::new();
     log::info!("installer: setting up the virtual microphone");
+    if !ct_engine::win::supports_process_loopback() {
+        // Windows 10: Claude Talk can't work here, so no driver either
+        log::warn!(
+            "installer: Windows build {} is too old",
+            ct_engine::win::windows_build()
+        );
+        return 8;
+    }
     let before = defaults();
     if cable_present() {
         // Either ours from an earlier install (already renamed), or a VB-CABLE
@@ -116,6 +124,13 @@ pub fn install_cable() -> i32 {
         }
         restore_defaults(&before);
         return 0;
+    }
+    if ct_engine::win::host::cable_installed() {
+        // installed but turned off in Windows' sound settings: installing
+        // again would not help, and must not touch the marker (it says
+        // whether the uninstaller may remove the cable)
+        log::warn!("installer: VB-CABLE is installed but disabled in Windows");
+        return 7;
     }
     let dir = data_dir();
     let _ = std::fs::remove_dir_all(&dir);
@@ -172,6 +187,12 @@ pub fn install_cable() -> i32 {
         log::error!("installer: package failed the checks (hash {hash_ok}, catalog {catalog_ok})");
         let _ = std::fs::remove_dir_all(&dir);
         return 3;
+    }
+    if !hash_ok {
+        // A package we have not tested: keep only what the setup needs (the
+        // driver files and the checked setup program). The setup runs as
+        // administrator, and a DLL next to it would be loaded with it.
+        keep_only_driver_files(&dir, &setup);
     }
     let setup_hash = sha256_hex(&setup).unwrap_or_default();
     match run_with_timeout(&setup, &["-i", "-h"], Duration::from_secs(180)) {
@@ -309,6 +330,32 @@ fn sha256_hex(path: &Path) -> Option<String> {
     let mut h = Sha256::new();
     std::io::copy(&mut f, &mut h).ok()?;
     Some(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn keep_only_driver_files(dir: &Path, setup: &Path) {
+    const DRIVER: [&str; 3] = ["inf", "cat", "sys"];
+    fn walk(d: &Path, setup: &Path) {
+        let Ok(entries) = std::fs::read_dir(d) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, setup);
+                continue;
+            }
+            let ext = p
+                .extension()
+                .map(|x| x.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            if p != setup && !DRIVER.contains(&ext.as_str()) {
+                if let Err(err) = std::fs::remove_file(&p) {
+                    log::warn!("installer: could not remove {}: {err}", p.display());
+                }
+            }
+        }
+    }
+    walk(dir, setup);
 }
 
 fn extract(zip: &Path, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {

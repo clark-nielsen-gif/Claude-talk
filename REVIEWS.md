@@ -112,3 +112,25 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 **Rettet efter runde 8:** Discord får altid sin mikrofon tilbage, når brugeren selv lukker; om Claude Talk starter med Windows, læses i Windows (Run og StartupApproved); danske tekster til Tauris installer (`installer/Danish.nsh`); kun Tauris egen »Slet også indstillinger og Claude-login«-boks (ét spørgsmål); en fejl ved start af installeren vises som fejl, ikke som »annulleret«; indstillingerne hentes igen efter en afvist genvej; udholdenhedstesten måler CPU og RAM for hele proces-træet.
 
 **Rettet efter runde 8 (lyd og "bryd det"):** stilheden fortsætter fra der, hvor den sidste pakkes lyd sluttede (WASAPI's QPC-tid); en fast route betaler gæld tilbage og starter efter en ny opfyldning ved det niveau, reguleringen holder (mål + en halv blok − kildens alder); lyd efter et overspringet stykke tones ind over 1 ms; ekkodæmperens tidsstempel læses, så en samtidig mikrofonpakke ikke tæller med. Ny test `late_packets.rs` (en model af optagesløjfen, ni scenarier: sene pakker, pauser, ±150 ppm, 3 ms levering, mikrofon i par): referencens forsinkelse holder sig inden for ±1,2 ms. I revisorens simulering fjernes 19–47 dB ekko igen (før 0,5–9,5 dB). Desuden: de sidste syv danske installer-tekster (WebView2), en pakke der er væk hos VB-Audio vises ikke som »ingen internet«, kun én luk-dialog ad gangen, indstillinger læses tilbage efter hver ændring, og højttaler-beskeden siger, at det er Windows' navn for enheden.
+
+## Runde 9 – 2026-11-26 – ikke ren (alle fem roller havde fund)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 10 minor | Efter »Gendan normale lydindstillinger« viste hvert Discord-opkald »Discord bruger en anden mikrofon« med en vejledning, der aldrig kunne lykkes. |
+| Lyd | 1 major, 7 minor | En sen pakke, der helt var dækket af stilhed, flyttede stadig tidslinjen; `late_packets.rs` bestod kun med sin ene faste tidsfølge. Med andre tidsforløb hoppede referencen op til 10 ms. |
+| Design | 1 major, 12 minor | Hjælp sagde »Lyden kører fint« med grønt flueben, mens Oversigt viste en rød fejl. |
+| "Min mor" | 1 major, 12 minor | Vejledningen sagde »vælg Standard«. Havde hun valgt sin rigtige mikrofon i Discord, fik de andre nu Windows' standardmikrofon (webcam, bærbar), og intet i programmet kunne ændre det. |
+| "Bryd det" | 1 major, 5 minor | Samme mikrofonfund, plus at Discords egen mikrofon under Windows' app-indstillinger blev ryddet i stedet for sat tilbage. |
+
+**Rettet efter runde 9:**
+- *Mikrofon (D28):* Claude Talk overtager den mikrofon, Discord brugte, før brugeren sættes til »Standard«; vejledningen og feltet Dig viser navnet; ny »Din mikrofon« under Indstillinger; Discords egen app-indstilling i Windows gemmes og sættes tilbage.
+- *Lyd (D29):* én tidslinje for pakker og stilhed, også når en sen pakke er helt dækket; tabte pakker fyldes med stilhed; overgange til stilhed tones ud; 100 ms optagebuffer; faste routes holder deres niveau efter et spring; sekvenslås om mikrofonens tidsstempel; `late_packets.rs` kører seks tidsforløb af elleve scenarier (højst 0,9 ms udsving).
+- *Gendan:* Discord-feltet siger »Discord bruger din egen mikrofon« (ingen advarsel); knappen spørger én gang til.
+- *Hjælp:* viser »Der er et problem« og en knap til oversigten, når Oversigt viser en fejl; tallene hedder »Claude Talks egen forsinkelse« og »Manglende lyd (prøver)«.
+- *Installer:* et kabel, der er slået fra, installeres ikke igen og mister ikke sit mærke (kode 7); Windows 10 får ingen driver og ingen autostart (kode 8); en ukendt pakke får alle filer undtagen driverfiler og installationsprogrammet fjernet, før det køres som administrator; status under installationen siger, at det kan tage et minut.
+- *Robusthed:* Discords hjælpeprocesser tæller ikke som en genstart; en mislykket genstart af Discord siges højt; en indstillingsfil, der ikke kunne læses, bliver ikke overskrevet uden en kopi; to klik på »Tilføj« giver ikke to ens id'er; registreringsscanninger springer store værdier over i stedet for at stoppe; loggen skifter fil hver dag, har et loft og ligger i `%LOCALAPPDATA%`.
+- *Genveje:* kræver Ctrl eller Windows-tasten (ikke Shift+bogstav, Alt+F4 eller AltGr); kun én genvej lytter ad gangen, med en Fortryd-knap.
+- *Design:* hovedvinduet passer til skærmen ved 150–175 %; instruktionerne kan kopieres; kun linjen under kontakten læses op; kortet, der kræver noget, kommer først, også for tastatur og skærmlæser; Avanceret er oversat og forklarer låste felter for skærmlæsere; fejl i Avanceret vises; sletning af en forudindstilling kræver to tryk; trinene i opsætningen siger »venter« efter en fejl; »Tal dansk« følger sproget.
+- *Tekster:* README om at lukke Claude-vinduet efter opkaldet, Fn-tasten, aktiveringsordet (»Næsten«), afinstallationsvinduet, pilen ved uret; D7, D8, D14, D26, D27 rettet til koden.
+- *Kendte begrænsninger tilføjet:* K33 (programmer, der leverer sjældnere end hvert 10. ms), K34 (meget hurtige højttalere), K35 (Windows' ordlyd).

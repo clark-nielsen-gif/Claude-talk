@@ -87,8 +87,10 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
                   <li key={c.label} className={ok ? '' : 'pending'}>
                     {ok ? <span className="check ok"><span className="dot">{Icon.check()}</span></span>
                       : i === failed ? <span className="check warn"><span className="dot">!</span></span>
+                      : failed >= 0 && i > failed ? <span className="check wait"><span className="dot" /></span>
                       : <span className="spinner" aria-hidden="true" />}
                     {c.label}
+                    <span className="sr-only">{`: ${ok ? t.onboarding.stepDone : i === failed ? t.onboarding.stepProblem : failed >= 0 && i > failed ? t.onboarding.stepWaiting : t.onboarding.stepBusy}`}</span>
                   </li>
                 );
               })}

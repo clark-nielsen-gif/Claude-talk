@@ -11,9 +11,16 @@ const routeNames: Record<string, { da: string; en: string }> = {
   discordToClaude: { da: 'Discord → Claude', en: 'Discord → Claude' },
 };
 
-export function Help({ info }: { info: AppInfo }) {
+export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
   const t = useT();
-  const { status, lang, toast } = useApp();
+  const { status, lang, toast, config } = useApp();
+  // Anything the overview shows as a problem: then the sound is not "fine".
+  const problem = !!status && (
+    !info.supported
+    || !status.cableOk
+    || status.micState === 'blocked' || status.micState === 'missing'
+    || status.discordNeedsRestart
+    || (status.discordUsesCable === 'no' && config.routeDiscord));
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<SelfTestResult[] | null>(null);
   // Plain verdict: dropouts in the last ~10 seconds, or a long delay.
@@ -59,7 +66,9 @@ export function Help({ info }: { info: AppInfo }) {
         <div className="row">
           {!status
             ? <Check state="wait">{t.help.healthStarting}</Check>
-            : choppy ? <Check state="warn">{t.help.healthChoppy}</Check> : <Check state="ok">{t.help.healthGood}</Check>}
+            : problem
+              ? <><Check state="warn">{t.help.healthProblem}</Check><button className="btn secondary" onClick={onHome}>{t.help.toHome}</button></>
+              : choppy ? <Check state="warn">{t.help.healthChoppy}</Check> : <Check state="ok">{t.help.healthGood}</Check>}
         </div>
         <details className="row details">
           <summary className="small">{t.help.numbers}</summary>

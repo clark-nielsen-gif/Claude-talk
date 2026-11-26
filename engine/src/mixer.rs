@@ -88,6 +88,9 @@ pub struct SourceStats {
     /// When the source last delivered (ns on `clock_ns`): with the fill it
     /// gives the true delay of a route, steady across packet phases.
     pub last_push_ns: AtomicU64,
+    /// Odd while a push is under way (written frames and `last_push_ns` not
+    /// yet consistent): readers that need both retry (a sequence lock).
+    pub push_seq: AtomicU64,
 }
 
 /// Monotonic nanoseconds since the first call (QueryPerformanceCounter on
@@ -505,6 +508,7 @@ impl SourceFanout {
         now_ns: u64,
     ) {
         self.apply_commands();
+        self.stats.push_seq.fetch_add(1, Ordering::AcqRel); // odd: pushing
         let mut done = 0;
         while done < frames {
             let n = (frames - done).min(MAX_BLOCK);
@@ -559,7 +563,8 @@ impl SourceFanout {
         self.stats
             .captured_frames
             .fetch_add(frames as u64, Ordering::Relaxed);
-        self.stats.last_push_ns.store(now_ns, Ordering::Relaxed);
+        self.stats.last_push_ns.store(now_ns, Ordering::Release);
+        self.stats.push_seq.fetch_add(1, Ordering::Release); // even: done
     }
 }
 

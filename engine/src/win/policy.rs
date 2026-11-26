@@ -159,6 +159,22 @@ pub fn pids_of(exes: &[String]) -> Vec<u32> {
 
 const ROLES: [ERole; 3] = [eConsole, eMultimedia, eCommunications];
 
+/// The input the user had set for Discord in Windows ("App volume and device
+/// preferences") before Claude Talk pointed it at the cable: given back on
+/// restore instead of clearing it. The app keeps it in its settings.
+static DISCORD_OWN_INPUT: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn set_discord_own_input(path: Option<String>) {
+    *DISCORD_OWN_INPUT.lock().unwrap_or_else(|p| p.into_inner()) = path;
+}
+
+pub fn discord_own_input() -> Option<String> {
+    DISCORD_OWN_INPUT
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+}
+
 /// Points Discord's microphone at our cable. Returns how many processes were
 /// updated (0 if Discord is not running – call again when it starts).
 pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
@@ -167,8 +183,18 @@ pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
     };
     let path = HSTRING::from(interface_path(&id));
     let f = factory()?;
+    let pids = pids_of(exes);
+    // Remember what the user has set for Discord right now (this is only
+    // called while Discord is not pointed at the cable): nothing, or a device.
+    if let Some(&first) = pids.first() {
+        if let Ok(d) = f.get(first, eConsole) {
+            if !d.to_lowercase().contains(&id.to_lowercase()) {
+                set_discord_own_input((!d.is_empty()).then_some(d));
+            }
+        }
+    }
     let mut n = 0;
-    for pid in pids_of(exes) {
+    for pid in pids {
         let mut ok = true;
         for role in ROLES {
             ok &= f.set(pid, role, &path).is_ok();
@@ -201,10 +227,11 @@ pub fn discord_routed_to_cable(exes: &[String]) -> Option<bool> {
 pub fn restore_discord(exes: &[String]) -> usize {
     let mut n = 0;
     if let Ok(f) = factory() {
-        let empty = HSTRING::new();
+        // the user's own choice for Discord if there was one, else none
+        let back = HSTRING::from(discord_own_input().unwrap_or_default());
         for pid in pids_of(exes) {
             for role in ROLES {
-                if f.set(pid, role, &empty).is_ok() {
+                if f.set(pid, role, &back).is_ok() {
                     n += 1;
                 }
             }
@@ -294,9 +321,9 @@ unsafe fn remove_values_pointing_at(store: &str, endpoint_id: &str) -> usize {
         let mut doomed = Vec::new();
         let mut j = 0u32;
         loop {
-            let mut vname = [0u16; 1024];
+            let mut vname = vec![0u16; 16384];
             let mut vlen = vname.len() as u32;
-            let mut data = vec![0u8; 4096];
+            let mut data = vec![0u8; 65536];
             let mut dlen = data.len() as u32;
             let r = unsafe {
                 RegEnumValueW(
@@ -310,6 +337,10 @@ unsafe fn remove_values_pointing_at(store: &str, endpoint_id: &str) -> usize {
                     Some(&mut dlen),
                 )
             };
+            if r == windows::Win32::Foundation::ERROR_MORE_DATA {
+                j += 1; // too big to be a device path; look at the next
+                continue;
+            }
             if r.is_err() {
                 break;
             }

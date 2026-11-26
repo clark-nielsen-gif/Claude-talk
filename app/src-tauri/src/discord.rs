@@ -65,8 +65,22 @@ pub fn spawn_watcher(app: AppHandle) {
                                     log::info!(
                                         "Discord's microphone set to Claude Talk ({n} processes)"
                                     );
+                                    // keep the user's own per-app choice to give back
+                                    let own = policy::discord_own_input();
+                                    let changed = state
+                                        .config
+                                        .lock()
+                                        .map(|mut c| {
+                                            let changed = c.discord_own_input != own;
+                                            c.discord_own_input = own;
+                                            changed
+                                        })
+                                        .unwrap_or(false);
+                                    if changed {
+                                        state.save_config();
+                                    }
                                     routed_since = Some(Instant::now());
-                                    routed_pids = pids.clone();
+                                    routed_pids = discord_roots(&exes);
                                     restarted_since_route = false;
                                 }
                                 Ok(_) => {}
@@ -75,10 +89,13 @@ pub fn spawn_watcher(app: AppHandle) {
                         }
                         Some(true) => {
                             routed_since.get_or_insert_with(Instant::now);
+                            // Discord's main process: helper processes come
+                            // and go without Discord restarting
+                            let roots = discord_roots(&exes);
                             if routed_pids.is_empty() {
-                                routed_pids = pids.clone();
-                            } else if routed_pids != pids {
-                                routed_pids = pids.clone();
+                                routed_pids = roots;
+                            } else if routed_pids != roots {
+                                routed_pids = roots;
                                 restarted_since_route = true;
                                 routed_since = Some(Instant::now());
                             }
@@ -95,11 +112,16 @@ pub fn spawn_watcher(app: AppHandle) {
                 }
                 let cable = policy::cable_capture_id();
                 let mic = sessions::discord_mic(&exes, cable.as_deref());
-                let uses = match mic {
+                let uses = match &mic {
                     sessions::DiscordMic::Cable => YES,
-                    sessions::DiscordMic::Other => NO,
+                    sessions::DiscordMic::Other(_) => NO,
                     sessions::DiscordMic::Unknown => UNKNOWN,
                 };
+                if let sessions::DiscordMic::Other(endpoint) = &mic {
+                    if enabled {
+                        adopt_discords_microphone(&app, &state, endpoint);
+                    }
+                }
                 state.discord_uses_cable.store(uses, Ordering::Relaxed);
                 state
                     .discord_recording
@@ -235,22 +257,77 @@ fn guard_default_output(state: &crate::state::Inner, last_good: &mut [Option<Str
     }
 }
 
-/// A new default microphone (headset plugged in, chosen in Windows): the
-/// microphone stream moves to it.
+/// Discord's main processes (helper processes are not a restart).
+#[cfg(windows)]
+fn discord_roots(exes: &[String]) -> Vec<u32> {
+    let names: Vec<String> = exes.iter().map(|e| e.to_lowercase()).collect();
+    ct_engine::win::process::find_roots(&ct_engine::win::process::snapshot(), &names)
+}
+
+/// Discord records from a specific microphone of the user's choice. Before
+/// the user is asked to set Discord to "Default" (which then means Claude
+/// Talk), Claude Talk takes over that microphone, so the others in the call
+/// keep hearing the same microphone as before. Only when the user has not
+/// chosen a microphone in Claude Talk.
+#[cfg(windows)]
+fn adopt_discords_microphone(app: &AppHandle, state: &crate::state::Inner, endpoint: &str) {
+    use ct_engine::win::devices::{self, DeviceSelector, Flow, NOT_A_MICROPHONE};
+    if state
+        .config
+        .lock()
+        .map(|c| c.microphone.is_some())
+        .unwrap_or(true)
+    {
+        return;
+    }
+    let own = devices::patterns(NOT_A_MICROPHONE);
+    let Ok((_, chosen)) = devices::resolve(&DeviceSelector::Id(endpoint.to_string())) else {
+        return;
+    };
+    if chosen.flow != Flow::Capture
+        || own
+            .iter()
+            .any(|p| chosen.name.to_lowercase().contains(&p.to_lowercase()))
+    {
+        return;
+    }
+    let default = devices::resolve(&DeviceSelector::DefaultExcluding(Flow::Capture, own))
+        .map(|(_, e)| e.id)
+        .unwrap_or_default();
+    if default.eq_ignore_ascii_case(&chosen.id) {
+        return; // the same microphone anyway
+    }
+    log::info!(
+        "Discord records from '{}'; Claude Talk uses it as the microphone too",
+        chosen.name
+    );
+    let cfg = state.config.lock().map(|mut c| {
+        c.microphone = Some(chosen.id.clone());
+        c.clone()
+    });
+    state.save_config();
+    crate::audio::use_microphone(app, Some(chosen.id));
+    if let Ok(cfg) = cfg {
+        use tauri::Emitter;
+        let _ = app.emit("config-changed", cfg);
+    }
+}
+
+/// A new default microphone (headset plugged in, chosen in Windows), or the
+/// chosen microphone plugged back in: the microphone stream moves to it.
 #[cfg(windows)]
 fn follow_default_microphone(state: &crate::state::Inner) {
     use ct_engine::graph::ids;
-    use ct_engine::win::devices::{self, DeviceSelector, Flow, NOT_A_MICROPHONE};
+    use ct_engine::win::devices::{self, DeviceSelector, NOT_A_MICROPHONE};
     let g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
     let Some(host) = g.as_ref() else { return };
     let current = host.source_device(ids::MIC);
     if current.is_empty() {
         return; // not running (paused, waiting) or not a device
     }
-    let wanted = devices::resolve(&DeviceSelector::DefaultExcluding(
-        Flow::Capture,
-        devices::patterns(NOT_A_MICROPHONE),
-    ))
+    let wanted = devices::resolve(&DeviceSelector::PreferredMicrophone(devices::patterns(
+        NOT_A_MICROPHONE,
+    )))
     .map(|(_, e)| e.name)
     .unwrap_or_default();
     if !wanted.is_empty() && wanted != current {
@@ -411,6 +488,12 @@ pub fn restart() -> Result<(), String> {
         }
     }
     std::thread::sleep(Duration::from_millis(1200));
+    if !policy::pids_of(&[exe.to_string()]).is_empty() {
+        // Discord runs as administrator (or refused): it is still running,
+        // and starting it again would only bring the old one to the front
+        log::warn!("restart Discord: Discord could not be closed");
+        return Err("error.discordRestart".into());
+    }
     std::process::Command::new(updater)
         .args(["--processStart", start])
         .spawn()

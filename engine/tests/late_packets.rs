@@ -29,6 +29,7 @@ struct Scen {
     ppm_src: f64,
     ppm_mic: f64,
     late_prob: f64, // probability a packet is late
+    lost_prob: f64, // probability a packet never arrives
     late_ms: (f64, f64),
     pause_every_s: f64, // source stops delivering (0 = never)
     pause_len_s: f64,
@@ -70,7 +71,9 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
             }
             arr = arr.max(last_arr);
             last_arr = arr;
-            pkts.push((arr, ts, k * FRAME as u64));
+            if rng.next() >= sc.lost_prob {
+                pkts.push((arr, ts, k * FRAME as u64));
+            }
         }
         k += 1;
     }
@@ -91,9 +94,10 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
     // ---- capture loop state (as stream.rs)
     let mut pi = 0usize; // next packet to deliver
     let mut last_data = 0.0f64; // us
-    let mut last_end = 0.0f64;
+                                // the timeline: how far the pushed sound reaches (us, packet clock)
+    let mut pos = 0.0f64;
+    let mut timed = false;
     let mut quiet: Option<(f64, u64)> = None;
-    let mut silence_until: Option<f64> = None; // us (qpc)
     let mut cap_wake = 0.0f64;
 
     let mut mi = 0usize;
@@ -127,12 +131,18 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
                 let (_, qpc, first) = pkts[pi];
                 pi += 1;
                 let frames = FRAME as u32;
-                let skip = match silence_until {
-                    Some(end) if end > qpc => (((end - qpc) * 48000.0 / 1e6) as u32).min(frames),
-                    _ => 0,
+                let skip = if timed && pos > qpc + 500.0 {
+                    (((pos - qpc) * 48000.0 / 1e6) as u32).min(frames)
+                } else {
+                    0
                 };
-                if skip < frames {
-                    silence_until = None;
+                let gap = if timed && qpc > pos + 1000.0 {
+                    (((qpc - pos) * 48000.0 / 1e6) as usize).min(4800)
+                } else {
+                    0
+                };
+                if gap > 0 {
+                    src_fan.push_at(None, 2, gap, (now * 1000.0) as u64);
                 }
                 let keep = (frames - skip) as usize;
                 if keep > 0 {
@@ -151,19 +161,22 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
                     pushed_first = true;
                 }
                 got = true;
-                last_end = qpc + FRAME as f64 / 48000.0 * 1e6;
+                let end = qpc + FRAME as f64 / 48000.0 * 1e6;
+                pos = if timed { pos.max(end) } else { end };
+                timed = true;
             }
             if got {
                 last_data = now;
                 quiet = None;
             } else if pushed_first && now - last_data >= 15_000.0 {
-                let (since, sent) = quiet.get_or_insert((last_end, 0));
+                let (since, sent) = quiet.get_or_insert((pos, 0));
                 let due = ((now - *since) * 48000.0 / 1e6) as u64;
                 let n = due.saturating_sub(*sent).min(4800) as usize;
                 if n > 0 {
                     src_fan.push_at(None, 2, n, (now * 1000.0) as u64);
                     *sent += n as u64;
-                    silence_until = Some(now);
+                    pos = *since + *sent as f64 / 48000.0 * 1e6;
+                    timed = true;
                 }
             }
         } else if t == mic_next {
@@ -218,8 +231,8 @@ struct Summary {
     spread: f64,
 }
 
-fn summarize(name: &str, sc: Scen) -> Summary {
-    let (d, gaps, skipped) = run(sc, 0xabcdef);
+fn summarize(name: &str, sc: Scen, seed: u64) -> Summary {
+    let (d, gaps, skipped) = run(sc, seed);
     let tail: Vec<f64> = d.iter().filter(|(t, _)| *t > 40.0).map(|x| x.1).collect();
     let n = tail.len() as f64;
     assert!(n > 0.0, "{name}: no reference frames");
@@ -250,6 +263,7 @@ fn reference_delay_holds_through_late_packets_pauses_and_drift() {
         ppm_src: 0.0,
         ppm_mic: 0.0,
         late_prob: 0.0,
+        lost_prob: 0.0,
         late_ms: (0.0, 0.0),
         pause_every_s: 0.0,
         pause_len_s: 0.0,
@@ -316,12 +330,30 @@ fn reference_delay_holds_through_late_packets_pauses_and_drift() {
                 ..late
             },
         ),
+        (
+            "1 % packets lost",
+            Scen {
+                lost_prob: 0.01,
+                ..base
+            },
+        ),
+        (
+            "1 % lost and 1 % late",
+            Scen {
+                lost_prob: 0.01,
+                ..late
+            },
+        ),
     ];
+    // several timings of the same scenarios (Rng uses seed | 1, so odd seeds)
+    let seeds = [0xabcdef_u64, 1, 3, 5, 7, 9];
     let mut bad = Vec::new();
     for (name, sc) in cases {
-        let s = summarize(name, sc);
-        if s.off_share > 0.01 || s.max_jump > 2.0 || s.spread > 4.0 {
-            bad.push(name);
+        for seed in seeds {
+            let s = summarize(&format!("{name} (seed {seed:#x})"), sc, seed);
+            if s.off_share > 0.01 || s.max_jump > 2.0 || s.spread > 4.0 {
+                bad.push(format!("{name} (seed {seed:#x})"));
+            }
         }
     }
     assert!(bad.is_empty(), "the reference delay moved: {bad:?}");

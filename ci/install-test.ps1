@@ -58,7 +58,7 @@ $driver = Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceClass 
 Check 'driver_production_signed' ($null -ne $driver -and $driver.Signer -like '*Microsoft*') $driver
 
 # 2. the app starts: time to the audio engine, CPU and memory while idle
-$logs = Join-Path $env:APPDATA 'Claude Talk\logs'
+$logs = Join-Path $env:LOCALAPPDATA 'Claude Talk\logs'
 if (Test-Path $logs) { Remove-Item $logs -Recurse -Force }
 $t0 = Get-Date
 # as after a Windows start: in the tray (window hidden)

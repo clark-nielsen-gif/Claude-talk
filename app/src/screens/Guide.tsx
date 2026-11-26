@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { api } from '../api';
 import { useApp, useT } from '../context';
+import { fill } from '../i18n';
 
 /** A neutral sketch of a voice-settings panel with the right choice marked.
  *  Deliberately generic: no third-party logos or screenshots. */
@@ -23,9 +24,9 @@ function Sketch({ label, choice }: { label: string; choice: string }) {
   );
 }
 
-export function DiscordGuide({ mode, onClose }: { mode: 'mic' | 'restart'; onClose: () => void }) {
+export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'restart'; onClose: () => void; onSettings: () => void }) {
   const t = useT();
-  const { toast } = useApp();
+  const { toast, status } = useApp();
   const first = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -51,6 +52,12 @@ export function DiscordGuide({ mode, onClose }: { mode: 'mic' | 'restart'; onClo
           <>
             <h2 id="guide-title">{t.guide.discordTitle}</h2>
             <Sketch label={t.guide.sketchLabel} choice={t.guide.sketchChoice} />
+            {status?.micName && (
+              <p className="muted">
+                {fill(t.guide.micInUse, { mic: status.micName })}{' '}
+                <button className="btn quiet" onClick={onSettings}>{t.main.otherMic}</button>
+              </p>
+            )}
             <ol>{t.guide.discordSteps.map((s) => <li key={s}>{s}</li>)}</ol>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>

@@ -91,6 +91,10 @@ pub fn set_config(
             .lock()
             .map_err(|_| "error.internal".to_string())?;
         if let Some(v) = patch.language.filter(|l| l == "da" || l == "en") {
+            if v != c.language {
+                // "Tal dansk" follows the language the user picks
+                c.instructions.danish = v == "da";
+            }
             c.language = v;
         }
         if let Some(v) = patch.theme {
@@ -147,6 +151,57 @@ pub fn set_config(
     if autostart_changed {
         crate::autostart::apply(&app, cfg.autostart);
     }
+    Ok(cfg)
+}
+
+#[derive(Serialize)]
+pub struct Microphone {
+    pub id: String,
+    pub name: String,
+}
+
+/// The microphones the user can choose (never Claude Talk's own devices).
+#[tauri::command]
+pub fn list_microphones() -> Vec<Microphone> {
+    #[cfg(windows)]
+    {
+        use ct_engine::win::devices::{self, Flow};
+        let _com = ct_engine::win::ComGuard::new();
+        let own = devices::patterns(devices::NOT_A_MICROPHONE);
+        devices::list(Flow::Capture)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| {
+                let n = e.name.to_lowercase();
+                !own.iter().any(|p| n.contains(&p.to_lowercase()))
+            })
+            .map(|e| Microphone {
+                id: e.id,
+                name: e.name,
+            })
+            .collect()
+    }
+    #[cfg(not(windows))]
+    Vec::new()
+}
+
+/// Chooses the microphone (None: Windows' default microphone).
+#[tauri::command]
+pub fn set_microphone(
+    app: AppHandle,
+    state: State<AppState>,
+    id: Option<String>,
+) -> Result<Config, String> {
+    let cfg = {
+        let mut c = state
+            .config
+            .lock()
+            .map_err(|_| "error.internal".to_string())?;
+        c.microphone = id.filter(|s| !s.is_empty());
+        c.clone()
+    };
+    state.save_config();
+    crate::audio::use_microphone(&app, cfg.microphone.clone());
     Ok(cfg)
 }
 

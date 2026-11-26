@@ -19,6 +19,10 @@ export interface Config {
   autostart: boolean;
   onboardingDone: boolean;
   claudeInDiscord: boolean;
+  /** Discord's microphone is pointed at Claude Talk (off after "Gendan"). */
+  routeDiscord: boolean;
+  /** Chosen microphone (endpoint id); null = Windows' default. */
+  microphone: string | null;
   micMuted: boolean;
   claudeToDiscordMuted: boolean;
   pushToTalk: boolean;
@@ -96,7 +100,7 @@ const scenario = params.get('scenario') ?? 'main-ok';
 
 const defaultConfig: Config = {
   version: 1, language: (params.get('lang') as 'da' | 'en') ?? 'da', theme: (params.get('theme') as Theme) ?? 'light',
-  autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off',
+  autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off' && scenario !== 'main-restored', routeDiscord: scenario !== 'main-restored', microphone: null,
   micMuted: scenario === 'main-muted', claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
   hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F11' },
   advancedUnlocked: false,
@@ -128,6 +132,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'error-cable-missing': return { ...ok, cableOk: false };
     case 'main-speakers': return { ...ok, speakers: true, echoActive: true, micName: 'Mikrofon (Realtek High Definition Audio)' };
     case 'main-muted': return { ...ok, mic: quiet };
+    case 'main-restored': return { ...ok, discordUsesCable: 'no' };
     case 'main-output-fixed': return { ...ok, outputFixed: true };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
     case 'onboarding-cable-missing': return { ...ok, cableOk: false };
@@ -166,6 +171,14 @@ export const api = {
   },
   async saveReport(): Promise<string> {
     return inTauri ? invoke<string>('save_report') : 'C:\\Users\\dig\\Desktop\\Claude Talk fejlrapport.zip';
+  },
+  async listMicrophones(): Promise<{ id: string; name: string }[]> {
+    return inTauri ? invoke('list_microphones') : [{ id: 'jabra', name: 'Headset-mikrofon (Jabra Evolve2 40)' }, { id: 'realtek', name: 'Mikrofon (Realtek High Definition Audio)' }];
+  },
+  async setMicrophone(id: string | null): Promise<Config> {
+    if (inTauri) return invoke<Config>('set_microphone', { id });
+    mockConfig = { ...mockConfig, microphone: id };
+    return mockConfig;
   },
   async restoreAudioSettings(): Promise<void> {
     if (inTauri) await invoke('restore_audio_settings');

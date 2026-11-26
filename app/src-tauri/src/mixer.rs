@@ -433,6 +433,8 @@ fn add_mixer_source_blocking(
         },
         _ => return Err("error.internal".into()),
     };
+    // one add at a time: a double click would give two entries one id
+    let _one = ADDING.lock().unwrap_or_else(|p| p.into_inner());
     let id = {
         let c = state.config.lock().unwrap_or_else(|p| p.into_inner());
         next_id(c.mixer.sources.iter().map(|s| s.id), FIRST_SOURCE)
@@ -488,11 +490,15 @@ fn remove_mixer_source_blocking(state: &AppState, id: u32) -> Result<(), String>
     Ok(())
 }
 
+/// Held while a source or output is added (ids are handed out one at a time).
+static ADDING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn add_mixer_output_blocking(
     state: &AppState,
     device_id: String,
     label: String,
 ) -> Result<u32, String> {
+    let _one = ADDING.lock().unwrap_or_else(|p| p.into_inner());
     let id = {
         let c = state.config.lock().unwrap_or_else(|p| p.into_inner());
         next_id(c.mixer.outputs.iter().map(|o| o.id), FIRST_OUTPUT)

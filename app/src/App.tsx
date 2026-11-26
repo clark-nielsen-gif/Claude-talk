@@ -97,7 +97,7 @@ export function App() {
               {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}
-              {page === 'help' && <Help info={info} />}
+              {page === 'help' && <Help info={info} onHome={() => setPage('home')} />}
             </main>
           </div>
         )}

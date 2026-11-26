@@ -68,7 +68,7 @@ export function Meter({ level, off = false, label }: { level: Level; off?: boole
 
 export function Check({ state, children }: { state: 'ok' | 'wait' | 'warn'; children: ReactNode }) {
   return (
-    <div className={`check ${state}`} role="status">
+    <div className={`check ${state}`}>
       <span className="dot">{state === 'ok' ? Icon.check() : state === 'warn' ? Icon.alert() : null}</span>
       <span className="label">{children}</span>
     </div>

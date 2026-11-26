@@ -87,12 +87,12 @@ pub fn sessions(flow: Flow) -> windows::core::Result<Vec<CaptureSession>> {
 }
 
 /// Where Discord is recording from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiscordMic {
     /// Discord records from our cable (it hears Claude).
     Cable,
-    /// Discord records from a different microphone.
-    Other,
+    /// Discord records from a different microphone (its endpoint id).
+    Other(String),
     /// Discord is not recording right now (not in a call), or not running.
     Unknown,
 }
@@ -117,6 +117,6 @@ pub fn discord_mic(exes: &[String], cable_id: Option<&str>) -> DiscordMic {
         {
             DiscordMic::Cable
         }
-        _ => DiscordMic::Other,
+        _ => DiscordMic::Other(discord[0].endpoint_id.clone()),
     }
 }

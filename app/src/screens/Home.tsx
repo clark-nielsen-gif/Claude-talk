@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { api, type AppInfo } from '../api';
 import { Check, Icon, Meter, Notice, Switch } from '../components';
 import { useApp, useT } from '../context';
@@ -71,7 +71,13 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   else if (cableMissing) discordCheck = { state: 'warn', text: t.main.discordNoMic };
   else if (!s?.discordRunning) discordCheck = { state: 'wait', text: t.main.discordNotRunning };
   else if (s.discordNeedsRestart) discordCheck = { state: 'warn', text: t.guide.restartDiscordTitle, fix: 'restart' };
-  else if (s.discordUsesCable === 'no') discordCheck = { state: 'warn', text: t.main.discordWrongMic, fix: 'mic' };
+  else if (s.discordUsesCable === 'no') {
+    // after "Gendan normale lydindstillinger" Discord is meant to use the
+    // user's own microphone until Claude is switched on again
+    discordCheck = config.routeDiscord
+      ? { state: 'warn', text: t.main.discordWrongMic, fix: 'mic' }
+      : { state: 'wait', text: t.main.discordOwnMic };
+  }
   else if (s.discordUsesCable === 'yes') {
     discordCheck = !on
       ? { state: 'wait', text: t.main.discordHearsOnlyYou }
@@ -107,6 +113,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
                 : hearsDiscord
                   ? { state: 'ok', text: t.main.claudeHearsOnlyDiscord }
                   : { state: 'wait', text: t.main.claudeHearsNobody };
+  // Claude waits for the user (log in, open, press the voice button)
+  const claudeNeedsYou = on && !cableMissing && (!s?.claudeWindowOpen || !!s?.claudeLogin || !s?.claudeListening);
   // The line under the switch says the same as the cards and notices below.
   const discordBroken = discordCheck.state === 'warn';
   const switchText = !on ? t.main.switchOff
@@ -128,7 +136,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
       <section className="hero" aria-labelledby="switch-title">
         <div className="text">
           <h1 id="switch-title">{t.main.switchTitle}</h1>
-          <p className={switchWarn ? 'warn-text' : 'muted'}>{switchText}</p>
+          <p className={switchWarn ? 'warn-text' : 'muted'} role="status">{switchText}</p>
         </div>
         <Switch on={on} label={t.main.switchTitle} onChange={(v) => updateConfig({ claudeInDiscord: v })} />
       </section>
@@ -136,6 +144,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
       {errors}
 
       <div className="people">
+        {[
+          { key: 'you', first: micBroken, card: (
         <section className={`person${config.micMuted ? ' dim' : ''}${micBroken ? ' attention' : ''}`} aria-label={t.main.you}>
           <div className="head"><h2>{t.main.you}</h2></div>
           <Meter level={config.micMuted ? quiet : s?.mic ?? quiet} off={config.micMuted || s?.micState !== 'ok'} label={t.main.you} />
@@ -151,12 +161,17 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
                 {config.micMuted ? Icon.micOff() : Icon.mic()} {config.micMuted ? t.main.unmuteMe : t.main.muteMe}
               </button>
             )}
+            {s?.micState !== 'blocked' && (
+              <button className="btn quiet" onClick={onSettings}>{t.main.otherMic}</button>
+            )}
           </div>
         </section>
+          ) },
+          { key: 'claude', first: claudeCheck.state === 'warn' || claudeNeedsYou, card: (
 
         <section className={`person${!on || !s?.claudeWindowOpen ? ' dim' : ''}${claudeCheck.state === 'warn' ? ' attention' : ''}`} aria-label={t.main.claude}>
           <div className="head"><h2>{t.main.claude}</h2></div>
-          <Meter level={on ? s?.claude ?? quiet : quiet} off={!on || !s?.claudeWindowOpen} label={t.main.claude} />
+          <Meter level={on ? s?.claude ?? quiet : quiet} off={!on || !s?.claudeWindowOpen || !!s?.claudeLogin || !s?.claudeListening} label={t.main.claude} />
           <div className="sub blank">&nbsp;</div>
           <Check state={claudeCheck.state}>{claudeCheck.text}</Check>
           <div className="actions">
@@ -169,6 +184,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
                 </button>}
           </div>
         </section>
+          ) },
+          { key: 'discord', first: discordCheck.state === 'warn', card: (
 
         <section className={`person${!s?.discordRunning ? ' dim' : ''}${discordCheck.state === 'warn' ? ' attention' : ''}`} aria-label={t.main.discord}>
           <div className="head"><h2>{t.main.discord}</h2></div>
@@ -179,12 +196,16 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
             {discordCheck.fix && <button className="btn primary" onClick={() => setGuide(discordCheck.fix!)}>{discordCheck.fix === 'restart' ? t.guide.restartDiscord : t.main.fixIt}</button>}
           </div>
         </section>
+          ) },
+          // the card that needs something from the user comes first, also
+          // for the keyboard and screen readers (not only on screen)
+        ].sort((a, b) => Number(b.first) - Number(a.first)).map((c) => <Fragment key={c.key}>{c.card}</Fragment>)}
       </div>
 
       {on && <p className="small">{t.notices.discordTips}</p>}
       {config.pushToTalk && <p className="small">{fill(t.main.pttHint, { key: config.hotkeys.pushToTalkClaude })}</p>}
 
-      {guide && <DiscordGuide mode={guide} onClose={() => setGuide(null)} />}
+      {guide && <DiscordGuide mode={guide} onClose={() => setGuide(null)} onSettings={() => { setGuide(null); onSettings(); }} />}
     </div>
   );
 }

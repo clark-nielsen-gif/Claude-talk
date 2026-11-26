@@ -64,6 +64,11 @@ pub enum DeviceSelector {
     /// microphone so the engine can never record its own virtual cable
     /// (which would feed "Til Discord" back into itself).
     DefaultExcluding(Flow, Vec<String>),
+    /// The microphone the user chose (`set_preferred_microphone`) while it is
+    /// plugged in and not one of the patterns; otherwise as
+    /// `DefaultExcluding`. Resolved again on every restart, so a new choice
+    /// takes effect with `restart_source`.
+    PreferredMicrophone(Vec<String>),
     /// The first active endpoint matching the first pattern that matches
     /// anything (patterns in order of preference).
     FirstMatching(Flow, Vec<String>),
@@ -110,6 +115,23 @@ pub const CABLE_RENDER_PATTERNS: &[&str] = &[
 
 pub fn patterns(p: &[&str]) -> Vec<String> {
     p.iter().map(|s| s.to_string()).collect()
+}
+
+static PREFERRED_MICROPHONE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The endpoint id of the microphone the user chose, or None for Windows'
+/// default microphone.
+pub fn set_preferred_microphone(id: Option<String>) {
+    *PREFERRED_MICROPHONE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = id;
+}
+
+pub fn preferred_microphone() -> Option<String> {
+    PREFERRED_MICROPHONE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
 }
 
 fn excluded(name: &str, patterns: &[String]) -> bool {
@@ -189,6 +211,27 @@ pub(crate) fn describe(dev: &IMMDevice, flow: Flow) -> Endpoint {
 }
 
 /// All active endpoints of a flow.
+/// Whether an endpoint whose name contains one of the patterns exists and is
+/// active or disabled in Windows' sound settings (not unplugged or removed).
+pub fn exists_enabled_or_disabled(flow: Flow, patterns: &[String]) -> bool {
+    use windows::Win32::Media::Audio::{DEVICE_STATE, DEVICE_STATE_DISABLED};
+    let Ok(e) = enumerator() else { return false };
+    let Ok(coll) = (unsafe {
+        e.EnumAudioEndpoints(
+            data_flow(flow),
+            DEVICE_STATE(DEVICE_STATE_ACTIVE.0 | DEVICE_STATE_DISABLED.0),
+        )
+    }) else {
+        return false;
+    };
+    let n = unsafe { coll.GetCount() }.unwrap_or(0);
+    (0..n).any(|i| {
+        unsafe { coll.Item(i) }
+            .map(|d| excluded(&read_string(&d, &PKEY_Device_FriendlyName), patterns))
+            .unwrap_or(false)
+    })
+}
+
 pub fn list(flow: Flow) -> windows::core::Result<Vec<Endpoint>> {
     let e = enumerator()?;
     let coll = unsafe { e.EnumAudioEndpoints(data_flow(flow), DEVICE_STATE_ACTIVE) }?;
@@ -225,6 +268,31 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
                 _ => Flow::Render,
             };
             (dev, flow)
+        }
+        DeviceSelector::PreferredMicrophone(patterns) => {
+            let chosen = preferred_microphone().and_then(|id| {
+                let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+                let dev = unsafe { e.GetDevice(PCWSTR(wide.as_ptr())) }.ok()?;
+                let active = unsafe { dev.GetState() }.ok()? == DEVICE_STATE_ACTIVE;
+                let flow_ok = unsafe {
+                    dev.cast::<windows::Win32::Media::Audio::IMMEndpoint>()
+                        .ok()?
+                        .GetDataFlow()
+                }
+                .ok()?
+                    == eCapture;
+                let name = read_string(&dev, &PKEY_Device_FriendlyName);
+                (active && flow_ok && !excluded(&name, patterns)).then_some(dev)
+            });
+            match chosen {
+                Some(d) => (d, Flow::Capture),
+                None => {
+                    return resolve(&DeviceSelector::DefaultExcluding(
+                        Flow::Capture,
+                        patterns.clone(),
+                    ))
+                }
+            }
         }
         DeviceSelector::DefaultExcluding(f, patterns) => {
             let def = unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eConsole) }.ok();
