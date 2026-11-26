@@ -103,7 +103,15 @@ mod imp {
     struct Player {
         stop: Arc<AtomicBool>,
         gen: Option<JoinHandle<()>>,
-        _render: StreamHandle,
+        render: StreamHandle,
+    }
+    impl Player {
+        fn describe(&self) -> Value {
+            let st = &self.render.status;
+            json!({"state": format!("{:?}", st.state()), "hr": format!("0x{:08X}", st.last_error.load(Ordering::Relaxed) as u32),
+                   "device": st.device_name.lock().unwrap().clone(), "restarts": st.restarts.load(Ordering::Relaxed),
+                   "period": st.period_frames.load(Ordering::Relaxed)})
+        }
     }
     impl Drop for Player {
         fn drop(&mut self) {
@@ -126,7 +134,7 @@ mod imp {
         let render = spawn_render("tone", device, mix);
         std::mem::forget(fan_h); // keep rings alive for the player's lifetime
         std::mem::forget(mix_h);
-        Player { stop, gen: Some(gen), _render: render }
+        Player { stop, gen: Some(gen), render }
     }
 
     pub fn tone(args: &[String]) -> i32 {
@@ -150,6 +158,7 @@ mod imp {
     /// Records a capture target for `secs` seconds through the engine.
     struct Recording {
         samples: Vec<f32>,
+        hr: String,
         state: StreamState,
         device: String,
         pid: u32,
@@ -171,6 +180,7 @@ mod imp {
         let r = Recording {
             samples: std::mem::take(&mut *rec.lock().unwrap()),
             state: cap.status.state(),
+            hr: format!("0x{:08X}", cap.status.last_error.load(Ordering::Relaxed) as u32),
             device: cap.status.device_name.lock().unwrap().clone(),
             pid: cap.status.pid.load(Ordering::Relaxed),
             restarts: cap.status.restarts.load(Ordering::Relaxed),
@@ -205,6 +215,7 @@ mod imp {
     }
 
     pub fn smoke(args: &[String]) -> i32 {
+        std::panic::set_hook(Box::new(|info| eprintln!("PANIC: {info}")));
         let _com = ComGuard::new();
         let cable_in = arg(args, "--cable-in").unwrap_or("CABLE Input").to_string();
         let cable_out = arg(args, "--cable-out").unwrap_or("CABLE Output").to_string();
@@ -226,10 +237,11 @@ mod imp {
             let player = play(1000.0, 0.3, DeviceSelector::NameContains(Flow::Render, cable_in.clone()));
             std::thread::sleep(Duration::from_millis(500));
             let r = record(CaptureTarget::Device(DeviceSelector::NameContains(Flow::Capture, cable_out.clone())), 3.0, |_| {});
+            let pl = player.describe();
             drop(player);
             let l = levels(&r, 2.0, &[1000.0, 3000.0]);
             let pass = r.state == StreamState::Running && lv(&l, 1000.0) > -16.0 && lv(&l, 3000.0) < lv(&l, 1000.0) - 60.0;
-            check("render_capture_cable", pass, json!({"levels_db": l, "device": r.device, "state": format!("{:?}", r.state)}), &mut report);
+            check("render_capture_cable", pass, json!({"levels_db": l, "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "player": pl, "samples": r.samples.len()}), &mut report);
         }
 
         // B. process loopback isolates one program from another
@@ -242,7 +254,7 @@ mod imp {
             let r = record(CaptureTarget::Process(ProcessTarget::Pid(pid)), 3.0, |_| {});
             let l = levels(&r, 2.0, &[1500.0, 3000.0]);
             let pass = lv(&l, 1500.0) > -20.0 && lv(&l, 3000.0) < lv(&l, 1500.0) - 60.0;
-            check("process_loopback_isolation", pass, json!({"levels_db": l, "pid": r.pid, "state": format!("{:?}", r.state)}), &mut report);
+            check("process_loopback_isolation", pass, json!({"levels_db": l, "pid": r.pid, "state": format!("{:?}", r.state), "hr": r.hr}), &mut report);
             let _ = target.kill();
             let _ = other.kill();
             let _ = target.wait();
@@ -279,12 +291,27 @@ mod imp {
             });
             let l = levels(&r, 0.8, &[1500.0]);
             let pass = lv(&l, 1500.0) > -20.0 && r.restarts >= 1;
-            check("process_restart_recovery", pass, json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state)}), &mut report);
+            check("process_restart_recovery", pass, json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state), "hr": r.hr}), &mut report);
             let child = restarted.lock().unwrap().take();
             if let Some(mut c) = child {
                 let _ = c.kill();
                 let _ = c.wait();
             }
+        }
+
+        // D. (information) the microphone the engine would pick never is our
+        // own cable, and whether the CI sink's virtual mic echoes its speaker
+        {
+            let own: Vec<String> = devices::OWN_VIRTUAL_DEVICES.iter().map(|s| s.to_string()).collect();
+            let mic = devices::resolve(&DeviceSelector::DefaultExcluding(Flow::Capture, own)).map(|(_, e)| e.name).unwrap_or_default();
+            let lower = mic.to_lowercase();
+            let pass = !devices::OWN_VIRTUAL_DEVICES.iter().any(|p| lower.contains(p));
+            check("microphone_never_own_cable", pass, json!({"picked": mic, "default": devices::default_id(Flow::Capture)}), &mut report);
+            let player = play(2500.0, 0.3, DeviceSelector::NameContains(Flow::Render, sink.clone()));
+            std::thread::sleep(Duration::from_millis(500));
+            let r = record(CaptureTarget::Device(DeviceSelector::NameContains(Flow::Capture, "virtual mic".into())), 2.0, |_| {});
+            drop(player);
+            report.insert("info_sink_mic_echo".into(), json!({"levels_db": levels(&r, 1.5, &[2500.0]), "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr}));
         }
 
         report.insert("pass".into(), json!(ok));

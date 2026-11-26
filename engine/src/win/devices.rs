@@ -55,6 +55,20 @@ pub enum DeviceSelector {
     Id(String),
     /// The first active endpoint whose name contains this text.
     NameContains(Flow, String),
+    /// The Windows default device, unless its name contains one of the
+    /// patterns; then the first other active device. Used for the
+    /// microphone so the engine can never record its own virtual cable
+    /// (which would feed "Til Discord" back into itself).
+    DefaultExcluding(Flow, Vec<String>),
+}
+
+/// Name fragments of the virtual devices Claude Talk itself feeds. They are
+/// never used as the user's microphone.
+pub const OWN_VIRTUAL_DEVICES: &[&str] = &["claude talk", "vb-audio", "cable output", "cable input"];
+
+fn excluded(name: &str, patterns: &[String]) -> bool {
+    let n = name.to_lowercase();
+    patterns.iter().any(|p| n.contains(&p.to_lowercase()))
 }
 
 /// HRESULT_FROM_WIN32(ERROR_NOT_FOUND)
@@ -143,6 +157,26 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
                 _ => Flow::Render,
             };
             (dev, flow)
+        }
+        DeviceSelector::DefaultExcluding(f, patterns) => {
+            let def = unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eConsole) }.ok();
+            let def_ok = def.as_ref().filter(|d| !excluded(&read_string(d, &PKEY_Device_FriendlyName), patterns)).cloned();
+            match def_ok {
+                Some(d) => (d, *f),
+                None => {
+                    let coll = unsafe { e.EnumAudioEndpoints(data_flow(*f), DEVICE_STATE_ACTIVE) }?;
+                    let n = unsafe { coll.GetCount() }?;
+                    let mut found = None;
+                    for i in 0..n {
+                        let dev = unsafe { coll.Item(i) }?;
+                        if !excluded(&read_string(&dev, &PKEY_Device_FriendlyName), patterns) {
+                            found = Some(dev);
+                            break;
+                        }
+                    }
+                    (found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?, *f)
+                }
+            }
         }
         DeviceSelector::NameContains(f, text) => {
             let coll = unsafe { e.EnumAudioEndpoints(data_flow(*f), DEVICE_STATE_ACTIVE) }?;
