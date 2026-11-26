@@ -57,6 +57,7 @@ impl GainParams {
 #[derive(Debug, Default)]
 pub struct TapStats {
     pub underrun_frames: AtomicU64,
+    pub skipped_frames: AtomicU64,
     pub drift_ppm: AtomicF32,
     pub buffered_ms: AtomicF32,
 }
@@ -236,6 +237,9 @@ impl OutputMixer {
             let st = tap.resampler.pull(&mut tap.ring, scratch);
             if st.underrun_frames > 0 {
                 tap.stats.underrun_frames.fetch_add(st.underrun_frames as u64, Ordering::Relaxed);
+            }
+            if st.skipped_frames > 0 {
+                tap.stats.skipped_frames.fetch_add(st.skipped_frames as u64, Ordering::Relaxed);
             }
             tap.stats.drift_ppm.store(tap.resampler.drift().drift_ppm() as f32);
             tap.stats.buffered_ms.store(tap.ring.slots() as f32 / ENGINE_CHANNELS as f32 / tap.in_rate as f32 * 1000.0);

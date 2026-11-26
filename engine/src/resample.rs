@@ -16,6 +16,9 @@ pub struct PullStats {
     /// Output frames that had to be filled with silence because the source
     /// did not deliver in time.
     pub underrun_frames: u32,
+    /// Input frames discarded because far more was buffered than the target
+    /// (start-up backlog, or the output stalled). Keeps latency bounded.
+    pub skipped_frames: u32,
 }
 
 pub struct AdaptiveResampler {
@@ -83,6 +86,24 @@ impl AdaptiveResampler {
                 stats.underrun_frames = (out.len() / ch) as u32;
                 return stats;
             }
+        }
+
+        // Latency guard: drift control only corrects slowly (≤0.5 %), so a
+        // big backlog (output started late, or stalled) is dropped at once
+        // instead of being played late for a minute.
+        let block_in = (out.len() / ch) as f64 / self.nominal;
+        let limit = self.target_frames as f64 + (self.target_frames as f64).max(2.0 * block_in);
+        let mut available = available;
+        if available as f64 > limit {
+            // keep the target, but never less than one block plus margin
+            let keep = (self.target_frames as f64).max(1.5 * block_in + CHUNK as f64) as usize;
+            let skip = available - keep;
+            if let Ok(c) = ring.read_chunk(skip * ch) {
+                c.commit_all();
+            }
+            stats.skipped_frames = skip as u32;
+            available -= skip;
+            self.drift.reset();
         }
 
         // One controller update per pull (per output block).
@@ -190,6 +211,35 @@ mod tests {
         let off = tone_level(&last, 1500.0, 48000.0);
         assert!(main > 0.4, "main {main}");
         assert!(20.0 * (off / main).log10() < -60.0, "spur {} dB", 20.0 * (off / main).log10());
+    }
+
+    #[test]
+    fn startup_backlog_is_dropped_not_played_late() {
+        let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
+        let mut r = AdaptiveResampler::new(1, 48000, 48000, 20.0, 100.0);
+        // 300 ms arrive before the output starts pulling
+        let mut phase = 0.0;
+        for v in sine(1000.0, 48000.0, 14400, &mut phase) {
+            let _ = prod.push(v);
+        }
+        let mut out = vec![0f32; 480];
+        let st = r.pull(&mut cons, &mut out);
+        assert!(st.skipped_frames > 13000, "skipped {}", st.skipped_frames);
+        // from then on: real-time delivery, latency stays near the target
+        let mut last = Vec::new();
+        for i in 0..2000 {
+            for v in sine(1000.0, 48000.0, 480, &mut phase) {
+                let _ = prod.push(v);
+            }
+            r.pull(&mut cons, &mut out);
+            assert!(cons.slots() < 48 * 40, "buffered {} ms at block {i}", cons.slots() / 48);
+            if i >= 1900 {
+                last.extend_from_slice(&out);
+            }
+        }
+        // pitch is right: the tone sits at 1000 Hz
+        assert!(tone_level(&last, 1000.0, 48000.0) > 0.4);
+        assert!(r.drift().drift_ppm().abs() < 100.0, "ppm {}", r.drift().drift_ppm());
     }
 
     #[test]
