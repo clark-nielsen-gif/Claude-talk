@@ -30,6 +30,11 @@ pub struct AudioStatus {
     pub claude_listening: bool,
     /// Discord is running (its sound is being captured).
     pub discord_running: bool,
+    /// "yes": Discord records from our cable, "no": another mic, "": unknown.
+    pub discord_uses_cable: String,
+    pub discord_needs_restart: bool,
+    /// Default output is speakers (echo risk).
+    pub speakers: bool,
     /// The virtual cable (Discord's microphone) is installed and playing.
     pub cable_ok: bool,
     pub latency_ms: f32,
@@ -148,6 +153,14 @@ mod imp {
             }
             // capture period (10 ms) + route buffer + render period (10 ms)
             st.latency_ms = worst_latency + 20.0;
+            st.discord_uses_cable = match state.discord_uses_cable.load(Ordering::Relaxed) {
+                crate::discord::YES => "yes",
+                crate::discord::NO => "no",
+                _ => "",
+            }
+            .into();
+            st.discord_needs_restart = state.discord_needs_restart.load(Ordering::Relaxed);
+            st.speakers = state.speakers.load(Ordering::Relaxed);
             st.claude_window_open = state.claude_pid.load(Ordering::Relaxed) != 0;
             st.claude_listening = state.claude_mic_active.load(Ordering::Relaxed);
             let _ = app.emit("audio-status", &st);

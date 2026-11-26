@@ -7,6 +7,8 @@ description = "Claude Talk – bring Claude into your Discord calls"
 default-run = "claude-talk"
 
 [features]
+default = ["updater"]
+updater = ["dep:tauri-plugin-updater"]
 # Hidden test mode for CI only: lets the Claude window load the local test
 # page instead of claude.ai. Never enabled in release builds.
 ci-testpage = []
@@ -20,7 +22,7 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = { version = "2", optional = true }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

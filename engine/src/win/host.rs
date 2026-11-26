@@ -62,7 +62,8 @@ impl HostConfig {
 
 struct SourceEntry {
     handle: FanoutHandle,
-    stream: StreamHandle,
+    stream: Option<StreamHandle>,
+    _generator: Option<crate::generator::Generator>,
 }
 
 struct OutputEntry {
@@ -213,12 +214,24 @@ impl AudioHost {
             SourceKind::Program(p) => CaptureTarget::Process(p),
         };
         let stream = spawn_capture("src", target, fanout);
-        self.sources.insert(id, SourceEntry { handle, stream });
+        self.sources.insert(id, SourceEntry { handle, stream: Some(stream), _generator: None });
         // re-wire existing routes of this source
         let routes: Vec<(OutputId, Route)> = self.graph.routes().filter(|(s, _, _)| *s == id).map(|(_, o, r)| (o, r)).collect();
         for (o, r) in routes {
             self.wire(id, o, r);
         }
+        Ok(())
+    }
+
+    /// A source that generates audio itself (self-test tones). `gen` fills
+    /// interleaved stereo 48 kHz.
+    pub fn add_generated_source(&mut self, spec: Source, gen: impl FnMut(&mut [f32]) + Send + 'static) -> Result<(), Rejection> {
+        let id = spec.id;
+        self.graph.add_source(spec)?;
+        self.sources.remove(&id);
+        let (fanout, handle) = SourceFanout::new(id, ENGINE_RATE);
+        let g = crate::generator::Generator::spawn(fanout, gen);
+        self.sources.insert(id, SourceEntry { handle, stream: None, _generator: Some(g) });
         Ok(())
     }
 
@@ -316,7 +329,9 @@ impl AudioHost {
     /// Makes a stream reopen its device (default device changed, etc.).
     pub fn restart_streams(&self) {
         for s in self.sources.values() {
-            s.stream.request_restart();
+            if let Some(st) = &s.stream {
+                st.request_restart();
+            }
         }
         for o in self.outputs.values() {
             if let Some(st) = &o.stream {
@@ -348,7 +363,7 @@ impl AudioHost {
                 muted: s.handle.params.muted.load(Ordering::Relaxed),
                 gain_db: s.handle.params.gain_db.load(),
                 overflow_frames: s.handle.stats.overflow_frames.load(Ordering::Relaxed),
-                stream: info(&s.stream),
+                stream: s.stream.as_ref().map(info).unwrap_or(StreamInfo { state: StreamState::Running, device: String::new(), pid: 0, last_error: 0, restarts: 0 }),
             });
         }
         for (id, o) in &self.outputs {

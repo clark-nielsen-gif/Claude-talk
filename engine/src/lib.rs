@@ -8,6 +8,7 @@
 pub mod analysis;
 pub mod drift;
 pub mod dsp;
+pub mod generator;
 pub mod graph;
 pub mod mixer;
 pub mod resample;

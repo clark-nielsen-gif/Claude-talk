@@ -1,6 +1,6 @@
 //! Shared application state.
 use crate::config::Config;
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8};
 use std::sync::{Arc, Mutex};
 
 pub struct Inner {
@@ -11,6 +11,13 @@ pub struct Inner {
     pub claude_mic_active: AtomicBool,
     pub shutting_down: AtomicBool,
     pub ptt_down: AtomicBool,
+    /// Discord records from our cable: 0 unknown, 1 yes, 2 no (see discord.rs).
+    pub discord_uses_cable: AtomicU8,
+    pub discord_needs_restart: AtomicBool,
+    /// The default output is speakers (sound can reach the microphone).
+    pub speakers: AtomicBool,
+    /// While Some, the Claude bridge appends what it sends (self-test).
+    pub bridge_probe: Mutex<Option<Vec<f32>>>,
     #[cfg(windows)]
     pub audio: Mutex<Option<ct_engine::win::host::AudioHost>>,
 }
@@ -25,6 +32,10 @@ impl Inner {
             claude_mic_active: AtomicBool::new(false),
             shutting_down: AtomicBool::new(false),
             ptt_down: AtomicBool::new(false),
+            discord_uses_cable: AtomicU8::new(0),
+            discord_needs_restart: AtomicBool::new(false),
+            speakers: AtomicBool::new(false),
+            bridge_probe: Mutex::new(None),
             #[cfg(windows)]
             audio: Mutex::new(None),
         })

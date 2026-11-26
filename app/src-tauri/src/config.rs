@@ -56,6 +56,9 @@ pub struct Config {
     pub echo: EchoMode,
     pub hotkeys: Hotkeys,
     pub advanced_unlocked: bool,
+    /// Keep Discord's microphone pointed at Claude Talk (off after
+    /// "Restore normal sound settings" until Claude is switched on again).
+    pub route_discord: bool,
 }
 
 impl Default for Config {
@@ -73,6 +76,7 @@ impl Default for Config {
             echo: EchoMode::Auto,
             hotkeys: Hotkeys::default(),
             advanced_unlocked: false,
+            route_discord: true,
         }
     }
 }
@@ -122,8 +126,7 @@ mod tests {
     fn roundtrip_and_damaged_file() {
         let dir = std::env::temp_dir().join(format!("ct-cfg-{}", std::process::id()));
         let path = dir.join("config.json");
-        let mut c = Config::default();
-        c.language = "en".into();
+        let c = Config { language: "en".into(), ..Default::default() };
         c.save(&path).unwrap();
         assert_eq!(Config::load(&path), c);
         std::fs::write(&path, "{ not json").unwrap();

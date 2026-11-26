@@ -165,6 +165,11 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
                 }
                 mixer.render(&mut buf);
                 sent += BLOCK as u64;
+                if let Ok(mut probe) = state.bridge_probe.try_lock() {
+                    if let Some(v) = probe.as_mut() {
+                        v.extend_from_slice(&buf);
+                    }
+                }
                 if !state.claude_mic_active.load(Ordering::Relaxed) {
                     continue;
                 }

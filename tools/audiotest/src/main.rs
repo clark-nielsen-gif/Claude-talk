@@ -11,7 +11,11 @@
 
 #[cfg(not(windows))]
 fn main() {
-    eprintln!("ct-audiotest only runs on Windows");
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("serve-testpage") {
+        std::process::exit(serve::run(&args[2..]));
+    }
+    eprintln!("ct-audiotest audio commands only run on Windows");
     std::process::exit(2);
 }
 
@@ -19,6 +23,7 @@ fn main() {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let code = match args.get(1).map(String::as_str) {
+        Some("serve-testpage") => serve::run(&args[2..]),
         Some("devices") => imp::devices(),
         Some("tone") => imp::tone(&args[2..]),
         Some("smoke") => imp::smoke(&args[2..]),
@@ -28,6 +33,72 @@ fn main() {
         }
     };
     std::process::exit(code);
+}
+
+/// Serves the CI voice page with a claude.ai-like strict CSP and stores the
+/// page's report. `serve-testpage --port 8765 --out report.json`
+mod serve {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+
+    const PAGE: &str = include_str!("../testpage/test.html");
+
+    pub fn run(args: &[String]) -> i32 {
+        let arg = |n: &str| args.iter().position(|a| a == n).and_then(|i| args.get(i + 1)).cloned();
+        let port = arg("--port").unwrap_or_else(|| "8765".into());
+        let out = arg("--out").unwrap_or_else(|| "page-report.json".into());
+        let listener = match TcpListener::bind(format!("127.0.0.1:{port}")) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("bind: {e}");
+                return 1;
+            }
+        };
+        println!("serving on http://127.0.0.1:{port}/test.html");
+        let mut counter = 0u64;
+        for conn in listener.incoming().flatten() {
+            counter += 1;
+            let mut reader = BufReader::new(&conn);
+            let mut line = String::new();
+            if reader.read_line(&mut line).is_err() {
+                continue;
+            }
+            let mut len = 0usize;
+            loop {
+                let mut h = String::new();
+                if reader.read_line(&mut h).is_err() || h == "\r\n" || h.is_empty() {
+                    break;
+                }
+                if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                    len = v.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut w = &conn;
+            if line.starts_with("POST /report") {
+                let mut body = vec![0u8; len];
+                let _ = reader.read_exact(&mut body);
+                let _ = std::fs::write(&out, &body);
+                println!("report received ({} bytes)", body.len());
+                let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
+            } else if line.starts_with("GET /test.html") {
+                let nonce = format!("ci{counter:08x}{:x}", std::process::id());
+                let html = PAGE.replace("__NONCE__", &nonce);
+                let csp = format!(
+                    "default-src 'none'; script-src 'nonce-{nonce}' 'unsafe-eval'; script-src-attr 'none'; style-src 'unsafe-inline'; \
+                     img-src 'self'; connect-src 'self'; media-src blob:; worker-src blob:; frame-src 'self'; base-uri 'self'"
+                );
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Security-Policy: {csp}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    html.len()
+                );
+                let _ = w.write_all(head.as_bytes());
+                let _ = w.write_all(html.as_bytes());
+            } else {
+                let _ = w.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+        }
+        0
+    }
 }
 
 #[cfg(windows)]

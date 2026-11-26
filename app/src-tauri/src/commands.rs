@@ -59,6 +59,7 @@ pub struct ConfigPatch {
     pub push_to_talk: Option<bool>,
     pub echo: Option<EchoMode>,
     pub hotkeys: Option<crate::config::Hotkeys>,
+    pub advanced_unlocked: Option<bool>,
 }
 
 #[tauri::command]
@@ -80,6 +81,12 @@ pub fn set_config(app: AppHandle, state: State<AppState>, patch: ConfigPatch) ->
         }
         if let Some(v) = patch.claude_in_discord {
             c.claude_in_discord = v;
+            if v {
+                c.route_discord = true; // switching Claude on re-enables Discord routing
+            }
+        }
+        if let Some(v) = patch.advanced_unlocked {
+            c.advanced_unlocked = v;
         }
         if let Some(v) = patch.mic_muted {
             c.mic_muted = v;
@@ -129,6 +136,8 @@ pub fn open_place(app: AppHandle, place: String) -> Result<(), String> {
         "soundSettings" => "ms-settings:sound",
         "vbAudio" => "https://vb-audio.com/Cable/",
         "vbAudioDonate" => "https://shop.vb-audio.com/en/win-apps/11-vb-cable.html",
+        "windowsUpdate" => "ms-settings:windowsupdate",
+        "download" => "https://github.com/clark-nielsen-gif/Claude-talk/releases/latest",
         "logs" => {
             return app
                 .opener()
@@ -161,4 +170,122 @@ pub fn show_main(app: AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
     }
+}
+
+#[tauri::command]
+pub fn restore_audio_settings(state: State<AppState>) {
+    if let Ok(mut c) = state.config.lock() {
+        c.route_discord = false;
+    }
+    state.save_config();
+    crate::discord::restore();
+}
+
+#[tauri::command]
+pub async fn restart_discord() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(crate::discord::restart).await.map_err(|_| "error.internal".to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixCell {
+    pub source: u32,
+    pub output: u32,
+    pub state: &'static str,
+    pub gain_db: f32,
+    pub who: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct Labeled {
+    pub id: u32,
+    pub label: String,
+}
+
+#[derive(Serialize)]
+pub struct Matrix {
+    pub sources: Vec<Labeled>,
+    pub outputs: Vec<Labeled>,
+    pub cells: Vec<MatrixCell>,
+}
+
+/// Sources × outputs with each cell's state as the routing rules see it.
+#[tauri::command]
+pub fn get_matrix(state: State<AppState>) -> Matrix {
+    #[cfg(windows)]
+    {
+        use ct_engine::graph::{Party, Rejection};
+        let g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
+        let Some(host) = g.as_ref() else { return Matrix { sources: vec![], outputs: vec![], cells: vec![] } };
+        let graph = host.graph();
+        let who = |p: &Party| match p {
+            Party::Claude => "Claude".to_string(),
+            Party::Discord => "Discord".to_string(),
+            Party::User => "Du".to_string(),
+            Party::App(a) => a.clone(),
+            Party::Other => "?".to_string(),
+        };
+        let sources: Vec<Labeled> = graph.sources().filter(|s| s.id < 900).map(|s| Labeled { id: s.id, label: s.label.clone() }).collect();
+        let outputs: Vec<Labeled> = graph.outputs().map(|o| Labeled { id: o.id, label: o.label.clone() }).collect();
+        let mut cells = Vec::new();
+        for s in &sources {
+            for o in &outputs {
+                let (st, w) = match graph.route(s.id, o.id) {
+                    Some(r) => (if r.muted { "off" } else { "on" }, None),
+                    None => match graph.check_route(s.id, o.id) {
+                        Ok(_) => ("off", None),
+                        Err(Rejection::SelfHearing { party, .. }) => ("locked", Some(who(&party))),
+                        Err(Rejection::Feedback { .. }) => ("loop", None),
+                        Err(_) => ("off", None),
+                    },
+                };
+                let gain = graph.route(s.id, o.id).map(|r| r.gain_db).unwrap_or(0.0);
+                cells.push(MatrixCell { source: s.id, output: o.id, state: st, gain_db: gain, who: w });
+            }
+        }
+        Matrix { sources, outputs, cells }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Matrix { sources: vec![], outputs: vec![], cells: vec![] }
+    }
+}
+
+#[tauri::command]
+pub fn set_route(app: AppHandle, state: State<AppState>, source: u32, output: u32, enabled: bool, gain_db: f32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use ct_engine::graph::Route;
+        let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
+        let Some(host) = g.as_mut() else { return Err("error.internal".into()) };
+        if enabled {
+            host.set_route(source, output, Route { gain_db: gain_db.clamp(-60.0, 12.0), muted: false }).map_err(|e| format!("error.{}", e.key()))?;
+        } else {
+            host.remove_route(source, output);
+        }
+        drop(g);
+        crate::audio::apply_switches(&app);
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state, source, output, enabled, gain_db);
+        Err("error.internal".into())
+    }
+}
+
+#[tauri::command]
+pub fn set_unlocked(state: State<AppState>, unlocked: bool) {
+    #[cfg(windows)]
+    if let Some(h) = state.audio.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        h.set_self_hearing_unlocked(unlocked);
+    }
+    #[cfg(not(windows))]
+    let _ = (state, unlocked);
+}
+
+#[tauri::command]
+pub async fn self_test(app: AppHandle) -> Result<Vec<crate::selftest::RouteResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::selftest::run(&app)).await.map_err(|_| "error.internal".to_string())?
 }

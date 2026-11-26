@@ -6,10 +6,12 @@ mod autostart;
 mod claude_window;
 mod commands;
 mod config;
+mod discord;
 mod hotkeys;
 mod logging;
 mod paths;
 mod report;
+mod selftest;
 mod state;
 mod tray;
 
@@ -34,20 +36,28 @@ pub fn shutdown(app: &AppHandle) {
 
 fn main() {
     logging::init();
+    // Used by the uninstaller: give Discord its own microphone back, then exit.
+    if std::env::args().any(|a| a == "--restore-audio") {
+        discord::restore();
+        log::logger().flush();
+        return;
+    }
     let config = config::Config::load(&paths::config_file());
     let started_minimized = std::env::args().any(|a| a == "--minimized");
     let state = Inner::new(config);
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // a second start just shows the running instance
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             commands::show_main(app.clone());
         }))
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .manage(state)
+        .manage(state);
+    #[cfg(feature = "updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::get_config,
@@ -57,6 +67,12 @@ fn main() {
             commands::save_report,
             commands::quit,
             commands::show_main,
+            commands::restore_audio_settings,
+            commands::restart_discord,
+            commands::get_matrix,
+            commands::set_route,
+            commands::set_unlocked,
+            commands::self_test,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -64,6 +80,7 @@ fn main() {
             let info = commands::app_info();
             if info.supported {
                 audio::start(&handle);
+                discord::spawn_watcher(handle.clone());
             } else {
                 log::warn!("Windows build {} lacks process loopback; showing the 'needs Windows 11' screen", info.windows_build);
             }

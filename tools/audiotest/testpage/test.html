@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude Talk CI voice page</title>
+<!-- Served with a strict nonce CSP like claude.ai's (see server). -->
+</head>
+<body>
+<h1>CI voice page</h1>
+<pre id="log"></pre>
+<script nonce="__NONCE__">
+// Behaves like a voice web app: asks for the microphone with typical
+// constraints, lists devices, plays "Claude's voice" (440 Hz), and analyses
+// what it receives through three consumers (Web Audio, MediaRecorder,
+// WebRTC loopback). Results are POSTed to /report.
+(async () => {
+  const log = (m) => { document.getElementById('log').textContent += m + '\n'; };
+  const report = { steps: [], errors: [] };
+  const step = (name, data) => { report.steps.push(Object.assign({ name }, data || {})); log(name + ' ' + JSON.stringify(data || {})); };
+  const post = () => fetch('/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(report) });
+  try {
+    // "Claude's voice": a steady 440 Hz from this page
+    const voice = new AudioContext();
+    const osc = voice.createOscillator(); const g = voice.createGain();
+    osc.frequency.value = 440; g.gain.value = 0.3; osc.connect(g).connect(voice.destination); osc.start();
+    await Promise.race([voice.resume(), new Promise(r => setTimeout(r, 2000))]);
+    step('voice', { state: voice.state });
+
+    const perm = await navigator.permissions.query({ name: 'microphone' });
+    step('permission', { state: perm.state });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    step('devices', { audioinput: devices.filter(d => d.kind === 'audioinput').map(d => d.label + '|' + d.deviceId) });
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: 'default', echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 },
+    });
+    const track = stream.getAudioTracks()[0];
+    step('track', { label: track.label, state: track.readyState, settings: track.getSettings() });
+    await track.applyConstraints({ echoCancellation: false });
+
+    // a second getUserMedia call must also work (apps often do this)
+    const s2 = await navigator.mediaDevices.getUserMedia({ audio: true });
+    s2.getTracks().forEach(t => t.stop());
+    step('second_call_ok');
+
+    // 1) Web Audio capture of 3 s at the context rate
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    await Promise.race([ctx.resume(), new Promise(r => setTimeout(r, 2000))]);
+    step('analysis_context', { state: ctx.state });
+    const src = ctx.createMediaStreamSource(stream);
+    const sp = ctx.createScriptProcessor(4096, 1, 1);
+    const samples = [];
+    let collecting = false;
+    const marks = [];
+    sp.onaudioprocess = (e) => {
+      const d = e.inputBuffer.getChannelData(0);
+      if (collecting) samples.push(new Float32Array(d));
+      // impulse detection for latency (Discord → Claude direction)
+      for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > 0.5) { marks.push(performance.timeOrigin + performance.now() - ((d.length - i) / ctx.sampleRate) * 1000); break; }
+    };
+    src.connect(sp); sp.connect(ctx.destination);
+    await new Promise(r => setTimeout(r, 1500));   // settle
+    collecting = true;
+    await new Promise(r => setTimeout(r, 3000));
+    collecting = false;
+    const n = samples.reduce((a, b) => a + b.length, 0);
+    const all = new Float32Array(n); let o = 0; for (const s of samples) { all.set(s, o); o += s.length; }
+    const goertzel = (x, f, rate) => {
+      // Blackman-Harris windowed, ±2 Hz search (device clocks drift a little)
+      let best = -400;
+      for (let df = -2; df <= 2.0001; df += 0.25) {
+        const w = 2 * Math.PI * (f + df) / rate, c = 2 * Math.cos(w);
+        let s1 = 0, s2 = 0, ws = 0;
+        for (let i = 0; i < x.length; i++) {
+          const t = 2 * Math.PI * i / (x.length - 1);
+          const win = 0.35875 - 0.48829 * Math.cos(t) + 0.14128 * Math.cos(2 * t) - 0.01168 * Math.cos(3 * t);
+          ws += win; const s0 = x[i] * win + c * s1 - s2; s2 = s1; s1 = s0;
+        }
+        const mag = Math.sqrt(Math.max(0, s1 * s1 + s2 * s2 - c * s1 * s2)) * 2 / ws;
+        best = Math.max(best, 20 * Math.log10(Math.max(mag, 1e-10)));
+      }
+      return Math.round(best * 10) / 10;
+    };
+    report.levels = { '1000': goertzel(all, 1000, ctx.sampleRate), '2500': goertzel(all, 2500, ctx.sampleRate), '440': goertzel(all, 440, ctx.sampleRate), '3000': goertzel(all, 3000, ctx.sampleRate) };
+    report.samples = n; report.rate = ctx.sampleRate;
+    step('levels', report.levels);
+    report.impulseTimes = marks.slice(-50);
+
+    // 2) MediaRecorder must produce data
+    const rec = new MediaRecorder(new MediaStream([track.clone()]));
+    let bytes = 0; rec.ondataavailable = (e) => { bytes += e.data.size; };
+    rec.start(250); await new Promise(r => setTimeout(r, 1200)); rec.stop(); await new Promise(r => setTimeout(r, 300));
+    step('mediarecorder', { bytes });
+
+    // 3) WebRTC loopback: the track survives an RTCPeerConnection
+    const a = new RTCPeerConnection(), b = new RTCPeerConnection();
+    a.onicecandidate = (e) => e.candidate && b.addIceCandidate(e.candidate);
+    b.onicecandidate = (e) => e.candidate && a.addIceCandidate(e.candidate);
+    const remote = new Promise(r => { b.ontrack = (e) => r(e.track); });
+    a.addTrack(track.clone(), stream);
+    await a.setLocalDescription(await a.createOffer()); await b.setRemoteDescription(a.localDescription);
+    await b.setLocalDescription(await b.createAnswer()); await a.setRemoteDescription(b.localDescription);
+    const rt = await remote;
+    await new Promise(r => setTimeout(r, 2000));
+    const stats = await b.getStats(); let energy = 0;
+    stats.forEach(s => { if (s.type === 'inbound-rtp' && s.kind === 'audio') energy = s.totalAudioEnergy || 0; });
+    step('webrtc', { remoteState: rt.readyState, totalAudioEnergy: energy });
+
+    track.stop();
+    step('stopped');
+  } catch (e) {
+    report.errors.push(String(e && e.stack || e));
+    log('ERROR ' + e);
+  }
+  await post();
+  log('reported');
+  // keep playing the voice for the cable-side measurement
+})();
+</script>
+</body>
+</html>

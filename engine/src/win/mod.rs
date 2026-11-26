@@ -9,7 +9,9 @@
 
 pub mod devices;
 pub mod host;
+pub mod policy;
 pub mod process;
+pub mod sessions;
 pub mod stream;
 
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
