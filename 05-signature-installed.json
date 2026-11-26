@@ -1,0 +1,10 @@
+﻿{
+    "Catalog":  "C:\\Windows\\System32\\DriverStore\\FileRepository\\vbmmecable64_win10.inf_amd64_9ed1e8995f3f9e21\\vbaudio_cable64_win10.cat",
+    "Driver":  "vbaudio_cable64_win10.sys",
+    "CatalogSigner":  "CN=Microsoft Windows Hardware Compatibility Publisher, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+    "MicrosoftSigned":  true,
+    "LegacyCrossSigned":  false,
+    "KernelPolicyPass":  true,
+    "ProductionOk":  true,
+    "SigntoolTail":  "    Expires:   Sat Jun 23 22:04:01 2035\n    SHA1 hash: 3B1EFD3A66EA28B16697394703A72CA340A05BD5\n        Issued to: Microsoft Windows Third Party Component CA 2014\n        Issued by: Microsoft Root Certificate Authority 2010\n        Expires:   Mon Oct 15 20:41:27 2029\n        SHA1 hash: 1906DCF62629B563252C826FDD874EFCEB6856C6\n            Issued to: Microsoft Windows Hardware Compatibility Publisher\n            Issued by: Microsoft Windows Third Party Component CA 2014\n            Expires:   Tue May 11 18:17:34 2027\n            SHA1 hash: 6022340C9F4CB00307DF8DB036D392ADAC766212\nSuccessfully verified: C:\\Windows\\System32\\DriverStore\\FileRepository\\vbmmecable64_win10.inf_amd64_9ed1e8995f3f9e21\\vbaudio_cable64_win10.sys\nNumber of files successfully Verified: 1\nNumber of warnings: 0\nNumber of errors: 0"
+}

@@ -1,0 +1,17 @@
+﻿[
+    {
+        "Flow":  "Render",
+        "FriendlyName":  "CABLE In 16ch (VB-Audio Virtual Cable)",
+        "Id":  "{0.0.0.00000000}.{7a591543-b1f7-4ad7-ae7d-8a506f530427}"
+    },
+    {
+        "Flow":  "Render",
+        "FriendlyName":  "CABLE Input (VB-Audio Virtual Cable)",
+        "Id":  "{0.0.0.00000000}.{fefd15b2-b38d-49d0-9bfc-a4b939703b15}"
+    },
+    {
+        "Flow":  "Capture",
+        "FriendlyName":  "Claude Talk â€“ til Discord (Claude Talk)",
+        "Id":  "{0.0.1.00000000}.{18344d01-0b70-4ecd-9092-35f94dc61c92}"
+    }
+]
