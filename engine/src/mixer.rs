@@ -91,6 +91,10 @@ pub struct SourceStats {
     /// Odd while a push is under way (written frames and `last_push_ns` not
     /// yet consistent): readers that need both retry (a sequence lock).
     pub push_seq: AtomicU64,
+    /// The source is silent and Claude Talk fills in silence for it (a
+    /// program between sounds): an underrun then is no reason to grow a
+    /// route's buffer.
+    pub quiet_fill: std::sync::atomic::AtomicBool,
 }
 
 /// Monotonic nanoseconds since the first call (QueryPerformanceCounter on
@@ -312,6 +316,8 @@ impl OutputMixer {
             let last = tap.source_stats.last_push_ns.load(Ordering::Relaxed);
             let age_s = (self.now_ns as f64 - last as f64) * 1e-9;
             tap.resampler.set_input_age(age_s);
+            tap.resampler
+                .set_source_quiet(tap.source_stats.quiet_fill.load(Ordering::Relaxed));
             let st = tap.resampler.pull(&mut tap.ring, scratch);
             if st.underrun_frames > 0 {
                 tap.stats
@@ -437,6 +443,20 @@ impl SourceFanout {
     }
 
     /// When this source last delivered (ns on `clock_ns`, 0 = never).
+    /// Where the pushed sound reaches, in `clock_ns` time, when that is not
+    /// the moment of the push (silence filled in behind "now"). Fixed routes
+    /// steer their delay by it.
+    pub fn set_reach_ns(&self, ns: u64) {
+        self.stats.push_seq.fetch_add(1, Ordering::AcqRel);
+        self.stats.last_push_ns.store(ns, Ordering::Release);
+        self.stats.push_seq.fetch_add(1, Ordering::Release);
+    }
+
+    /// See `SourceStats::quiet_fill`.
+    pub fn set_quiet_fill(&self, on: bool) {
+        self.stats.quiet_fill.store(on, Ordering::Relaxed);
+    }
+
     pub fn last_push_ns(&self) -> u64 {
         self.stats.last_push_ns.load(Ordering::Relaxed)
     }

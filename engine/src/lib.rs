@@ -18,6 +18,10 @@ pub mod resample;
 pub const ENGINE_RATE: u32 = 48_000;
 /// Internal channel count of the engine (stereo).
 pub const ENGINE_CHANNELS: usize = 2;
+/// Start buffer of an ordinary route (ms): two 10 ms packets plus one
+/// resampler chunk, so the first time the two clocks' phases cross (two
+/// renders between two packets) does not run it dry.
+pub const ROUTE_START_MS: f64 = 21.5;
 
 #[cfg(windows)]
 pub mod win;

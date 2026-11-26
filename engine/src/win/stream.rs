@@ -648,7 +648,7 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             let stamp = qpc as f64;
             let dur = frames as f64 * 1e7 / ENGINE_RATE as f64;
             let contiguous =
-                timed && (qpc == 0 || (!after_silence && (stamp - pos).abs() < 30_000.0));
+                timed && !after_silence && (qpc == 0 || (stamp - pos).abs() < 30_000.0);
             let compare = fill_silence && timed && qpc != 0 && !contiguous;
             // part of this packet was already played as silence (it came
             // late); small differences (< 0.5 ms) are clock rounding
@@ -729,6 +729,10 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                 pos = if timed { pos.max(end) } else { end };
             }
             timed = true;
+            if fill_silence {
+                fanout.set_quiet_fill(false);
+                set_reach(fanout, pos);
+            }
             if let Err(e) = unsafe { capture.ReleaseBuffer(frames) } {
                 return finish(&client, e.into());
             }
@@ -756,6 +760,11 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                 pos = *since + *sent as f64 * 1e7 / ENGINE_RATE as f64;
                 timed = true;
                 after_silence = true;
+                fanout.set_quiet_fill(true);
+                // The silence reaches 10 ms before now: say so, or the echo
+                // reference's delay control would read the delay 10 ms short
+                // and move the reference later for every pause.
+                set_reach(fanout, pos);
                 ctx.status
                     .silence_filled_frames
                     .fetch_add(frames as u64, Ordering::Relaxed);
@@ -763,6 +772,13 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         }
     };
     finish(&client, ended)
+}
+
+/// Tells the routes where the pushed sound reaches (`pos`, QPC 100 ns), on
+/// the mixer's clock.
+fn set_reach(fanout: &crate::mixer::SourceFanout, pos: f64) {
+    let behind_ns = ((qpc_100ns() as f64 - pos).max(0.0) * 100.0) as u64;
+    fanout.set_reach_ns(crate::mixer::clock_ns().saturating_sub(behind_ns));
 }
 
 /// Silence after sound: the first millisecond fades out from the last

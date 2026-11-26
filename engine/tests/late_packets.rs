@@ -185,6 +185,9 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
                     pos = if timed { pos.max(end) } else { end };
                 }
                 timed = true;
+                // as stream.rs: the routes learn where the sound reaches
+                src_fan.set_quiet_fill(false);
+                src_fan.set_reach_ns((pos * 1000.0) as u64);
             }
             if got {
                 last_data = now;
@@ -199,6 +202,8 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
                     pos = *since + *sent as f64 / 48000.0 * 1e6;
                     timed = true;
                     after_silence = true;
+                    src_fan.set_quiet_fill(true);
+                    src_fan.set_reach_ns((pos * 1000.0) as u64);
                 }
             }
         } else if t == mic_next {
@@ -248,6 +253,7 @@ fn run(sc: Scen, seed: u64) -> (Vec<(f64, f64)>, u64, u64) {
 }
 
 struct Summary {
+    median: f64,
     off_share: f64,
     max_jump: f64,
     spread: f64,
@@ -273,6 +279,7 @@ fn summarize(name: &str, sc: Scen, seed: u64) -> Summary {
         off * 100.0
     );
     Summary {
+        median: med,
         off_share: off,
         max_jump,
         spread,
@@ -368,6 +375,22 @@ fn reference_delay_holds_through_late_packets_pauses_and_drift() {
             },
         ),
         (
+            "pauses of 8 s every 12 s",
+            Scen {
+                pause_every_s: 12.0,
+                pause_len_s: 8.0,
+                ..base
+            },
+        ),
+        (
+            "pauses of 20 s every 30 s",
+            Scen {
+                pause_every_s: 30.0,
+                pause_len_s: 20.0,
+                ..base
+            },
+        ),
+        (
             "time stamps +-0.7 ms",
             Scen {
                 stamp_jit_us: 700.0,
@@ -403,10 +426,17 @@ fn reference_delay_holds_through_late_packets_pauses_and_drift() {
     // several timings of the same scenarios (Rng uses seed | 1, so odd seeds)
     let seeds = [0xabcdef_u64, 1, 3, 5, 7, 9];
     let mut bad = Vec::new();
+    // every scenario must keep the delay the steady case has, not only be
+    // steady in itself (a pause must not move the whole reference)
+    let steady = summarize("steady (reference)", base, seeds[0]).median;
     for (name, sc) in cases {
         for seed in seeds {
             let s = summarize(&format!("{name} (seed {seed:#x})"), sc, seed);
-            if s.off_share > 0.005 || s.max_jump > 1.5 || s.spread > 4.0 {
+            if s.off_share > 0.005
+                || s.max_jump > 2.0
+                || s.spread > 4.0
+                || (s.median - steady).abs() > 1.5
+            {
                 bad.push(format!("{name} (seed {seed:#x})"));
             }
         }

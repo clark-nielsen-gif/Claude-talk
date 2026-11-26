@@ -56,6 +56,7 @@ pub struct AdaptiveResampler {
     /// the source restarted: the next underrun is that gap, not jitter
     source_epoch: u32,
     restart_grace: bool,
+    source_quiet: bool,
     /// frames of fade-in still to apply after a gap (no click on resume)
     fade_in: usize,
     /// fixed mode: input frames owed for a gap that was played as silence;
@@ -119,6 +120,7 @@ impl AdaptiveResampler {
             fixed: false,
             source_epoch: 0,
             restart_grace: false,
+            source_quiet: false,
             fade_in: 0,
             owed: 0.0,
             owed_pulls: 0,
@@ -146,6 +148,11 @@ impl AdaptiveResampler {
     /// frame was recorded).
     pub fn set_input_age(&mut self, seconds: f64) {
         self.input_age_s = seconds.clamp(-0.1, 0.1);
+    }
+
+    /// Called before each pull: the source is being filled with silence.
+    pub fn set_source_quiet(&mut self, quiet: bool) {
+        self.source_quiet = quiet;
     }
 
     /// Called before each pull with the source's restart counter.
@@ -381,7 +388,8 @@ impl AdaptiveResampler {
                     // Underrun: emit silence for the rest, re-prime, and
                     // enlarge the buffer – unless the source just restarted.
                     self.priming = true;
-                    if std::mem::take(&mut self.restart_grace) {
+                    // (the gap of a program going quiet is not jitter either)
+                    if std::mem::take(&mut self.restart_grace) || self.source_quiet {
                         self.min_slack = usize::MAX;
                     } else {
                         self.adapt_after_underrun();
@@ -590,7 +598,8 @@ mod tests {
             } else {
                 let st = r.pull(&mut cons, &mut out);
                 let dry = st.underrun_frames > 0;
-                if dry && !was_dry && next_out > 60_000_000 {
+                // (the very first priming is not a dropout)
+                if dry && !was_dry && next_out > 100_000 {
                     dropouts += 1;
                 }
                 was_dry = dry;
@@ -620,7 +629,7 @@ mod tests {
         // grow once or twice at the start, but must not shrink back into
         // dropouts every few minutes.
         for (i, phase) in [0i64, 5_000, 9_500].into_iter().enumerate() {
-            let (d, _, m) = simulate(20.0, phase, 0x1234_5678 + i as u64);
+            let (d, _, m) = simulate(crate::ROUTE_START_MS, phase, 0x1234_5678 + i as u64);
             assert_eq!(d, 0, "phase {phase}: {d} dropouts in two hours");
             assert!(m <= 32.0, "phase {phase}: buffer grew to {m} ms");
         }

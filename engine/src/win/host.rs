@@ -24,7 +24,7 @@ use std::sync::Arc;
 /// 20 ms and repeated dropouts below it; the buffer grows by itself (max
 /// 40 ms) when a device is burstier than that, and never shrinks back below
 /// the level that ran dry.
-pub const ROUTE_BUFFER_MS: f64 = 20.0;
+pub const ROUTE_BUFFER_MS: f64 = crate::ROUTE_START_MS;
 
 /// Executables whose sound is "Discord".
 pub fn discord_executables() -> Vec<String> {
