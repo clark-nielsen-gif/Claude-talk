@@ -33,24 +33,30 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  ${If} $LANGUAGE == 1030
-    DetailPrint "Lydindstillingerne gendannes"
-  ${Else}
-    DetailPrint "Restoring sound settings"
+  ; An installer that replaces this version (an upgrade or a reinstall) runs
+  ; this uninstaller in place (_?=$INSTDIR); an uninstall from Windows'
+  ; settings copies itself to a temporary folder first. Only a real uninstall
+  ; removes the Claude Talk microphone and asks about the user's data.
+  ${If} $EXEDIR != $INSTDIR
+    ${If} $LANGUAGE == 1030
+      DetailPrint "Lydindstillingerne gendannes"
+    ${Else}
+      DetailPrint "Restoring sound settings"
+    ${EndIf}
+    nsExec::ExecToLog '"$INSTDIR\claude-talk.exe" --uninstall-cleanup'
+    Pop $0
+    ; The Claude window's login (claude.ai cookies) and the settings stay
+    ; unless the user says so; "No" is the default button, and a silent
+    ; uninstall (/S) keeps them.
+    ${If} $LANGUAGE == 1030
+      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Vil du også slette dine indstillinger og logge ud af Claude i Claude Talk?$\r$\n$\r$\nDin Claude-konto og dine samtaler bliver ikke slettet." /SD IDNO IDNO keep_user_data
+    ${Else}
+      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Do you also want to delete your settings and sign out of Claude in Claude Talk?$\r$\n$\r$\nYour Claude account and conversations are not deleted." /SD IDNO IDNO keep_user_data
+    ${EndIf}
+      SetShellVarContext current
+      RMDir /r "$LOCALAPPDATA\Claude Talk"
+      RMDir /r "$APPDATA\Claude Talk"
+      SetShellVarContext all
+    keep_user_data:
   ${EndIf}
-  nsExec::ExecToLog '"$INSTDIR\claude-talk.exe" --uninstall-cleanup'
-  Pop $0
-  ; The Claude window's login (claude.ai cookies) and the settings stay
-  ; unless the user says so; a silent uninstall (/S, also used for upgrades)
-  ; keeps them.
-  ${If} $LANGUAGE == 1030
-    MessageBox MB_YESNO|MB_ICONQUESTION "Vil du også slette dine indstillinger og logge ud af Claude i Claude Talk?$\r$\n$\r$\nDin Claude-konto og dine samtaler bliver ikke slettet." /SD IDNO IDNO keep_user_data
-  ${Else}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Do you also want to delete your settings and sign out of Claude in Claude Talk?$\r$\n$\r$\nYour Claude account and conversations are not deleted." /SD IDNO IDNO keep_user_data
-  ${EndIf}
-    SetShellVarContext current
-    RMDir /r "$LOCALAPPDATA\Claude Talk"
-    RMDir /r "$APPDATA\Claude Talk"
-    SetShellVarContext all
-  keep_user_data:
 !macroend

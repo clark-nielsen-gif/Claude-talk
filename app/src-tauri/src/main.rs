@@ -181,6 +181,14 @@ fn shutdown_inner(app: &AppHandle) {
         // Nothing feeds Discord's microphone any more: give Discord its own
         // microphone back (the next start points it at Claude Talk again).
         discord::restore();
+        // Discord closed: its choice can only be put back once it runs again
+        let routed = st.config.lock().map(|c| c.route_discord).unwrap_or(true);
+        let discord_running =
+            !ct_engine::win::policy::pids_of(&ct_engine::win::host::discord_executables())
+                .is_empty();
+        if routed && !discord_running {
+            discord::spawn_restore_helper();
+        }
     }
     log::info!("Claude Talk quit");
     log::logger().flush();
@@ -197,11 +205,17 @@ fn main() {
     for (flag, f) in [
         ("--install-cable", installer::install_cable as fn() -> i32),
         ("--uninstall-cleanup", installer::uninstall_cleanup),
+        (
+            "--restore-when-discord-starts",
+            discord::restore_when_discord_starts,
+        ),
     ] {
         if std::env::args().any(|a| a == flag) {
             // (the uninstaller removes that folder, so it logs nowhere)
             if flag == "--install-cable" {
                 logging::init_in(installer::elevated_log_dir());
+            } else if flag == "--restore-when-discord-starts" {
+                logging::init(); // runs as the user
             }
             let code = f();
             log::logger().flush();
@@ -269,6 +283,8 @@ fn main() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
+            #[cfg(windows)]
+            discord::mark_running();
             tray::create(&handle)?;
             let info = commands::app_info();
             if info.supported {

@@ -219,7 +219,9 @@ pub fn open_place(app: AppHandle, place: String) -> Result<(), String> {
 
 /// Saves logs, settings and a status snapshot as a zip on the Desktop and
 /// returns its path.
-#[tauri::command]
+// off the main thread: zipping the logs takes a moment, and the main thread
+// carries the Claude window's audio
+#[tauri::command(async)]
 pub fn save_report(app: AppHandle) -> Result<String, String> {
     crate::report::save(&app).map_err(|e| {
         log::error!("save report: {e}");

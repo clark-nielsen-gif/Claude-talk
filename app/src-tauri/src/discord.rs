@@ -249,6 +249,86 @@ pub fn restore() -> usize {
     0
 }
 
+const MAIN_MUTEX: &str = "Local\\ClaudeTalkMain";
+
+/// Marks this process as the running Claude Talk (the restore helper below
+/// steps aside while it exists). Kept for the life of the program.
+#[cfg(windows)]
+pub fn mark_running() {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Threading::CreateMutexW;
+    // the handle is never closed: Windows closes it when the program ends
+    let _ = unsafe { CreateMutexW(None, false, &HSTRING::from(MAIN_MUTEX)) };
+}
+
+#[cfg(windows)]
+fn main_running() -> bool {
+    use windows::core::HSTRING;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_SYNCHRONIZE};
+    match unsafe {
+        OpenMutexW(
+            SYNCHRONIZATION_SYNCHRONIZE,
+            false,
+            &HSTRING::from(MAIN_MUTEX),
+        )
+    } {
+        Ok(h) => {
+            let _ = unsafe { CloseHandle(h) };
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Claude Talk quit while Discord was closed: Windows' audio service keeps
+/// Discord's microphone choice in memory and only lets it change while
+/// Discord runs (K12). This small helper (`--restore-when-discord-starts`)
+/// waits for Discord, gives it its own microphone back, and ends. It steps
+/// aside if Claude Talk starts again, and gives up after 12 hours.
+#[cfg(windows)]
+pub fn restore_when_discord_starts() -> i32 {
+    use ct_engine::win::host::discord_executables;
+    use ct_engine::win::{policy, ComGuard};
+    let _com = ComGuard::new();
+    let exes = discord_executables();
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_secs(12 * 3600) {
+        if main_running() {
+            return 0;
+        }
+        if !policy::pids_of(&exes).is_empty() {
+            // Discord starts its audio process a little later
+            for wait in [3u64, 10, 30] {
+                std::thread::sleep(Duration::from_secs(wait));
+                if main_running() {
+                    return 0;
+                }
+                let n = policy::restore_discord(&exes);
+                log::info!("restore helper: Discord's own microphone back ({n})");
+            }
+            return 0;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    0
+}
+
+/// Starts the helper above, detached and without a window.
+#[cfg(windows)]
+pub fn spawn_restore_helper() {
+    use std::os::windows::process::CommandExt;
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    if let Ok(exe) = std::env::current_exe() {
+        let r = std::process::Command::new(exe)
+            .arg("--restore-when-discord-starts")
+            .creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW)
+            .spawn();
+        log::info!("restore helper started: {}", r.is_ok());
+    }
+}
+
 /// Closes Discord and starts it again through its own launcher.
 #[cfg(windows)]
 pub fn restart() -> Result<(), String> {

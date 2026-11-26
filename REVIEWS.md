@@ -51,3 +51,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 
 **Rettet efter runde 3:** alle blocker- og major-fund, se `DECISIONS.md` D21 og `KNOWN_ISSUES.md` K9 og K20–K25, samt de fleste minor-fund (knapper der stikker ud, tastaturfokus i dialogen, ensartede ord, installerbeskeder på ét sprog, første lukning forklarer ikonet ved uret, lyd-klik ved huller på blokgrænser).
 
+## Runde 4 – 2026-11-26 – ikke ren
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 5 minor | En opgradering kørte hele afinstallations-oprydningen: kablet blev fjernet og hentet igen, og brugeren blev spurgt (med Ja som standard) om at slette login. |
+| Lyd | 1 blocker, 4 minor | Efter ét hul i kilden kunne ekkodæmperens reference blive tavs for altid (»gælden« blev aldrig betalt). Timer-drosling i Windows 11, når programmet ligger ved uret. |
+| Design | 2 major, 11 minor | Opsætningens problem-skærm kunne ikke rulle, så »Gå til oversigten« var uden for skærmen. Mikrofon-trinnet fik flueben, selv når mikrofonen var blokeret. |
+| "Min mor" | 1 betinget blocker, 5 major, 18 minor | Hentelinket virker kun, når projektet er offentligt (K17). »Gendan« efterlod en vejledning, der aldrig kunne lykkes. Mikrofon-slukning overlevede en genstart. Login-hjælp kun ved Google. Discord i browseren nævnt ingen steder. |
+| "Bryd det" | 6 major, 9 minor | To Claude-vinduer ved dobbeltklik. Luk Claude Talk, mens Discord er lukket, efterlod Discord på det tavse kabel. Opgradering (som kode-revieweren). Kablet kunne holde op med at virke, mens alt viste grønt. Smart App Control blokerer usignerede programmer. |
+
+**Rettet efter runde 4:** alle blocker- og major-fund undtagen to, som kun kan løses uden for koden og er beskrevet i `KNOWN_ISSUES.md`: projektet skal gøres offentligt, før hentelinket virker for andre (K17), og programmet skal signeres for Smart App Control (K26). Opgraderingen er rettet efter Tauris installer-skabelon, men ikke kørt i CI (K27).
+

@@ -310,6 +310,13 @@ impl Config {
         // "Slå min mikrofon fra" is for now, not for tomorrow: muted after
         // a restart, nobody in Discord would hear the user, without a hint
         self.mic_muted = false;
+        // only the programs the Chrome/app mode offers (a hand-edited
+        // "discord.exe" here would let Discord hear itself)
+        if self.external_claude.as_deref().is_some_and(|e| {
+            !["claude.exe", "chrome.exe", "msedge.exe"].contains(&e.to_lowercase().as_str())
+        }) {
+            self.external_claude = None;
+        }
         // F12 cannot be a global shortcut (Windows keeps it for debuggers);
         // early builds used it for push-to-talk
         if self.hotkeys.push_to_talk_claude.ends_with("+F12") {

@@ -23,6 +23,9 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 1. Tryk på **Flere oplysninger** (den lille tekst i den blå boks).
 2. Tryk på knappen **Kør alligevel**, der dukker op nederst.
 
+### Hvis Windows siger »Smart App Control har blokeret en app«
+Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der endnu ikke er signeret af en kendt udgiver, og den kan ikke tilsidesættes for ét program. Claude Talk er ikke signeret endnu, så på de pc'er kan det ikke installeres, før det er signeret (se `SIGNING.md`).
+
 ## Det skal du vide
 - **Claude kører i sit eget vindue i Claude Talk.** Det er det, der gør, at Claude kan høre dig og Discord, uden at noget andet på din pc kommer med. Du logger ind én gang, og så husker vinduet det.
 - **Log ind med din e-mail.** Google tillader ikke login i programmers egne vinduer. Skriv din e-mail, og tryk på knappen under feltet (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet.

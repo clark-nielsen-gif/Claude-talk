@@ -40,7 +40,10 @@
       track: gen,
       push(samples) {
         // Never let a stalled consumer build up delay: drop if > 60 ms queued.
-        if (pending > 6) { dropped += samples.length; return; }
+        if (pending > 6) {
+          // keep the timeline: the dropped stretch is a gap, not a jump
+          dropped += samples.length; ts += Math.round((samples.length * 1e6) / RATE); return;
+        }
         const data = new AudioData({ format: 'f32', sampleRate: RATE, numberOfFrames: samples.length, numberOfChannels: 1, timestamp: ts, data: samples });
         ts += Math.round((samples.length * 1e6) / RATE);
         pending++;

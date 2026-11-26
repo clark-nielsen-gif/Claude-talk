@@ -24,6 +24,23 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
   const [update, setUpdate] = useState<string | null>(null);
   const { installing, install: installCable } = useInstallCable();
+  // "Åbn Claude" waits for the window (seconds on a first start): one press
+  const [opening, setOpening] = useState(false);
+  const openClaude = () => {
+    if (opening) return;
+    setOpening(true);
+    api.openClaude().catch(() => toast(t.errors.claudeWindow)).finally(() => setTimeout(() => setOpening(false), 1500));
+  };
+  // The cable stopped playing while installed (disabled in Windows' sound
+  // settings, taken by another program): shown after 5 s, not for a blip.
+  const [cableBadSince, setCableBadSince] = useState<number | null>(null);
+  useEffect(() => {
+    if (!status || status.cableOk || !info.cableInstalled) setCableBadSince(null);
+    else setCableBadSince((v) => v ?? Date.now());
+  }, [status, info.cableInstalled]);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { if (cableBadSince === null) return; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [cableBadSince]);
+  const cableBroken = cableBadSince !== null && now - cableBadSince > 5000;
   useEffect(() => api.onUpdate(setUpdate), []);
   const s = status;
   const quiet = { peak: 0, rms: 0 };
@@ -36,6 +53,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   } else if (s && !s.cableOk && !info.cableInstalled) {
     errors.push(<Notice key="c" kind="error" title={t.errors.cableMissingTitle} body={t.errors.cableMissingBody} action={installing ? t.errors.cableInstalling : t.errors.cableMissingAction} onAction={installing ? undefined : installCable} />);
   }
+  if (cableBroken) errors.push(<Notice key="cb" kind="error" title={t.errors.cableBrokenTitle} body={t.errors.cableBrokenBody} action={t.errors.cableBrokenAction} onAction={() => api.openPlace('soundSettings')} />);
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
@@ -44,7 +62,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} />);
 
   // The cards never contradict the switch or an error above them.
-  const cableMissing = !info.supported || (!!s && !s.cableOk && !info.cableInstalled);
+  const cableMissing = !info.supported || (!!s && !s.cableOk && !info.cableInstalled) || cableBroken;
   const micBroken = s?.micState === 'blocked' || s?.micState === 'missing';
 
   // --- Discord card state
@@ -140,9 +158,9 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
           <Check state={claudeCheck.state}>{claudeCheck.text}</Check>
           <div className="actions">
             {!s?.claudeWindowOpen
-              ? <button className="btn primary" onClick={() => api.openClaude()}>{t.main.openClaude}</button>
+              ? <button className="btn primary" disabled={opening} onClick={openClaude}>{opening ? t.main.openingClaude : t.main.openClaude}</button>
               : !s.claudeListening && on
-                ? <button className="btn secondary" onClick={() => api.openClaude()}>{t.main.showClaude}</button>
+                ? <button className="btn secondary" onClick={openClaude}>{t.main.showClaude}</button>
                 : on && !cableMissing && <button className="iconbtn" title={t.main.muteClaudeHint} aria-pressed={config.claudeToDiscordMuted} onClick={() => updateConfig({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
                   {config.claudeToDiscordMuted ? Icon.speakerOff() : Icon.speaker()} {config.claudeToDiscordMuted ? t.main.unmuteClaude : t.main.muteClaude}
                 </button>}

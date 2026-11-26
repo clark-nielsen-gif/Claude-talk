@@ -108,6 +108,14 @@ fn show_login_help(app: &AppHandle, mode: &str) {
 
 /// Opens (or focuses) the Claude window.
 pub fn open(app: &AppHandle) -> tauri::Result<()> {
+    // One window, however fast "Åbn Claude" is pressed: Tauri registers the
+    // window's label only after it is built (seconds on a first start).
+    // A second call while one is building just returns (never waits: the
+    // tray calls this on the main thread, which the build itself needs).
+    static OPENING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let Ok(_one_at_a_time) = OPENING.try_lock() else {
+        return Ok(());
+    };
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.unminimize();
         let _ = w.show();

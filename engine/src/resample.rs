@@ -58,6 +58,9 @@ pub struct AdaptiveResampler {
     /// fixed mode: input frames owed for a gap that was played as silence;
     /// skipped when they arrive, so the delay really stays the same
     owed: f64,
+    /// pulls since the debt arose: unpaid after a few, the input was lost
+    /// rather than late, and the route re-primes to its target instead
+    owed_pulls: u32,
     /// the last frame played (a gap at a block boundary fades from it)
     last: [f32; 8],
 }
@@ -111,6 +114,7 @@ impl AdaptiveResampler {
             restart_grace: false,
             fade_in: 0,
             owed: 0.0,
+            owed_pulls: 0,
             last: [0.0; 8],
         }
     }
@@ -130,6 +134,12 @@ impl AdaptiveResampler {
         if epoch != self.source_epoch {
             self.source_epoch = epoch;
             self.restart_grace = true;
+            if self.fixed {
+                // a restarted source owes nothing: start again at the target
+                self.owed = 0.0;
+                self.owed_pulls = 0;
+                self.priming = true;
+            }
         }
     }
 
@@ -211,8 +221,10 @@ impl AdaptiveResampler {
         }
 
         if self.fixed && self.owed >= 1.0 {
-            // a late packet arrived: drop what was already played as silence
-            let n = (self.owed as usize).min(available);
+            // A late packet arrived: the fill is above the target by what was
+            // already played as silence; drop that much.
+            let excess = available.saturating_sub(self.target_frames);
+            let n = (self.owed as usize).min(excess);
             if n > 0 {
                 if let Ok(c) = ring.read_chunk(n * ch) {
                     c.commit_all();
@@ -220,6 +232,24 @@ impl AdaptiveResampler {
                 available -= n;
                 self.owed -= n as f64;
                 stats.skipped_frames += n as u32;
+            }
+            if self.owed < 1.0 {
+                self.owed = 0.0;
+                self.owed_pulls = 0;
+            } else {
+                self.owed_pulls += 1;
+                if self.owed_pulls > 3 {
+                    // never came: the input was lost, not late. Fill up to
+                    // the target again – the same delay as before the gap.
+                    self.owed = 0.0;
+                    self.owed_pulls = 0;
+                    if available < self.target_frames {
+                        self.priming = true;
+                        out.fill(0.0);
+                        stats.underrun_frames = (out.len() / ch) as u32;
+                        return stats;
+                    }
+                }
             }
         }
         self.min_slack = self
@@ -551,6 +581,55 @@ mod tests {
                 "offset {offset}: a click, step of {max_step}"
             );
             assert!(all.contains(&0.0), "the stall must be a gap");
+        }
+    }
+
+    /// A fixed (echo reference) route whose source loses data – a capture
+    /// stream reopening, a program restarting – must play again within a few
+    /// blocks, not stay silent paying back a debt that never arrives
+    /// (round-4 audio review), and a late packet must not move the delay.
+    #[test]
+    fn fixed_route_recovers_from_lost_and_late_input() {
+        for (lost, late) in [
+            (2usize, false),
+            (3, false),
+            (6, false),
+            (2, true),
+            (3, true),
+        ] {
+            let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
+            let mut r = AdaptiveResampler::new(1, 48000, 48000, 20.0, 100.0);
+            r.set_fixed();
+            let mut out = vec![0.0f32; 480];
+            let mut silent_after = 0usize;
+            let mut held = 0usize;
+            for block in 0..400usize {
+                let gap = (200..200 + lost).contains(&block);
+                if gap {
+                    held += 1;
+                } else {
+                    // lost input never comes; late input comes all at once
+                    let n = if late { 480 * (1 + held) } else { 480 };
+                    held = 0;
+                    let _ = prod
+                        .write_chunk_uninit(n)
+                        .map(|c| c.fill_from_iter(std::iter::repeat(0.5f32)));
+                }
+                r.pull(&mut cons, &mut out);
+                if block > 200 + lost + 4 && out.iter().all(|&x| x == 0.0) {
+                    silent_after += 1;
+                }
+            }
+            assert_eq!(
+                silent_after, 0,
+                "lost {lost} (late {late}): {silent_after} silent blocks after recovery"
+            );
+            // the delay is back at the target
+            let fill_ms = cons.slots() as f32 / 48.0;
+            assert!(
+                (5.0..=35.0).contains(&fill_ms),
+                "lost {lost} (late {late}): {fill_ms} ms buffered"
+            );
         }
     }
 

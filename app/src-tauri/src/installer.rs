@@ -11,7 +11,8 @@
 //!
 //! The package is never bundled with Claude Talk (VB-Audio's licence asks
 //! that it comes from them); a copy of the extracted package is kept in
-//! `%ProgramData%\Claude Talk\vbcable` so it can be uninstalled later.
+//! `Program Files\Claude Talk\vbcable` (admin-only) so it can be uninstalled
+//! later.
 
 #![cfg(windows)]
 
@@ -159,7 +160,9 @@ pub fn install_cable() -> i32 {
     // signed by VB-Audio; signatures checked with revocation (we are online:
     // the package was just downloaded).
     let catalog_ok = signer_name(&catalog, true).is_some_and(|n| n.contains(WHCP));
-    let setup_signer = signer_name(&setup, true);
+    // the tested package is proven by its hash: no online revocation check
+    // needed (a firewall may block the revocation servers)
+    let setup_signer = signer_name(&setup, !hash_ok);
     let setup_ok = match &setup_signer {
         Some(_) if hash_ok => true,
         Some(n) => vb_audio_signer(n),
@@ -198,6 +201,10 @@ pub fn install_cable() -> i32 {
 
 pub fn uninstall_cleanup() -> i32 {
     let _com = ComGuard::new();
+    // Claude Talk itself is still running in the tray: stop it first, so its
+    // streams don't hold the cable and the Claude window's files while they
+    // are removed (this cleanup gives Discord its microphone back itself)
+    stop_other_instances();
     crate::discord::restore();
     remove_autostart();
     // VB-CABLE is removed only if Claude Talk installed it, and only with
@@ -222,6 +229,28 @@ pub fn uninstall_cleanup() -> i32 {
     let _ = std::fs::remove_dir_all(data_dir());
     let _ = std::fs::remove_dir_all(elevated_log_dir());
     0
+}
+
+/// Ends every other Claude Talk process (same program file name).
+pub fn stop_other_instances() {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    let me = std::process::id();
+    let name = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|f| f.to_string_lossy().to_lowercase()))
+        .unwrap_or_else(|| "claude-talk.exe".into());
+    for p in ct_engine::win::process::snapshot() {
+        if p.pid != me && p.exe == name {
+            unsafe {
+                if let Ok(h) = OpenProcess(PROCESS_TERMINATE, false, p.pid) {
+                    let _ = TerminateProcess(h, 0);
+                    let _ = CloseHandle(h);
+                }
+            }
+        }
+    }
+    std::thread::sleep(Duration::from_millis(500));
 }
 
 /// Removes "start with Windows" entries that start Claude Talk, for this

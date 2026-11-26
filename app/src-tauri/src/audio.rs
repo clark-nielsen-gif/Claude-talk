@@ -357,8 +357,9 @@ mod imp {
                 }
             }
             // capture period (10 ms) + route buffer + render queue (1.5
-            // periods, 15 ms) + limiter look-ahead (1.5 ms)
-            st.latency_ms = worst_latency + 26.5;
+            // periods, 15 ms) + limiter look-ahead (1.5 ms), plus one 10 ms
+            // frame through echo reduction when it runs
+            st.latency_ms = worst_latency + 26.5 + if echo_active { 10.0 } else { 0.0 };
             st.discord_uses_cable = match state.discord_uses_cable.load(Ordering::Relaxed) {
                 crate::discord::YES => "yes",
                 crate::discord::NO => "no",

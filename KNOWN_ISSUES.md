@@ -34,7 +34,7 @@ WebRTC AEC3-biblioteket (`aec3`) allokerer pr. blok. Det kører derfor ikke i en
 Hvis en almindelig bruger afinstallerer med en administrators kode, rydder afinstallationen administratorens brugerindstillinger (autostart og Discords mikrofonvalg), ikke brugerens. Brugerens autostart peger så på et program, der ikke findes, og Windows ignorerer den. Discords mikrofonvalg peger på en enhed, der er fjernet, og Discord falder tilbage til standardmikrofonen.
 
 ## K12 – »Gendan normale lydindstillinger«, mens Discord er lukket
-Windows' lydtjeneste husker Discords mikrofonvalg i hukommelsen, så det kan først ændres, når Discord kører. Claude Talk sletter det gemte valg med det samme og retter det, så snart Discord starter. Hvis Discord allerede er begyndt at optage, skal Discord genstartes én gang. Det viser Claude Talk selv.
+Windows' lydtjeneste husker Discords mikrofonvalg i hukommelsen, så det kan først ændres, når Discord kører. Claude Talk sletter det gemte valg med det samme og retter det, så snart Discord starter. Hvis Discord allerede er begyndt at optage, skal Discord genstartes én gang. Det viser Claude Talk selv. Lukker man Claude Talk, mens Discord er lukket, starter Claude Talk en lille hjælper uden vindue. Den venter på, at Discord starter, giver Discord sin egen mikrofon tilbage og lukker sig selv (højst 12 timer, og den træder til side, hvis Claude Talk startes igen).
 
 ## K13 – Aktiveringsordet er en instruktion til Claude
 »Svar kun, når nogen siger …« bliver sendt til Claude som en instruktion. Claude følger den godt, men kan en sjælden gang svare alligevel. Skal Claude slet ikke høre noget før ordet, kræver det talegenkendelse på pc'en. Windows' indbyggede talegenkendelse kan ikke dansk og kan ikke lytte til Claude Talks egen lyd. »Claude hører kun mig« håndhæves derimod af Claude Talk selv. Hvis claude.ai ændrer sit beskedfelt, kan den automatiske afsendelse stoppe. Så viser Claude Talk en besked, og instruktionerne kan indsættes manuelt.
@@ -76,4 +76,10 @@ Kablet deles af alle brugere. Lader bruger A Claude tale, og skifter man til bru
 
 ## K25 – Forsinkelse til Claude
 Vejen fra Discord til Claude-vinduet går gennem en buffer, broen til siden og sidens egen lydkø. Målt forsinkelse står i `PROGRESS.md`. Den er over målet på 40 ms. For en samtale med Claude betyder det, at Claude hører de andre en anelse senere; Claude svarer alligevel først, når nogen er færdig med at tale.
+
+## K26 – Smart App Control og manglende signatur
+Claude Talk er ikke signeret endnu (`SIGNING.md`). Windows viser derfor »Ukendt udgiver«, og pc'er med Smart App Control slået til blokerer installationen helt. Det løses kun ved at signere installeren og programmet.
+
+## K27 – Opgradering er ikke testet automatisk
+En nyere `ClaudeTalk-Setup.exe` oven på en ældre afinstallerer først den gamle. Afinstallationens oprydning (kablet fjernes, spørgsmålet om login) springes over, når den køres af en installer (den kører så fra programmappen), men det er kun kontrolleret mod Tauris installer-skabelon, ikke kørt i CI, fordi der endnu kun findes én version.
 
