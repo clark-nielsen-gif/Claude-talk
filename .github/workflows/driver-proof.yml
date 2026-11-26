@@ -38,18 +38,12 @@ jobs:
           Get-ChildItem vad -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath vad\x -Force }
           Get-ChildItem vad -Recurse -Include *.inf, *.sys, *.cat | Format-Table FullName
 
-      - name: Inspect signatures (Authenticode and kernel-mode policy)
+      - name: Kernel-mode signature proof (independent of runner test signing)
         shell: powershell
-        run: |
-          $files = Get-ChildItem vad -Recurse -Include *.sys, *.cat
-          foreach ($f in $files) {
-            $s = Get-AuthenticodeSignature $f.FullName
-            "{0}: {1} / signer: {2} / issuer: {3}" -f $f.Name, $s.Status, $s.SignerCertificate.Subject, $s.SignerCertificate.Issuer
-          }
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match 'x64' | Select-Object -Last 1
-          foreach ($f in $files) { & $signtool.FullName verify /kp /v $f.FullName 2>&1 | Select-Object -Last 8; "exit=$LASTEXITCODE" }
+        continue-on-error: true   # expected to fail; keep going to record install behaviour
+        run: ci/driver-proof/Assert-KernelSignature.ps1 -Path vad -OutFile signature-A.json
 
-      - name: Install two instances without test signing
+      - name: Install two instances
         shell: powershell
         run: |
           $inf = (Get-ChildItem vad -Recurse -Filter VirtualAudioDriver.inf | Select-Object -First 1).FullName
@@ -99,15 +93,11 @@ jobs:
           Expand-Archive hifi.zip -DestinationPath vb\hifi -Force
           Get-ChildItem vb -Recurse | Format-Table FullName, Length
 
-      - name: Inspect signatures (kernel-mode policy)
+      - name: Kernel-mode signature proof (independent of runner test signing)
         shell: powershell
         run: |
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match 'x64' | Select-Object -Last 1
-          Get-ChildItem vb -Recurse -Include *.sys, *.cat, *.exe | ForEach-Object {
-            $s = Get-AuthenticodeSignature $_.FullName
-            "{0}: {1} / {2}" -f $_.Name, $s.Status, $s.SignerCertificate.Subject
-            if ($_.Extension -ne '.exe') { & $signtool.FullName verify /kp $_.FullName 2>&1 | Select-Object -Last 3 }
-          }
+          ci/driver-proof/Assert-KernelSignature.ps1 -Path vb\cable -OutFile signature-B-cable.json
+          ci/driver-proof/Assert-KernelSignature.ps1 -Path vb\hifi -OutFile signature-B-hifi.json
 
       - name: Trust VB-Audio as driver publisher (suppresses the Windows Security dialog)
         shell: powershell
