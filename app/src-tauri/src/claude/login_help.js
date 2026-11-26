@@ -3,20 +3,23 @@
 // we explain the e-mail sign-in instead. Pure DOM, no network, no storage.
 (() => {
   if (window.__claudeTalkLoginHelp) return;
+  const HOW_DA = 'Skriv din e-mail i feltet på Claudes side, og tryk på knappen under det (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden her i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet for her. Du skal kun logge ind én gang.';
+  const HOW_EN = "Type your e-mail address in the field on Claude's page and press the button below it (“Continue with email”). Claude e-mails you a code. Type the code here in the Claude window. Don't click the link in the e-mail: that signs you in in your normal browser instead of here. You only sign in once.";
   const TEXT = {
     da: {
-      title: 'Log ind med din e-mail',
-      body: 'Google tillader ikke login i programmers egne vinduer. Skriv i stedet din e-mail i feltet på Claudes side, og tryk på knappen under det (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden her i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet for her. Claude Talk husker dit login.',
+      start: { title: 'Log ind på Claude med din e-mail', body: HOW_DA },
+      google: { title: 'Log ind med din e-mail', body: 'Google tillader ikke login i programmers egne vinduer. ' + HOW_DA },
       ok: 'Forstået',
     },
     en: {
-      title: 'Sign in with your e-mail',
-      body: "Google doesn't allow signing in inside apps' own windows. Type your e-mail address in the field on Claude's page and press the button below it (“Continue with email”). Claude e-mails you a code. Type the code here in the Claude window. Don't click the link in the e-mail: that signs you in in your normal browser instead of here. Claude Talk remembers your sign-in.",
+      start: { title: 'Sign in to Claude with your e-mail', body: HOW_EN },
+      google: { title: 'Sign in with your e-mail', body: "Google doesn't allow signing in inside apps' own windows. " + HOW_EN },
       ok: 'Got it',
     },
   };
-  window.__claudeTalkLoginHelp = (lang) => {
-    const t = TEXT[lang] || TEXT.da;
+  window.__claudeTalkLoginHelp = (lang, mode) => {
+    const all = TEXT[lang] || TEXT.da;
+    const t = { ...(all[mode] || all.google), ok: all.ok };
     const old = document.getElementById('claude-talk-login-help');
     if (old) old.remove();
     const host = document.createElement('div');

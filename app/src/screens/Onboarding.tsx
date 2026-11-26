@@ -22,7 +22,7 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
   // Each step is ticked off only when the real condition is true.
   const checks = [
     { label: t.onboarding.stepCable, done: info.cableInstalled || !!status?.cableOk },
-    { label: t.onboarding.stepMic, done: status?.micState === 'ok' || status?.micState === 'missing' || status?.micState === 'blocked' },
+    { label: t.onboarding.stepMic, done: status?.micState === 'ok' },
     { label: t.onboarding.stepEngine, done: !!status?.engineRunning },
     { label: t.onboarding.stepDiscord, done: !!status?.engineRunning },
   ];
@@ -30,7 +30,14 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
   // What can't finish by itself: shown at once when it is certain, otherwise
   // after 12 s – always with a way forward.
   const cableMissing = !info.cableInstalled && !!status?.engineRunning && !status.cableOk;
-  const problem = !info.supported ? 'unsupported' : cableMissing && (slow || shown >= checks.length) ? 'cable' : slow && !allDone ? 'slow' : null;
+  const micState = status?.micState;
+  const problem = !info.supported ? 'unsupported'
+    : cableMissing && (slow || shown >= checks.length) ? 'cable'
+    : micState === 'blocked' && shown >= 2 ? 'micBlocked'
+    : micState === 'missing' && (slow || shown >= checks.length) ? 'micMissing'
+    : slow && !allDone ? 'slow' : null;
+  // the step that failed shows a warning, not a spinner
+  const failed = problem === 'cable' ? 0 : problem === 'micBlocked' || problem === 'micMissing' ? 1 : -1;
 
   useEffect(() => {
     if (step !== 'setup' || allDone) return;
@@ -76,7 +83,9 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
                 const ok = revealed && c.done;
                 return (
                   <li key={c.label} className={ok ? '' : 'pending'}>
-                    {ok ? <span className="check ok"><span className="dot">{Icon.check()}</span></span> : <span className="spinner" aria-hidden="true" />}
+                    {ok ? <span className="check ok"><span className="dot">{Icon.check()}</span></span>
+                      : i === failed ? <span className="check warn"><span className="dot">!</span></span>
+                      : <span className="spinner" aria-hidden="true" />}
                     {c.label}
                   </li>
                 );
@@ -84,6 +93,8 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
             </ul>
             {problem === 'unsupported' && <Notice kind="error" title={t.errors.unsupportedTitle} body={t.errors.unsupportedBody} action={t.errors.unsupportedAction} onAction={() => api.openPlace('windowsUpdate')} />}
             {problem === 'cable' && <Notice kind="error" title={t.errors.cableMissingTitle} body={t.onboarding.cableMissingBody} action={installing ? t.errors.cableInstalling : t.errors.cableMissingAction} onAction={installing ? undefined : install} />}
+            {problem === 'micBlocked' && <Notice kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />}
+            {problem === 'micMissing' && <Notice kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />}
             {problem === 'slow' && <Notice kind="warn" title={t.onboarding.slowTitle} body={t.onboarding.slowBody} />}
             {problem && <div><button className="btn secondary" onClick={onDone}>{t.onboarding.toOverview}</button></div>}
             <Dots at={1} />

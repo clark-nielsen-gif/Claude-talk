@@ -307,6 +307,9 @@ impl Config {
 
     fn migrate(mut self) -> Config {
         // Version 1 is the first format; future versions convert here.
+        // "Slå min mikrofon fra" is for now, not for tomorrow: muted after
+        // a restart, nobody in Discord would hear the user, without a hint
+        self.mic_muted = false;
         // F12 cannot be a global shortcut (Windows keeps it for debuggers);
         // early builds used it for push-to-talk
         if self.hotkeys.push_to_talk_claude.ends_with("+F12") {

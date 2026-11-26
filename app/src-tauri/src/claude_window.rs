@@ -88,7 +88,9 @@ fn open_external(app: &AppHandle, url: &Url) {
     let _ = app.opener().open_url(url.as_str(), None::<&str>);
 }
 
-fn show_login_help(app: &AppHandle) {
+/// `mode`: "google" (Google sign-in was blocked) or "start" (the login page,
+/// shown once per start of Claude Talk).
+fn show_login_help(app: &AppHandle, mode: &str) {
     if let Some(w) = app.get_webview_window(LABEL) {
         let lang = app
             .state::<AppState>()
@@ -97,8 +99,9 @@ fn show_login_help(app: &AppHandle) {
             .map(|c| c.language.clone())
             .unwrap_or_default();
         let _ = w.eval(format!(
-            "{LOGIN_HELP_JS}\n;window.__claudeTalkLoginHelp && window.__claudeTalkLoginHelp({});",
-            serde_json::json!(lang)
+            "{LOGIN_HELP_JS}\n;window.__claudeTalkLoginHelp && window.__claudeTalkLoginHelp({}, {});",
+            serde_json::json!(lang),
+            serde_json::json!(mode)
         ));
     }
 }
@@ -133,7 +136,7 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         .on_navigation(move |url| match decide(url) {
             NavDecision::Allow => true,
             NavDecision::GoogleLoginHelp => {
-                show_login_help(&nav_app);
+                show_login_help(&nav_app, "google");
                 false
             }
             NavDecision::OpenInBrowser => {
@@ -144,7 +147,7 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         })
         .on_new_window(move |url, _features| {
             match decide(&url) {
-                NavDecision::GoogleLoginHelp => show_login_help(&popup_app),
+                NavDecision::GoogleLoginHelp => show_login_help(&popup_app, "google"),
                 NavDecision::Ignore => {}
                 // Pop-ups (also Claude's own links to docs etc.) go to the
                 // normal browser; the Claude window stays one page.
@@ -409,31 +412,44 @@ mod win {
             );
             // For error reports: did the page load (host only, never the
             // full address), and did a WebView2 process fail?
+            let done_app = app2.clone();
             let _ = core.add_NavigationCompleted(
-                &webview2_com::NavigationCompletedEventHandler::create(Box::new(|wv, args| {
-                    let (Some(wv), Some(args)) = (wv, args) else {
-                        return Ok(());
-                    };
-                    let mut ok = windows::core::BOOL::default();
-                    args.IsSuccess(&mut ok)?;
-                    let mut status = Default::default();
-                    args.WebErrorStatus(&mut status)?;
-                    let mut src = PWSTR::null();
-                    wv.Source(&mut src)?;
-                    let host = Url::parse(&take(src))
-                        .ok()
-                        .and_then(|u| u.host_str().map(str::to_string))
-                        .unwrap_or_default();
-                    if ok.as_bool() {
-                        log::info!("Claude window loaded {host}");
-                    } else {
-                        log::warn!(
-                            "Claude window could not load {host} (web error {})",
-                            status.0
-                        );
-                    }
-                    Ok(())
-                })),
+                &webview2_com::NavigationCompletedEventHandler::create(Box::new(
+                    move |wv, args| {
+                        let (Some(wv), Some(args)) = (wv, args) else {
+                            return Ok(());
+                        };
+                        let mut ok = windows::core::BOOL::default();
+                        args.IsSuccess(&mut ok)?;
+                        let mut status = Default::default();
+                        args.WebErrorStatus(&mut status)?;
+                        let mut src = PWSTR::null();
+                        wv.Source(&mut src)?;
+                        let url = Url::parse(&take(src)).ok();
+                        let host = url
+                            .as_ref()
+                            .and_then(|u| u.host_str().map(str::to_string))
+                            .unwrap_or_default();
+                        if ok.as_bool() {
+                            log::info!("Claude window loaded {host}");
+                            // Claude's login page: explain the e-mail code once
+                            static SHOWN: std::sync::atomic::AtomicBool =
+                                std::sync::atomic::AtomicBool::new(false);
+                            let login = url.as_ref().is_some_and(|u| {
+                                super::is_claude_host(u) && u.path().starts_with("/login")
+                            });
+                            if login && !SHOWN.swap(true, Ordering::Relaxed) {
+                                super::show_login_help(&done_app, "start");
+                            }
+                        } else {
+                            log::warn!(
+                                "Claude window could not load {host} (web error {})",
+                                status.0
+                            );
+                        }
+                        Ok(())
+                    },
+                )),
                 &mut token,
             );
             let fail_app = app2.clone();

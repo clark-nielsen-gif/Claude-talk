@@ -7,10 +7,11 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
 2. **Første opstart.** Claude Talk åbner med »Tag Claude med i dine Discord-opkald«. Tryk »Sæt det op for mig«. Alle fire punkter får flueben, og du ender på »Klar!«.
    - [ ] Tre skærme, ingen tekniske ord
 3. **Log ind på Claude.** Tryk »Åbn Claude«. Claude-vinduet åbner på claude.ai. Log ind med din e-mail og koden, som Claude sender dig.
-   - [ ] Logget ind. (Hvis du trykker »Fortsæt med Google«, vises en venlig vejledning om e-mail-login i stedet.)
+   - [ ] På login-siden vises en dansk vejledning om login med e-mail og kode
+   - [ ] Logget ind med koden fra mailen. (Hvis du trykker »Continue with Google«, vises vejledningen igen i stedet.)
 4. **Luk og åbn Claude-vinduet igen.**
    - [ ] Du er stadig logget ind
-5. **Start Discord-opkaldet.** I Claude Talk står der »Discord hører Claude ✓« på Discord-kortet. Hvis der står »Discord bruger en anden mikrofon«, så tryk »Vis mig hvordan«, og følg de tre trin. Fluebenet kommer af sig selv.
+5. **Start Discord-opkaldet.** I Claude Talk står der »Klar – venter på Claude« i Discord-feltet, og »De andre i Discord hører Claude ✓«, når Claudes stemme er tændt (trin 6). Hvis der står »Discord bruger en anden mikrofon«, så tryk »Vis mig hvordan«, og følg de tre trin. Fluebenet kommer af sig selv.
    - [ ] Grønt flueben uden at åbne Windows' lydindstillinger
 6. **Tænd for Claudes stemme** i Claude-vinduet (stemme-knappen ved tekstfeltet). Claude-kortet viser »Claude hører dig og Discord ✓«.
    - [ ] Flueben

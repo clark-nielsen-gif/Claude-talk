@@ -128,6 +128,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-output-fixed': return { ...ok, outputFixed: true };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
     case 'onboarding-cable-missing': return { ...ok, cableOk: false };
+    case 'onboarding-mic-blocked': return { ...ok, micState: 'blocked', mic: quiet };
     case 'onboarding-setup': return { ...ok, engineRunning: t < 1.2 ? false : true };
     default: return ok;
   }

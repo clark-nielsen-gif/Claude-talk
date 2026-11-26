@@ -5,7 +5,7 @@
 use crate::config::{Config, EchoMode, Theme};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -251,12 +251,21 @@ pub fn show_main(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn restore_audio_settings(state: State<AppState>) {
-    if let Ok(mut c) = state.config.lock() {
+pub fn restore_audio_settings(app: AppHandle, state: State<AppState>) -> Config {
+    // Claude leaves the call too, so the screen says what is true (switching
+    // "Claude i Discord" on again sets everything up again)
+    let cfg = {
+        let mut c = state.config.lock().unwrap_or_else(|p| p.into_inner());
         c.route_discord = false;
-    }
+        c.claude_in_discord = false;
+        c.clone()
+    };
     state.save_config();
     crate::discord::restore();
+    crate::audio::apply_switches(&app);
+    crate::tray::refresh(&app);
+    let _ = app.emit("config-changed", &cfg);
+    cfg
 }
 
 /// Installs Discord's microphone from the app (one Windows prompt).

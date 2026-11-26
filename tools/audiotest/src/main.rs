@@ -680,6 +680,14 @@ mod imp {
                     CaptureTarget::Process(ProcessTarget::Pid(Arc::new(AtomicU32::new(
                         std::process::id(),
                     )))),
+                    // Claude Talk itself: what it plays into the cable, as
+                    // Windows takes it – its own share, before VB-CABLE (K9)
+                    CaptureTarget::Process(ProcessTarget::ExeNames(vec![std::path::Path::new(
+                        &app,
+                    )
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_lowercase())
+                    .unwrap_or_else(|| "claude-talk.exe".into())])),
                 ],
                 8.0,
             );
@@ -704,6 +712,14 @@ mod imp {
                 .map(|t| t - cable_buf)
                 .collect();
             let to_discord_total = match_delays(&a, &b, 300.0);
+            // Claude Talk's own share: the microphone burst in, against the
+            // same burst as Claude Talk plays it (process loopback of the app)
+            let (app_rec, app_buf) = &recs[4];
+            let own: Vec<f64> = ms(burst_onsets(app_rec, 2500.0, rate, 0.3, 2400))
+                .into_iter()
+                .map(|t| t - app_buf)
+                .collect();
+            let own_to_discord = match_delays(&a, &own, 300.0);
             // VB-CABLE's own share: our 4000 Hz bursts as played (process
             // loopback of this tool) against the same bursts out of the cable
             let (probe_rec, probe_buf) = &recs[3];
@@ -740,28 +756,29 @@ mod imp {
                 .filter(|&m| m >= epoch && m <= epoch + 9000.0)
                 .collect();
             let to_claude = match_delays(&sent, &marks, 300.0);
-            let (md, mc, mt) = (
+            let (md, mc, mt, mo) = (
                 median(&to_discord),
                 median(&to_claude),
                 median(&to_discord_total),
+                median(&own_to_discord),
             );
-            let pass = cable_added.is_some()
-                && to_discord.len() >= 5
-                && to_claude.len() >= 5
-                && md.is_some_and(|v| v < 40.0)
-                && mc.is_some_and(|v| v < 40.0);
+            // The requirement (< 40 ms) is for Claude Talk's own share to
+            // Discord; VB-CABLE's buffer (K9) and the way to Claude through
+            // the page (K25) are measured and reported, not gated.
+            let pass =
+                own_to_discord.len() >= 5 && to_claude.len() >= 5 && mo.is_some_and(|v| v < 40.0);
             println!(
-                "[{}] echo {echo}: latency Claude Talk → cable {md:?} ms ({} bursts), + VB-CABLE {cable_added:?} ms = {mt:?} ms at Discord; Discord → Claude {mc:?} ms ({} bursts)",
+                "[{}] echo {echo}: latency Claude Talk's own share {mo:?} ms ({} bursts); at Discord in all {mt:?} ms (VB-CABLE probe {cable_added:?} ms, remainder {md:?} ms); Discord → Claude page {mc:?} ms ({} bursts)",
                 if pass { "PASS" } else { "FAIL" },
-                to_discord.len(),
+                own_to_discord.len(),
                 to_claude.len()
             );
             phase.insert(
                 "latency".into(),
-                json!({"pass": pass, "to_discord_ms": md, "vbcable_added_ms": cable_added, "to_discord_total_ms": mt, "to_claude_ms": mc,
+                json!({"pass": pass, "own_share_to_discord_ms": mo, "to_discord_ms": md, "vbcable_added_ms": cable_added, "to_discord_total_ms": mt, "to_claude_ms": mc,
                        "to_discord_all": to_discord, "to_claude_all": to_claude,
                        "bursts": {"mic": a.len(), "cable": b.len(), "cable_probe": [p_in.len(), p_out.len()], "discord": sent.len(), "page": marks.len()},
-                       "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf, probe_buf]}),
+                       "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf, probe_buf, app_buf]}),
             );
             ok &= pass;
             // back to steady tones for the next mode

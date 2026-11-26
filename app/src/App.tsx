@@ -69,7 +69,7 @@ export function App() {
   if (!info || !ctx || !config) return <div className="shell"><TitleBarless /></div>;
 
   const onboarding = !config.onboardingDone;
-  const initialStep = initialScenario === 'onboarding-setup' || initialScenario === 'onboarding-cable-missing' ? 'setup' : initialScenario === 'onboarding-ready' ? 'ready' : 'welcome';
+  const initialStep = initialScenario === 'onboarding-setup' || initialScenario === 'onboarding-cable-missing' || initialScenario === 'onboarding-mic-blocked' ? 'setup' : initialScenario === 'onboarding-ready' ? 'ready' : 'welcome';
 
   return (
     <AppContext.Provider value={ctx}>
