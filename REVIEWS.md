@@ -135,7 +135,7 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 - *Tekster:* README om at lukke Claude-vinduet efter opkaldet, Fn-tasten, aktiveringsordet (»Næsten«), afinstallationsvinduet, pilen ved uret; D7, D8, D14, D26, D27 rettet til koden.
 - *Kendte begrænsninger tilføjet:* K33 (programmer, der leverer sjældnere end hvert 10. ms), K34 (meget hurtige højttalere), K35 (Windows' ordlyd).
 
-## Runde 10 – 2026-11-26 – ikke ren (lyd-revisoren nåede ikke at aflevere; de fire andre havde fund)
+## Runde 10 – 2026-11-26 – ikke ren (alle fem roller havde fund)
 
 | Rolle | Resultat | Vigtigste fund |
 |---|---|---|
@@ -143,5 +143,8 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | Design | 1 major, 13 minor | Samme »Din mikrofon«-fund. |
 | "Min mor" | 2 major, 10 minor | »Genstart Discord« blev foreslået midt i opkaldet, selv om Discord havde en bestemt mikrofon valgt (en genstart hjælper ikke). Efter Gendan, Luk og afinstallation fik Discord på »Standard« Windows' standardmikrofon i stedet for hendes headset. |
 | "Bryd det" | 2 major, 6 minor | De samme to fund om at give Discords mikrofon tilbage. |
+| Lyd | 2 major, 5 minor | Runde 9's tidslinje stolede på hver pakkes tidsstempel til 0,25 ms; svinger stemplerne ±0,7 ms, blev almindelig lyd skåret i stykker (1,5 % tabt) og referencen hoppede. Stilhed fyldt helt op til »nu« gjorde en pakke, der kom 5 ms for sent, til ca. 15 ms stilhed på alle veje (K32 var forkert). |
 
 **Rettet efter runde 10:** hjælpeprocessen og afinstallationen læser indstillingerne; Discord får brugerens mikrofon som app-indstilling, når Claude Talk giver slip (også overtaget fra Discord); en tom gemt værdi overskriver ikke den kendte; en mikrofon sat for Discord i Windows overtages også; »Din mikrofon« opdateres med det samme, sender besked til resten af programmet, og »Windows' standard« er et valg, der respekteres; »Genstart Discord« foreslås kun, når Discord står på »Standard«; kablets optageside tjekkes også (en slået-fra »Claude Talk – til Discord« vises som fejl); kun Discords registreringsposter ryddes; afinstallationens sammenligning af installationsprogrammets navn tager ikke hensyn til store og små bogstaver; en indstillingsfil, der ikke kunne læses, overskrives aldrig; tilføjede kilder kan ikke være Claude Talks egne enheder; hjælperen venter op til 30 dage; `late_packets.rs` kræver højst 1 ms spring; CI-tjekket af mikrofonvalget kræver, at der vælges en mikrofon, når der findes en. UI: knapper, der fører til en anden side, flytter fokus derhen; Fortryd virker med tastaturet; Gendan siger »Er du sikker?« med en Nej-knap; mikrofonhjælpen passer efter Gendan; en mikrofon, der er taget ud, vises med navn og »(ikke tilsluttet)«; vejledningen siger »ikke Claude Talk – til Discord«; tekster og små layoutfejl.
+
+**Rettet efter runde 10 (lyd):** pakke efter pakke følger tidslinjen prøveantallet og trækkes kun 5 % mod stemplerne; stempler sammenlignes kun efter indsat stilhed eller ved spring over 3 ms; stilhed fyldes kun op til 10 ms før nu (halverer tabet ved sene pakker og fjerner tabet ved hver ny lyd efter en pause); pakker uden tidsstempel følger prøveantallet. `late_packets.rs` er revisorens verificerede model med fire nye scenarier med svingende stempler; grænserne er sat efter det målte (spring højst 1,5 ms, udsving højst 4 ms) og står sådan i D29. K32 siger nu ærligt, at sene pakker giver korte huller i lyden på alle veje. Ikke rettet: to adskilte lydstrømme (tabsfri til de almindelige veje, tilpasset til referencen) – K32.

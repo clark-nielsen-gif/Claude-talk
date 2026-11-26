@@ -589,14 +589,20 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
     let mut last_data = Instant::now();
     // The timeline, in the packets' clock (100 ns QPC units): how far the
     // sound pushed so far reaches – packets and the silence put in for them.
-    // A late packet overlaps silence already sent, and the overlap is
-    // dropped; a lost packet leaves a gap, and the gap is filled with
-    // silence. So the timeline (and the echo reference's delay) never moves.
-    let mut pos = qpc_100ns();
+    // Packet after packet, the timeline follows the sample count (the time
+    // stamps can jitter by a fraction of a millisecond), pulled 5 % towards
+    // the stamps so it follows the clock. Only after silence was put in, or
+    // when a stamp jumps by 3 ms or more (packets lost), are stamps compared:
+    // a late packet's overlap with silence already sent is dropped, and a
+    // gap after lost packets is filled with silence. So the timeline (and
+    // the echo reference's delay) does not move.
+    let mut pos = qpc_100ns() as f64;
     // pos comes from a packet or from silence (not just the start time)
     let mut timed = false;
+    // the last thing pushed was silence that may overlap the next packet
+    let mut after_silence = false;
     // silence fed since the program went quiet: (from, frames sent), QPC
-    let mut quiet: Option<(u64, u64)> = None;
+    let mut quiet: Option<(f64, u64)> = None;
     // the last sample pushed, to fade out into silence without a click
     let mut last_sample = [0f32; ENGINE_CHANNELS];
     // A quiet program sends no packets; look every 5 ms so the silence that
@@ -638,17 +644,22 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             if qpc == 0 {
                 ctx.status.untimed_packets.fetch_add(1, Ordering::Relaxed);
             }
-            let to_frames = |d: u64| (d as f64 * ENGINE_RATE as f64 / 1e7) as u64;
+            let to_frames = |d: f64| (d * ENGINE_RATE as f64 / 1e7) as u64;
+            let stamp = qpc as f64;
+            let dur = frames as f64 * 1e7 / ENGINE_RATE as f64;
+            let contiguous =
+                timed && (qpc == 0 || (!after_silence && (stamp - pos).abs() < 30_000.0));
+            let compare = fill_silence && timed && qpc != 0 && !contiguous;
             // part of this packet was already played as silence (it came
             // late); small differences (< 0.5 ms) are clock rounding
-            let skip = if fill_silence && timed && qpc != 0 && pos > qpc + 5_000 {
-                (to_frames(pos - qpc) as u32).min(frames)
+            let skip = if compare && pos > stamp + 5_000.0 {
+                (to_frames(pos - stamp) as u32).min(frames)
             } else {
                 0
             };
             // packets were lost before this one: the time passed all the same
-            let gap = if fill_silence && timed && qpc != 0 && qpc > pos + 10_000 {
-                to_frames(qpc - pos).min(ENGINE_RATE as u64 / 10) as usize
+            let gap = if compare && stamp > pos + 10_000.0 {
+                to_frames(stamp - pos).min(ENGINE_RATE as u64 / 10) as usize
             } else {
                 0
             };
@@ -697,14 +708,26 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                     fanout.push(Some(kept), ENGINE_CHANNELS, keep);
                 }
             }
-            // A packet entirely covered by silence already sent ends before
-            // `pos`: the timeline stays where the silence reached.
-            let end = if qpc != 0 {
-                qpc + frames as u64 * 10_000_000 / ENGINE_RATE as u64
+            if contiguous {
+                let predicted = pos + dur;
+                pos = if qpc != 0 {
+                    predicted + 0.05 * (stamp + dur - predicted)
+                } else {
+                    predicted
+                };
+                after_silence = false;
             } else {
-                qpc_100ns()
-            };
-            pos = if timed { pos.max(end) } else { end };
+                let end = if qpc != 0 {
+                    stamp + dur
+                } else {
+                    qpc_100ns() as f64
+                };
+                // A packet entirely covered by silence already sent ends
+                // before `pos`: the timeline stays where the silence reached,
+                // and the next packet is compared with it too.
+                after_silence = timed && pos > end;
+                pos = if timed { pos.max(end) } else { end };
+            }
             timed = true;
             if let Err(e) = unsafe { capture.ReleaseBuffer(frames) } {
                 return finish(&client, e.into());
@@ -719,17 +742,20 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             // Loopback streams deliver nothing while the program is silent.
             // Keep the downstream buffers moving with silence, sample for
             // sample in real time from the last packet, so mixing continues
-            // and drift control stays locked.
-            let now_qpc = qpc_100ns();
+            // and drift control stays locked. The silence reaches up to one
+            // packet (10 ms) before now: a packet that arrives now covers
+            // the time up to then, and its start is not cut off.
+            let now_qpc = qpc_100ns() as f64 - 100_000.0;
             let (since, sent) = quiet.get_or_insert((pos, 0));
-            let due = (now_qpc.saturating_sub(*since) as f64 * ENGINE_RATE as f64 / 1e7) as u64;
+            let due = ((now_qpc - *since).max(0.0) * ENGINE_RATE as f64 / 1e7) as u64;
             let frames = due.saturating_sub(*sent).min(ENGINE_RATE as u64 / 10) as usize;
             if frames > 0 {
                 push_silence_after(fanout, &mut last_sample, frames);
                 *sent += frames as u64;
                 // exactly as far as the silence sent reaches
-                pos = *since + *sent * 10_000_000 / ENGINE_RATE as u64;
+                pos = *since + *sent as f64 * 1e7 / ENGINE_RATE as f64;
                 timed = true;
+                after_silence = true;
                 ctx.status
                     .silence_filled_frames
                     .fetch_add(frames as u64, Ordering::Relaxed);
