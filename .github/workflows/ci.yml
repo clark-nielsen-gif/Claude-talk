@@ -1,0 +1,44 @@
+# Fast checks on every push: engine unit/property tests and the real-time
+# allocation test on Windows. (Repository is private: windows-latest only;
+# the full Windows matrix runs at milestones via workflow_dispatch.)
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'ci/driver-proof/**', '.github/workflows/driver-proof.yml']
+  workflow_dispatch:
+    inputs:
+      matrix:
+        description: 'Run on all Windows versions (milestone)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Engine tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.matrix && '["windows-latest","windows-2025","windows-2022"]' || '["windows-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      PROPTEST_CASES: 256
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy -p ct-engine --all-targets -- -D warnings
+      - name: Unit, property and real-time tests
+        run: cargo test -p ct-engine --release -- --nocapture

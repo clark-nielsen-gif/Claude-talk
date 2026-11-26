@@ -1,0 +1,13 @@
+[package]
+name = "ct-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Claude Talk real-time audio engine"
+
+[dependencies]
+rtrb = "0.4"
+rubato = "5"
+
+[dev-dependencies]
+proptest = "1"
