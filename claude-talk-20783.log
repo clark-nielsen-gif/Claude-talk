@@ -1,0 +1,187 @@
+1795696205.282 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795696205.305 WARN  claude_talk::audio::imp: TEST MODE: microphone replaced by program fakemic.exe
+1795696205.306 INFO  claude_talk::audio::imp: audio engine started
+1795696205.338 INFO  claude_talk::discord: Discord's microphone set to Claude Talk (1 processes)
+1795696205.568 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Starting (device '', pid 5492, hr 0x00000000)
+1795696205.568 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795696205.568 INFO  claude_talk::audio::imp: source 3 'Discord' -> Starting (device '', pid 4536, hr 0x00000000)
+1795696205.650 INFO  claude_talk::discord: default output is now speakers
+1795696205.650 INFO  claude_talk::discord: Discord microphone: Unknown
+1795696205.823 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Paused (device '', pid 5492, hr 0x00000000)
+1795696205.823 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 4536, hr 0x00000000)
+1795696210.334 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-10 src1=-120 src2=-120 src3=-10] routes [1>101 buf=6/17ms under=1680 drift=1478; 1>102 buf=24/22ms under=16464 drift=2083; 2>101 buf=13/17ms under=672 drift=1613; 3>102 buf=0/12ms under=15360 drift=2177] echo None
+1795696211.686 INFO  claude_talk::claude_window::win: Claude window browser process: 3544
+1795696211.758 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 5492, hr 0x00000000)
+1795696212.471 INFO  claude_talk::audio::imp: source 2 'Claude' -> Running (device '', pid 3544, hr 0x00000000)
+1795696213.017 INFO  claude_talk::claude_window::win: Claude window loaded 127.0.0.1
+1795696213.234 INFO  claude_talk::claude_window: bridge source mode: generator
+1795696213.235 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696213.235 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696213.238 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696214.828 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":76800,"mode":"generator","type":"stats"}
+1795696215.343 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=11/22ms under=2304 drift=1152; 1>102 buf=10/22ms under=16464 drift=2084; 2>101 buf=25/22ms under=2112 drift=2506; 3>102 buf=12/22ms under=15936 drift=1161] echo None
+1795696216.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":172800,"mode":"generator","type":"stats"}
+1795696219.960 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696219.976 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":217440,"mode":"generator","type":"stats"}
+1795696220.353 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=8/22ms under=2304 drift=95; 1>102 buf=13/27ms under=17088 drift=1606; 2>101 buf=13/22ms under=2112 drift=2506; 3>102 buf=0/22ms under=15936 drift=-9] echo None
+1795696220.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":364800,"mode":"generator","type":"stats"}
+1795696221.477 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696222.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":460800,"mode":"generator","type":"stats"}
+1795696224.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":556800,"mode":"generator","type":"stats"}
+1795696225.359 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=9/22ms under=2304 drift=-385; 1>102 buf=9/27ms under=17088 drift=287; 2>101 buf=5/22ms under=2112 drift=541; 3>102 buf=2/22ms under=15936 drift=-778] echo None
+1795696226.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":652800,"mode":"generator","type":"stats"}
+1795696228.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":748800,"mode":"generator","type":"stats"}
+1795696230.166 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForProcess (device '', pid 5492, hr 0x00000000)
+1795696230.166 INFO  claude_talk::audio::imp: source 3 'Discord' -> WaitingForProcess (device '', pid 4536, hr 0x00000000)
+1795696230.270 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Starting (device '', pid 5492, hr 0x00000000)
+1795696230.270 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 3908, hr 0x00000000)
+1795696230.304 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 2396, hr 0x00000000)
+1795696230.372 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=4/26ms under=3312 drift=1139; 1>102 buf=30/37ms under=19680 drift=2065; 2>101 buf=4/21ms under=2112 drift=-189; 3>102 buf=21/26ms under=17472 drift=784] echo None
+1795696230.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":844320,"mode":"generator","type":"stats"}
+1795696232.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":940320,"mode":"generator","type":"stats"}
+1795696234.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1036800,"mode":"generator","type":"stats"}
+1795696235.384 DEBUG claude_talk::audio::imp: levels dBFS [out101=-2 out102=-1 src1=-6 src2=-10 src3=-6] routes [1>101 buf=8/26ms under=3312 drift=-1443; 1>102 buf=22/37ms under=19680 drift=937; 2>101 buf=7/21ms under=2112 drift=-886; 3>102 buf=17/26ms under=17472 drift=630] echo None
+1795696236.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1132800,"mode":"generator","type":"stats"}
+1795696238.829 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1228800,"mode":"generator","type":"stats"}
+1795696240.390 DEBUG claude_talk::audio::imp: levels dBFS [out101=-2 out102=-1 src1=-6 src2=-10 src3=-6] routes [1>101 buf=17/26ms under=3312 drift=-1745; 1>102 buf=20/37ms under=19680 drift=-81; 2>101 buf=11/21ms under=2112 drift=-557; 3>102 buf=15/26ms under=17472 drift=134] echo None
+1795696240.830 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1323840,"mode":"generator","type":"stats"}
+1795696242.830 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1420320,"mode":"generator","type":"stats"}
+1795696244.830 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1516320,"mode":"generator","type":"stats"}
+1795696245.231 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForProcess (device '', pid 2396, hr 0x00000000)
+1795696245.231 INFO  claude_talk::audio::imp: source 3 'Discord' -> WaitingForProcess (device '', pid 3908, hr 0x00000000)
+1795696245.311 INFO  claude_talk::audio::imp: source 3 'Discord' -> Starting (device '', pid 2204, hr 0x00000000)
+1795696248.408 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795696248.425 WARN  claude_talk::audio::imp: TEST MODE: microphone replaced by program fakemic.exe
+1795696248.425 INFO  ct_engine::win::host: echo reduction on
+1795696248.425 INFO  claude_talk::audio::imp: audio engine started
+1795696248.457 INFO  claude_talk::discord: default output is now speakers
+1795696248.457 INFO  claude_talk::discord: Discord microphone: Unknown
+1795696248.763 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Paused (device '', pid 6664, hr 0x00000000)
+1795696248.763 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795696248.763 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 2204, hr 0x00000000)
+1795696250.472 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 6664, hr 0x00000000)
+1795696253.449 DEBUG claude_talk::audio::imp: levels dBFS [echo=-51 out101=-51 out102=-10 src1=-10 src2=-120 src3=-10] routes [1>101 buf=16/32ms under=6816 drift=867; 1>102 buf=18/32ms under=6816 drift=307; 2>101 buf=26/22ms under=1536 drift=1942; 3>102 buf=4/12ms under=960 drift=1638] echo Some(234720)
+1795696255.842 INFO  claude_talk::claude_window::win: Claude window browser process: 1844
+1795696255.965 INFO  claude_talk::claude_window::win: Claude window loaded 127.0.0.1
+1795696256.041 INFO  claude_talk::claude_window: bridge source mode: generator
+1795696256.041 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696256.041 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696256.044 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696257.583 INFO  claude_talk::audio::imp: source 2 'Claude' -> Running (device '', pid 1844, hr 0x00000000)
+1795696257.881 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":88320,"mode":"generator","type":"stats"}
+1795696258.478 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=16/32ms under=6816 drift=-644; 1>102 buf=19/32ms under=6816 drift=-547; 2>101 buf=19/27ms under=2688 drift=2339; 3>102 buf=8/17ms under=1488 drift=1640] echo Some(476160)
+1795696259.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":184320,"mode":"generator","type":"stats"}
+1795696262.799 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696262.818 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":216960,"mode":"generator","type":"stats"}
+1795696263.504 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=21/32ms under=6816 drift=-824; 1>102 buf=31/32ms under=6816 drift=-360; 2>101 buf=11/27ms under=2688 drift=780; 3>102 buf=3/17ms under=1488 drift=489] echo Some(717600)
+1795696263.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":376320,"mode":"generator","type":"stats"}
+1795696264.306 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696265.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":472320,"mode":"generator","type":"stats"}
+1795696267.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":568320,"mode":"generator","type":"stats"}
+1795696268.525 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=23/31ms under=6816 drift=-40; 1>102 buf=21/31ms under=6816 drift=188; 2>101 buf=9/27ms under=2688 drift=-100; 3>102 buf=3/17ms under=1488 drift=-345] echo Some(958560)
+1795696269.881 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":664320,"mode":"generator","type":"stats"}
+1795696271.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":760320,"mode":"generator","type":"stats"}
+1795696272.881 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForProcess (device '', pid 6664, hr 0x00000000)
+1795696272.881 INFO  claude_talk::audio::imp: source 3 'Discord' -> WaitingForProcess (device '', pid 2204, hr 0x00000000)
+1795696272.983 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 7504, hr 0x00000000)
+1795696272.983 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 8484, hr 0x00000000)
+1795696273.554 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-4 out102=-4 src1=-6 src2=-10 src3=-10] routes [1>101 buf=30/36ms under=8640 drift=801; 1>102 buf=30/36ms under=8736 drift=1004; 2>101 buf=12/26ms under=2688 drift=-904; 3>102 buf=20/26ms under=3456 drift=1179] echo Some(1198560)
+1795696273.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":856320,"mode":"generator","type":"stats"}
+1795696275.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":947040,"mode":"generator","type":"stats"}
+1795696277.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1037760,"mode":"generator","type":"stats"}
+1795696278.587 DEBUG claude_talk::audio::imp: levels dBFS [echo=-6 out101=-2 out102=-6 src1=-6 src2=-10 src3=-6] routes [1>101 buf=26/36ms under=8640 drift=543; 1>102 buf=25/36ms under=8736 drift=654; 2>101 buf=16/26ms under=2688 drift=-608; 3>102 buf=15/26ms under=3456 drift=648] echo Some(1440000)
+1795696279.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1133760,"mode":"generator","type":"stats"}
+1795696281.883 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1229760,"mode":"generator","type":"stats"}
+1795696283.610 DEBUG claude_talk::audio::imp: levels dBFS [echo=-8 out101=-3 out102=-6 src1=-6 src2=-10 src3=-6] routes [1>101 buf=25/36ms under=8640 drift=72; 1>102 buf=24/36ms under=8736 drift=48; 2>101 buf=18/26ms under=2688 drift=-55; 3>102 buf=13/26ms under=3456 drift=-39] echo Some(1680960)
+1795696283.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1325760,"mode":"generator","type":"stats"}
+1795696285.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1421760,"mode":"generator","type":"stats"}
+1795696287.882 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1517760,"mode":"generator","type":"stats"}
+1795696287.922 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForProcess (device '', pid 7504, hr 0x00000000)
+1795696287.922 INFO  claude_talk::audio::imp: source 3 'Discord' -> WaitingForProcess (device '', pid 8484, hr 0x00000000)
+1795696291.055 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795696291.071 WARN  claude_talk::audio::imp: TEST MODE: microphone replaced by program fakemic.exe
+1795696291.071 INFO  claude_talk::audio::imp: audio engine started
+1795696291.097 INFO  claude_talk::discord: default output is now speakers
+1795696291.097 INFO  claude_talk::discord: Discord microphone: Unknown
+1795696291.426 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Paused (device '', pid 5044, hr 0x00000000)
+1795696291.426 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795696291.426 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 1228, hr 0x00000000)
+1795696292.089 INFO  claude_talk::claude_window::win: Claude window browser process: 8724
+1795696292.159 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Starting (device '', pid 5044, hr 0x00000000)
+1795696292.216 INFO  claude_talk::claude_window::win: Claude window loaded 127.0.0.1
+1795696292.218 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 5044, hr 0x00000000)
+1795696292.281 INFO  claude_talk::claude_window: bridge source mode: generator
+1795696292.281 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696292.281 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696292.284 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696292.619 INFO  claude_talk::audio::imp: source 2 'Claude' -> Running (device '', pid 8724, hr 0x00000000)
+1795696294.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":89280,"mode":"generator","type":"stats"}
+1795696296.112 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=17/27ms under=4752 drift=748; 1>102 buf=17/27ms under=4752 drift=747; 2>101 buf=7/17ms under=1536 drift=853; 3>102 buf=9/12ms under=1440 drift=2506] echo None
+1795696296.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":184800,"mode":"generator","type":"stats"}
+1795696298.980 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696298.998 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":217440,"mode":"generator","type":"stats"}
+1795696300.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":377280,"mode":"generator","type":"stats"}
+1795696300.496 INFO  claude_talk::claude_window: Claude window microphone in use
+1795696301.135 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=15/27ms under=4752 drift=156; 1>102 buf=15/27ms under=4752 drift=153; 2>101 buf=5/17ms under=1536 drift=147; 3>102 buf=8/17ms under=1968 drift=2341] echo None
+1795696302.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":473280,"mode":"generator","type":"stats"}
+1795696304.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":569280,"mode":"generator","type":"stats"}
+1795696304.769 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForProcess (device '', pid 5044, hr 0x00000000)
+1795696306.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":665280,"mode":"generator","type":"stats"}
+1795696306.148 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=30/32ms under=5808 drift=1110; 1>102 buf=10/27ms under=4752 drift=-866; 2>101 buf=5/17ms under=1536 drift=-218; 3>102 buf=0/17ms under=1968 drift=628] echo None
+1795696307.897 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 7192, hr 0x00000000)
+1795696308.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":761280,"mode":"generator","type":"stats"}
+1795696310.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":857280,"mode":"generator","type":"stats"}
+1795696311.160 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=27/37ms under=6864 drift=1128; 1>102 buf=27/31ms under=6576 drift=1586; 2>101 buf=5/16ms under=1536 drift=-29; 3>102 buf=9/22ms under=2976 drift=1937] echo None
+1795696312.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":953280,"mode":"generator","type":"stats"}
+1795696314.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1049280,"mode":"generator","type":"stats"}
+1795696316.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1145280,"mode":"generator","type":"stats"}
+1795696316.273 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=24/37ms under=6864 drift=204; 1>102 buf=18/31ms under=6576 drift=1153; 2>101 buf=6/16ms under=1536 drift=-30; 3>102 buf=4/22ms under=2976 drift=306] echo None
+1795696318.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1237440,"mode":"generator","type":"stats"}
+1795696320.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1333440,"mode":"generator","type":"stats"}
+1795696321.299 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=24/37ms under=6864 drift=-275; 1>102 buf=16/31ms under=6576 drift=-110; 2>101 buf=6/16ms under=1536 drift=-26; 3>102 buf=5/21ms under=2976 drift=-537] echo None
+1795696322.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1425600,"mode":"generator","type":"stats"}
+1795696324.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1521600,"mode":"generator","type":"stats"}
+1795696326.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1617600,"mode":"generator","type":"stats"}
+1795696326.310 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=25/36ms under=6864 drift=-91; 1>102 buf=17/30ms under=6576 drift=-312; 2>101 buf=5/15ms under=1536 drift=162; 3>102 buf=9/21ms under=2976 drift=-985] echo None
+1795696328.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1713600,"mode":"generator","type":"stats"}
+1795696330.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1809600,"mode":"generator","type":"stats"}
+1795696331.328 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=26/36ms under=6864 drift=-84; 1>102 buf=19/30ms under=6576 drift=-300; 2>101 buf=5/15ms under=1536 drift=42; 3>102 buf=12/21ms under=2976 drift=-339] echo None
+1795696332.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":1905600,"mode":"generator","type":"stats"}
+1795696334.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2001600,"mode":"generator","type":"stats"}
+1795696336.134 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2097600,"mode":"generator","type":"stats"}
+1795696336.341 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=26/36ms under=6864 drift=-22; 1>102 buf=20/30ms under=6576 drift=-141; 2>101 buf=5/15ms under=1536 drift=-27; 3>102 buf=13/20ms under=2976 drift=308] echo None
+1795696338.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2193600,"mode":"generator","type":"stats"}
+1795696340.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2289600,"mode":"generator","type":"stats"}
+1795696341.364 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=25/35ms under=6864 drift=186; 1>102 buf=20/29ms under=6576 drift=179; 2>101 buf=4/14ms under=1536 drift=153; 3>102 buf=11/20ms under=2976 drift=332] echo None
+1795696342.139 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2385120,"mode":"generator","type":"stats"}
+1795696344.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2481600,"mode":"generator","type":"stats"}
+1795696346.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2577600,"mode":"generator","type":"stats"}
+1795696346.382 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=25/35ms under=6864 drift=83; 1>102 buf=19/29ms under=6576 drift=86; 2>101 buf=4/14ms under=1536 drift=24; 3>102 buf=10/20ms under=2976 drift=123] echo None
+1795696348.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2673600,"mode":"generator","type":"stats"}
+1795696350.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2769600,"mode":"generator","type":"stats"}
+1795696351.389 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=25/35ms under=6864 drift=-25; 1>102 buf=19/29ms under=6576 drift=-4; 2>101 buf=4/14ms under=1536 drift=-32; 3>102 buf=9/19ms under=2976 drift=196] echo None
+1795696352.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2864640,"mode":"generator","type":"stats"}
+1795696354.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":2960640,"mode":"generator","type":"stats"}
+1795696356.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3056640,"mode":"generator","type":"stats"}
+1795696356.401 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=24/34ms under=6864 drift=217; 1>102 buf=27/28ms under=6576 drift=545; 2>101 buf=10/19ms under=1584 drift=2506; 3>102 buf=14/19ms under=2976 drift=39] echo None
+1795696358.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3152640,"mode":"generator","type":"stats"}
+1795696360.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3248640,"mode":"generator","type":"stats"}
+1795696361.416 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=24/34ms under=6864 drift=90; 1>102 buf=15/28ms under=6576 drift=157; 2>101 buf=21/24ms under=2592 drift=2506; 3>102 buf=4/19ms under=2976 drift=-154] echo None
+1795696362.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3344640,"mode":"generator","type":"stats"}
+1795696364.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3440640,"mode":"generator","type":"stats"}
+1795696366.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3536640,"mode":"generator","type":"stats"}
+1795696366.436 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=28/34ms under=6864 drift=1019; 1>102 buf=20/28ms under=6576 drift=581; 2>101 buf=15/24ms under=2592 drift=2506; 3>102 buf=16/24ms under=4224 drift=1848] echo None
+1795696368.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3632640,"mode":"generator","type":"stats"}
+1795696370.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3727200,"mode":"generator","type":"stats"}
+1795696371.455 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=22/33ms under=6864 drift=321; 1>102 buf=16/27ms under=6576 drift=522; 2>101 buf=10/24ms under=2592 drift=1279; 3>102 buf=17/24ms under=4224 drift=1153] echo None
+1795696372.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3823200,"mode":"generator","type":"stats"}
+1795696374.135 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":3919200,"mode":"generator","type":"stats"}
+1795696376.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":4015200,"mode":"generator","type":"stats"}
+1795696376.470 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-120 src1=-120 src2=-120 src3=-120] routes [1>101 buf=21/33ms under=6864 drift=-22; 1>102 buf=15/27ms under=6576 drift=2; 2>101 buf=7/24ms under=2592 drift=166; 3>102 buf=15/24ms under=4224 drift=-121] echo None
+1795696378.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":4111200,"mode":"generator","type":"stats"}
+1795696380.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":4207200,"mode":"generator","type":"stats"}
+1795696381.490 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-120 src1=-120 src2=-120 src3=-120] routes [1>101 buf=22/33ms under=6864 drift=-164; 1>102 buf=16/27ms under=6576 drift=-200; 2>101 buf=8/23ms under=2592 drift=-475; 3>102 buf=7/23ms under=4224 drift=-454] echo None
+1795696382.137 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":4303200,"mode":"generator","type":"stats"}
+1795696384.143 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":4399200,"mode":"generator","type":"stats"}
+1795696386.136 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":4495200,"mode":"generator","type":"stats"}
+1795696386.514 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-120 src1=-120 src2=-120 src3=-120] routes [1>101 buf=22/32ms under=6864 drift=85; 1>102 buf=16/26ms under=6576 drift=34; 2>101 buf=11/23ms under=2592 drift=-661; 3>102 buf=19/23ms under=4224 drift=-317] echo None
