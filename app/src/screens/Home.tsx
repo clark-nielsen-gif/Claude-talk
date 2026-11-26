@@ -17,7 +17,7 @@ function useSpeaking(rms: number): boolean {
   return speaking;
 }
 
-export function Home({ info }: { info: AppInfo }) {
+export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => void }) {
   const t = useT();
   const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
@@ -45,6 +45,8 @@ export function Home({ info }: { info: AppInfo }) {
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
+  if (s?.outputFixed) errors.push(<Notice key="of" kind="warn" title={t.notices.outputFixedTitle} body={t.notices.outputFixedBody} />);
+  if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onSettings} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} />);
 
   // The cards never contradict the switch or an error above them.
@@ -57,26 +59,43 @@ export function Home({ info }: { info: AppInfo }) {
   else if (!s?.discordRunning) discordCheck = { state: 'wait', text: t.main.discordNotRunning };
   else if (s.discordNeedsRestart) discordCheck = { state: 'warn', text: t.guide.restartDiscordTitle, fix: 'restart' };
   else if (s.discordUsesCable === 'no') discordCheck = { state: 'warn', text: t.main.discordWrongMic, fix: 'mic' };
-  else if (s.discordUsesCable === 'yes') discordCheck = on ? { state: 'ok', text: t.main.discordHearsClaude } : { state: 'wait', text: t.main.claudeOff };
+  else if (s.discordUsesCable === 'yes') {
+    discordCheck = !on
+      ? { state: 'wait', text: t.main.discordHearsOnlyYou }
+      : config.claudeToDiscordMuted
+        ? { state: 'wait', text: t.main.claudeMutedInDiscord }
+        : { state: 'ok', text: t.main.discordHearsClaude };
+  }
   else discordCheck = { state: 'wait', text: t.main.discordWaiting };
 
-  // --- Claude card state
+  // --- Claude card state: built from what Claude really hears right now
+  const hearsYou = !micBroken && !config.micMuted;
+  const hearsDiscord = !!s?.discordRunning && config.claudeHearsDiscord;
   const claudeCheck: { state: 'ok' | 'wait' | 'warn'; text: string } = !on
     ? { state: 'wait', text: t.main.claudeOff }
-    : !s?.claudeWindowOpen
-      ? { state: 'wait', text: t.main.claudeNotOpen }
-      : !s.claudeListening
-        ? { state: 'wait', text: t.main.claudeOpenNotListening }
-        : micBroken
-          ? { state: 'warn', text: t.main.micProblem }
-          : { state: 'ok', text: t.main.claudeHearsYou };
+    : cableMissing
+      ? { state: 'wait', text: t.main.claudeNotReady }
+      : !s?.claudeWindowOpen
+        ? { state: 'wait', text: t.main.claudeNotOpen }
+        : !s.claudeListening
+          ? { state: 'wait', text: t.main.claudeOpenNotListening }
+          : micBroken
+            ? { state: 'warn', text: t.main.claudeCantHearYou }
+            : hearsYou && hearsDiscord
+              ? { state: 'ok', text: t.main.claudeHearsYou }
+              : hearsYou
+                ? { state: 'ok', text: t.main.claudeHearsOnlyYou }
+                : hearsDiscord
+                  ? { state: 'ok', text: t.main.claudeHearsOnlyDiscord }
+                  : { state: 'wait', text: t.main.claudeHearsNobody };
+  const switchText = !on ? t.main.switchOff : cableMissing ? t.main.switchOnNotReady : t.main.switchOn;
 
   return (
     <div className="page">
       <section className="hero" aria-labelledby="switch-title">
         <div className="text">
           <h1 id="switch-title">{t.main.switchTitle}</h1>
-          <p className="muted">{on ? t.main.switchOn : t.main.switchOff}</p>
+          <p className={on && cableMissing ? 'warn-text' : 'muted'}>{switchText}</p>
         </div>
         <Switch on={on} label={t.main.switchTitle} onChange={(v) => updateConfig({ claudeInDiscord: v })} />
       </section>
@@ -104,7 +123,7 @@ export function Home({ info }: { info: AppInfo }) {
 
         <section className={`person${!on || !s?.claudeWindowOpen ? ' dim' : ''}`} aria-label={t.main.claude}>
           <div className="head"><h2>{t.main.claude}</h2></div>
-          <Meter level={s?.claude ?? quiet} off={!s?.claudeWindowOpen} label={t.main.claude} />
+          <Meter level={on ? s?.claude ?? quiet : quiet} off={!on || !s?.claudeWindowOpen} label={t.main.claude} />
           <div className="sub">&nbsp;</div>
           <Check state={claudeCheck.state}>{claudeCheck.text}</Check>
           <div className="actions">
@@ -130,7 +149,6 @@ export function Home({ info }: { info: AppInfo }) {
       </div>
 
       {config.pushToTalk && <p className="small">{fill(t.main.pttHint, { key: config.hotkeys.pushToTalkClaude })}</p>}
-      {on && s?.discordUsesCable === 'yes' && s.claudeListening && <p className="small">{t.notices.krispTitle} {t.notices.krispBody}</p>}
 
       {guide && <DiscordGuide mode={guide} onClose={() => setGuide(null)} />}
     </div>

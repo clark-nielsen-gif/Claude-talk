@@ -364,6 +364,16 @@ unsafe trait IPolicyConfig: windows_core::IUnknown {
 const CLSID_POLICY_CONFIG: windows::core::GUID =
     windows::core::GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);
 
+/// Makes `endpoint_id` the default device for one role (index into
+/// console, multimedia, communications – as `devices::default_ids`).
+pub fn set_default_endpoint_role(endpoint_id: &str, role: usize) -> windows::core::Result<()> {
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+    let pc: IPolicyConfig = unsafe { CoCreateInstance(&CLSID_POLICY_CONFIG, None, CLSCTX_ALL) }?;
+    let id = HSTRING::from(endpoint_id);
+    let role = ROLES.get(role).copied().unwrap_or(eConsole);
+    unsafe { pc.set_default_endpoint(windows::core::PCWSTR(id.as_ptr()), role.0) }.ok()
+}
+
 /// Makes `endpoint_id` the default device for all roles.
 pub fn set_default_endpoint(endpoint_id: &str) -> windows::core::Result<()> {
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};

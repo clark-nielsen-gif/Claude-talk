@@ -288,6 +288,8 @@ fn supervise(
                     if ctx.stopping() {
                         break;
                     }
+                    // the device is opened fresh anyway
+                    ctx.take_restart();
                     backoff = Duration::from_millis(100);
                 }
                 ctx.status.set(StreamState::Starting);
@@ -373,7 +375,11 @@ pub fn spawn_capture(
         ctx,
         move |ctx| {
             let mut f = run_fanout.lock().unwrap_or_else(|p| p.into_inner());
-            run_capture(ctx, &target, &mut f)
+            f.mark_restart();
+            let ended = run_capture(ctx, &target, &mut f);
+            // the gap until the silence feed takes over is not jitter either
+            f.mark_restart();
+            ended
         },
         move |new_stretch| {
             // real-time silence while waiting (one lock per 10 ms, not on a

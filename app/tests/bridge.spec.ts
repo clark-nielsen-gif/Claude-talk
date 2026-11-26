@@ -108,12 +108,14 @@ test('instructions are written into the message field and sent', async ({ page }
   // a stand-in for Claude's message field: ProseMirror-like editor whose send
   // button is enabled only after text was typed
   const html = `<!doctype html><title>chat</title><main>
-    <fieldset><div class="ProseMirror" contenteditable="true" role="textbox"></div></fieldset>
-    <button aria-label="Send message" disabled>send</button></main>
+    <fieldset><div class="ProseMirror" contenteditable="true" role="textbox"></div>
+    <button aria-label="Send message" disabled>send</button></fieldset>
+    <form><textarea name="other"></textarea><button type="submit">save</button></form></main>
     <script>
       const box = document.querySelector('.ProseMirror'), btn = document.querySelector('button');
       box.addEventListener('input', () => { btn.disabled = !box.textContent.trim(); });
       btn.addEventListener('click', () => { window.__submitted = box.textContent; box.textContent = ''; btn.disabled = true; });
+      document.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); window.__otherForm = true; });
     </script>`;
   await page.route('https://claude-ci.test/new', (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: html }));
   await page.addInitScript(fakeHost);
@@ -124,6 +126,16 @@ test('instructions are written into the message field and sent', async ({ page }
   const text = 'Svar kun, når nogen siger »Claude«.';
   await page.evaluate((t) => (window as any).__hostSend('ct:p:' + JSON.stringify(t)), text);
   await expect.poll(() => page.evaluate(() => (window as any).__submitted)).toBe(text);
-  const results = await page.evaluate(() => (window as any).__hostSent.map((m: string) => JSON.parse(m)).filter((m: any) => m.type === 'prompt'));
-  expect(results).toEqual([{ ct: 1, type: 'prompt', ok: true }]);
+  const prompts = () => page.evaluate(() => (window as any).__hostSent.map((m: string) => JSON.parse(m)).filter((m: any) => m.type === 'prompt'));
+  await expect.poll(prompts).toEqual([{ ct: 1, type: 'prompt', ok: true }]);
+  // nothing else on the page was touched
+  expect(await page.evaluate(() => (window as any).__otherForm)).toBeUndefined();
+  expect(await page.evaluate(() => (document.querySelector('textarea') as HTMLTextAreaElement).value)).toBe('');
+  // a draft the user is typing is never overwritten
+  await page.evaluate(() => { document.querySelector('.ProseMirror')!.textContent = 'mit eget udkast'; });
+  await page.evaluate((t) => (window as any).__hostSend('ct:p:' + JSON.stringify(t)), text);
+  await expect.poll(() => page.evaluate(() => (window as any).__hostSent.map((m: string) => JSON.parse(m)).filter((m: any) => m.type === 'prompt').length)).toBe(2);
+  const last = await page.evaluate(() => (window as any).__hostSent.map((m: string) => JSON.parse(m)).filter((m: any) => m.type === 'prompt').pop());
+  expect(last).toEqual({ ct: 1, type: 'prompt', ok: false, reason: 'draft' });
+  expect(await page.evaluate(() => document.querySelector('.ProseMirror')!.textContent)).toBe('mit eget udkast');
 });

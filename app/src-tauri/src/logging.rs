@@ -77,6 +77,13 @@ pub fn init() {
     std::panic::set_hook(Box::new(|info| {
         log::error!("panic: {info}");
         log::logger().flush();
+        // Only the main thread's panic ends the program (the audio and
+        // helper threads are caught and restarted). If it goes down,
+        // Discord must not be left on a silent cable.
+        #[cfg(windows)]
+        if std::thread::current().name() == Some("main") {
+            crate::discord::restore();
+        }
     }));
     log::info!("Claude Talk {} starting", env!("CARGO_PKG_VERSION"));
 }

@@ -5,8 +5,8 @@ use windows::core::{Interface, GUID, PCWSTR, PWSTR};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::{
-    eCapture, eCommunications, eConsole, eRender, EDataFlow, IMMDevice, IMMDeviceEnumerator,
-    MMDeviceEnumerator, PKEY_AudioEndpoint_FormFactor, DEVICE_STATE_ACTIVE,
+    eCapture, eCommunications, eConsole, eMultimedia, eRender, EDataFlow, IMMDevice,
+    IMMDeviceEnumerator, MMDeviceEnumerator, PKEY_AudioEndpoint_FormFactor, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::StructuredStorage::{
     PropVariantClear, PropVariantToStringAlloc, PropVariantToUInt32, PROPVARIANT,
@@ -71,7 +71,7 @@ pub enum DeviceSelector {
 
 /// Name fragments of the virtual devices Claude Talk itself feeds (our names
 /// after renaming, or VB-CABLE's own names). Only VB-CABLE itself matches:
-/// VB-CABLE A/B, Hi-Fi Cable and VoiceMeeter keep their own roles.
+/// VB-CABLE A/B, Hi-Fi Cable and VoiceMeeter are not renamed.
 pub const OWN_VIRTUAL_DEVICES: &[&str] = &["claude talk", "(vb-audio virtual cable)"];
 
 /// Inputs that carry what the computer plays rather than a voice. They are
@@ -87,6 +87,13 @@ pub const NOT_A_MICROPHONE: &[&str] = &[
     "loopback",
     "rec. playback",
     "mix (",
+    // the recording side of the extra cables: in "Claude in Chrome or the
+    // app" mode it carries mic + Discord, so as a microphone it would howl
+    "cable-a output",
+    "cable-b output",
+    "cable-c output",
+    "cable-d output",
+    "hi-fi cable output",
 ];
 
 /// Our virtual microphone (Discord records it), most preferred first.
@@ -294,9 +301,29 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
 
 /// Id of the current default device of a flow (console role).
 pub fn default_id(flow: Flow) -> Option<String> {
-    let e = enumerator().ok()?;
-    let dev = unsafe { e.GetDefaultAudioEndpoint(data_flow(flow), eConsole) }.ok()?;
-    Some(device_id(&dev))
+    default_ids(flow)[0].clone()
+}
+
+/// Default device ids for each role, in the order console, multimedia,
+/// communications (Windows can keep a separate communications device).
+pub fn default_ids(flow: Flow) -> [Option<String>; 3] {
+    let Ok(e) = enumerator() else {
+        return [None, None, None];
+    };
+    [eConsole, eMultimedia, eCommunications].map(|role| {
+        unsafe { e.GetDefaultAudioEndpoint(data_flow(flow), role) }
+            .ok()
+            .map(|d| device_id(&d))
+    })
+}
+
+/// Name of an active endpoint by id.
+pub fn name_of(flow: Flow, id: &str) -> Option<String> {
+    list(flow)
+        .ok()?
+        .into_iter()
+        .find(|e| e.id == id)
+        .map(|e| e.name)
 }
 
 /// Property keys for renaming (see `DECISIONS.md` D1): Windows shows

@@ -142,7 +142,7 @@ pub fn set_config(
     crate::audio::apply_switches(&app);
     crate::tray::refresh(&app);
     if hotkeys_changed {
-        crate::hotkeys::register(&app).map_err(|_| "error.hotkeyTaken".to_string())?;
+        crate::hotkeys::register(&app)?;
     }
     if autostart_changed {
         crate::autostart::apply(&app, cfg.autostart);
@@ -152,8 +152,12 @@ pub fn set_config(
 
 /// The exact message the instructions become (shown as a preview).
 #[tauri::command]
-pub fn instruction_text(instructions: crate::config::Instructions, language: String) -> String {
-    instructions.text(&language)
+pub fn instruction_text(
+    instructions: crate::config::Instructions,
+    language: String,
+    hears_others: bool,
+) -> String {
+    instructions.text(&language, hears_others)
 }
 
 /// Writes the instructions into the Claude window and sends them. The result
@@ -165,7 +169,7 @@ pub fn send_instructions(app: AppHandle, state: State<AppState>) -> Result<(), S
             .config
             .lock()
             .map_err(|_| "error.internal".to_string())?;
-        c.instructions.text(&c.language)
+        c.instructions.text(&c.language, c.claude_hears_discord)
     };
     if text.is_empty() {
         return Err("error.noInstructions".into());
@@ -223,7 +227,7 @@ pub fn save_report(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 pub fn quit(app: AppHandle) {
-    crate::shutdown(&app);
+    crate::request_quit(&app);
 }
 
 #[tauri::command]
@@ -383,6 +387,10 @@ pub fn set_route(
     #[cfg(windows)]
     {
         use ct_engine::graph::Route;
+        // the external-Claude routes follow their own switch only
+        if crate::mixer::imp::is_external(source, output) {
+            return Err("error.internal".into());
+        }
         let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
         let Some(host) = g.as_mut() else {
             return Err("error.internal".into());
@@ -393,7 +401,7 @@ pub fn set_route(
                 output,
                 Route {
                     gain_db: gain_db.clamp(-60.0, 12.0),
-                    muted: false,
+                    muted: crate::audio::starts_muted(source, output),
                 },
             )
             .map_err(|e| format!("error.{}", e.key()))?;

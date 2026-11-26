@@ -82,7 +82,8 @@ pub mod imp {
         let e = exe.to_lowercase();
         if discord_executables().contains(&e) {
             Party::Discord
-        } else if e == "msedgewebview2.exe" {
+        } else if e == "msedgewebview2.exe" || e == "claude.exe" {
+            // the Claude window, and the Claude app: Claude's voice
             Party::Claude
         } else {
             Party::App(e)
@@ -145,7 +146,7 @@ pub mod imp {
                 o,
                 Route {
                     gain_db,
-                    muted: false,
+                    muted: crate::audio::starts_muted(s, o),
                 },
             ) {
                 log::info!("mixer: route {s}->{o} not restored ({})", e.key());
@@ -203,7 +204,7 @@ pub mod imp {
 
     /// Routes of "Claude in another program": owned by that setting, never
     /// by presets or the saved routing.
-    fn is_external(s: u32, o: u32) -> bool {
+    pub fn is_external(s: u32, o: u32) -> bool {
         s == EXTERNAL_SRC || o == EXTERNAL_OUT
     }
 
@@ -248,7 +249,11 @@ pub mod imp {
             (ids::DISCORD, EXTERNAL_OUT),
             (EXTERNAL_SRC, ids::TO_DISCORD),
         ] {
-            host.set_route(s, o, Route::default())
+            let route = Route {
+                muted: true, // opened by apply_switches
+                ..Route::default()
+            };
+            host.set_route(s, o, route)
                 .map_err(|e| format!("error.{}", e.key()))?;
         }
         log::info!("external Claude: {exe} via '{}'", cable.render.name);

@@ -33,6 +33,10 @@ pub struct AudioStatus {
     /// "yes": Discord records from our cable, "no": another mic, "": unknown.
     pub discord_uses_cable: String,
     pub discord_needs_restart: bool,
+    /// Windows' default output was our cable and was set back (last 30 s).
+    pub output_fixed: bool,
+    /// Shortcuts that could not be registered ("" = all fine).
+    pub hotkey_problem: String,
     /// Default output is speakers (echo risk).
     pub speakers: bool,
     /// Echo reduction is running on the microphone.
@@ -93,6 +97,54 @@ mod imp {
         log::info!("audio engine started");
     }
 
+    /// Routes the switches decide (see `switch_mute`).
+    const SWITCHED_ROUTES: [(u32, u32); 7] = {
+        use crate::mixer::imp::{EXTERNAL_OUT, EXTERNAL_SRC};
+        [
+            (ids::CLAUDE, ids::TO_DISCORD),
+            (ids::DISCORD, ids::TO_CLAUDE),
+            (ids::MIC, ids::TO_CLAUDE),
+            (ids::MIC, ids::TO_DISCORD),
+            (EXTERNAL_SRC, ids::TO_DISCORD),
+            (ids::DISCORD, EXTERNAL_OUT),
+            (ids::MIC, EXTERNAL_OUT),
+        ]
+    };
+
+    /// A route the switches decide starts muted; `apply_switches` (always
+    /// called right after a route change) opens it if the switches allow.
+    pub fn starts_muted(s: u32, o: u32) -> bool {
+        SWITCHED_ROUTES.contains(&(s, o))
+    }
+
+    /// Whether the switches mute this route (`None`: not a switched route).
+    /// Used when applying the switches and whenever a route is (re)created,
+    /// so no route is ever live for a moment against a switch.
+    pub fn switch_mute(
+        cfg: &crate::config::Config,
+        ptt_down: bool,
+        s: u32,
+        o: u32,
+    ) -> Option<bool> {
+        use crate::mixer::imp::{EXTERNAL_OUT, EXTERNAL_SRC};
+        let on = cfg.claude_in_discord;
+        // "Claude hears only you": Discord's voices never reach Claude
+        let discord_to_claude = on && cfg.claude_hears_discord;
+        // To Claude the microphone follows the big switch and, if
+        // push-to-talk is on, the key.
+        let mic_to_claude = on && !(cfg.push_to_talk && !ptt_down);
+        let claude_to_discord = on && !cfg.claude_to_discord_muted;
+        Some(match (s, o) {
+            (ids::CLAUDE, ids::TO_DISCORD) | (EXTERNAL_SRC, ids::TO_DISCORD) => !claude_to_discord,
+            (ids::DISCORD, ids::TO_CLAUDE) | (ids::DISCORD, EXTERNAL_OUT) => !discord_to_claude,
+            (ids::MIC, ids::TO_CLAUDE) | (ids::MIC, EXTERNAL_OUT) => !mic_to_claude,
+            // Your microphone always reaches Discord (Discord uses our
+            // cable as its microphone).
+            (ids::MIC, ids::TO_DISCORD) => false,
+            _ => return None,
+        })
+    }
+
     /// Applies config switches (big switch, mutes, push-to-talk) to the routes.
     pub fn apply_switches(app: &AppHandle) {
         let state = app.state::<AppState>();
@@ -107,39 +159,11 @@ mod imp {
             .clone();
         let ptt_down = state.ptt_down.load(Ordering::Relaxed);
         let Some(host) = guard.as_mut() else { return };
-        let on = cfg.claude_in_discord;
         host.set_source_muted(ids::MIC, cfg.mic_muted);
-        host.set_route_muted(
-            ids::CLAUDE,
-            ids::TO_DISCORD,
-            !on || cfg.claude_to_discord_muted,
-        );
-        // "Claude hears only you": Discord's voices never reach Claude
-        let discord_to_claude = on && cfg.claude_hears_discord;
-        host.set_route_muted(ids::DISCORD, ids::TO_CLAUDE, !discord_to_claude);
-        // Your microphone always reaches Discord (Discord uses our cable as
-        // its microphone). To Claude it follows the big switch and, if
-        // push-to-talk is on, the key.
-        host.set_route_muted(
-            ids::MIC,
-            ids::TO_CLAUDE,
-            !on || (cfg.push_to_talk && !ptt_down),
-        );
-        host.set_route_muted(ids::MIC, ids::TO_DISCORD, false);
-        // the same switches for Claude in another program (if that mode is on)
-        {
-            use crate::mixer::imp::{EXTERNAL_OUT, EXTERNAL_SRC};
-            host.set_route_muted(
-                EXTERNAL_SRC,
-                ids::TO_DISCORD,
-                !on || cfg.claude_to_discord_muted,
-            );
-            host.set_route_muted(ids::DISCORD, EXTERNAL_OUT, !discord_to_claude);
-            host.set_route_muted(
-                ids::MIC,
-                EXTERNAL_OUT,
-                !on || (cfg.push_to_talk && !ptt_down),
-            );
+        for (s, o) in SWITCHED_ROUTES {
+            if let Some(m) = switch_mute(&cfg, ptt_down, s, o) {
+                host.set_route_muted(s, o, m);
+            }
         }
         // echo reduction: always, never, or automatically with speakers
         let echo = match cfg.echo {
@@ -164,10 +188,7 @@ mod imp {
     /// Bluetooth headsets keep their good sound.
     pub fn refresh_mic(app: &AppHandle) {
         let state = app.state::<AppState>();
-        let window_open = app
-            .get_webview_window("main")
-            .and_then(|w| w.is_visible().ok())
-            .unwrap_or(false);
+        let window_open = window_shown(app);
         let external = state
             .config
             .lock()
@@ -183,6 +204,13 @@ mod imp {
         }
     }
 
+    /// The main window is on screen: visible and not minimized.
+    fn window_shown(app: &AppHandle) -> bool {
+        app.get_webview_window("main")
+            .map(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
+            .unwrap_or(false)
+    }
+
     fn level(peak: f32, rms: f32) -> Level {
         Level { peak, rms }
     }
@@ -193,13 +221,15 @@ mod imp {
         // diagnostics for the log: loudest peak per source/output over ~5 s
         let mut peaks: std::collections::BTreeMap<String, f32> = Default::default();
         let mut last_diag = std::time::Instant::now();
+        let mut was_shown = false;
         while !state.shutting_down.load(Ordering::Relaxed) {
-            // 30 meter updates a second while the window is open; when it is
-            // hidden (Claude Talk in the tray) only the bookkeeping runs.
-            let visible = app
-                .get_webview_window("main")
-                .and_then(|w| w.is_visible().ok())
-                .unwrap_or(false);
+            // 30 meter updates a second while the window is on screen; when
+            // it is hidden or minimized only the bookkeeping runs.
+            let visible = window_shown(&app);
+            if visible != was_shown {
+                was_shown = visible;
+                refresh_mic(&app); // the meter needs the mic only on screen
+            }
             std::thread::sleep(Duration::from_millis(if visible { 33 } else { 250 }));
             let (snap, echo_active) = {
                 let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
@@ -324,6 +354,17 @@ mod imp {
             }
             .into();
             st.discord_needs_restart = state.discord_needs_restart.load(Ordering::Relaxed);
+            st.output_fixed = state
+                .output_fixed_at
+                .lock()
+                .ok()
+                .and_then(|t| *t)
+                .is_some_and(|t| t.elapsed() < Duration::from_secs(30));
+            st.hotkey_problem = state
+                .hotkey_problem
+                .lock()
+                .map(|h| h.clone())
+                .unwrap_or_default();
             st.speakers = state.speakers.load(Ordering::Relaxed);
             st.echo_active = echo_active;
             st.claude_window_open = state.claude_pid.load(Ordering::Relaxed) != 0;
@@ -336,7 +377,7 @@ mod imp {
 }
 
 #[cfg(windows)]
-pub use imp::{apply_switches, refresh_mic, start};
+pub use imp::{apply_switches, refresh_mic, start, starts_muted};
 
 #[cfg(not(windows))]
 pub fn start(_app: &AppHandle) {}

@@ -14,8 +14,8 @@ export function Instructions() {
 
   // keep the preview current; save typing a moment after it stops
   useEffect(() => {
-    api.instructionText(ins, lang).then(setPreview);
-  }, [ins, lang]);
+    api.instructionText(ins, lang, config.claudeHearsDiscord).then(setPreview);
+  }, [ins, lang, config.claudeHearsDiscord]);
   const change = (patch: Partial<Ins>, now = true) => {
     const next = { ...ins, ...patch };
     setIns(next);
@@ -25,11 +25,14 @@ export function Instructions() {
   };
   useEffect(() => api.onPrompt((r) => {
     if (r.ok) toast(t.instructions.sent);
-    else toast(r.reason === 'noComposer' ? t.errors.noComposer : t.errors.generic);
+    else toast(r.reason === 'noComposer' ? t.errors.noComposer : r.reason === 'draft' ? t.errors.promptDraft : t.errors.promptNotSent);
   }), [t, toast]);
 
   const send = async () => {
     try {
+      // what is on screen is what gets sent: save pending typing first
+      window.clearTimeout(save.current);
+      await update({ instructions: ins });
       await api.sendInstructions();
     } catch (e) {
       const key = String(e).replace(/^error\./, '') as keyof typeof t.errors;

@@ -9,18 +9,22 @@ use crate::graph::{
     ids, Output, OutputId, Party, Rejection, Route, RoutingGraph, Source, SourceId,
 };
 use crate::mixer::{
-    connect, connect_raw, disconnect, FanoutHandle, GainParams, MixerHandle, OutputMixer,
-    SourceFanout, TapStats,
+    connect, connect_fixed, connect_raw, disconnect, FanoutHandle, GainParams, MixerHandle,
+    OutputMixer, SourceFanout, TapStats,
 };
 use crate::{ENGINE_CHANNELS, ENGINE_RATE};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-/// Buffer each route keeps against scheduling jitter. WASAPI shared mode
-/// delivers 10 ms periods; 20 ms of margin holds through normal system load
-/// while keeping the end-to-end latency inside the 40 ms budget.
-pub const ROUTE_BUFFER_MS: f64 = 12.0;
+/// Buffer each route starts with against scheduling jitter. WASAPI shared
+/// mode delivers 10 ms periods; when the capture and render clocks' phases
+/// cross, one period plus jitter (±2 ms each side) plus the resampler chunk
+/// is needed. A two-hour simulation (resample.rs tests) gave no dropouts at
+/// 20 ms and repeated dropouts below it; the buffer grows by itself (max
+/// 40 ms) when a device is burstier than that, and never shrinks back below
+/// the level that ran dry.
+pub const ROUTE_BUFFER_MS: f64 = 20.0;
 
 /// Executables whose sound is "Discord".
 pub fn discord_executables() -> Vec<String> {
@@ -273,7 +277,16 @@ impl AudioHost {
             (ids::MIC, ids::TO_CLAUDE),
             (ids::DISCORD, ids::TO_CLAUDE),
         ] {
-            let _ = h.set_route(s, o, Route::default());
+            // muted until the app applies its switches ("Claude hears only
+            // you", the big switch): never live for a moment by default
+            let _ = h.set_route(
+                s,
+                o,
+                Route {
+                    muted: true,
+                    ..Route::default()
+                },
+            );
         }
         h
     }
@@ -514,7 +527,8 @@ impl AudioHost {
             return Err("no microphone".into());
         };
         let mut raw = connect_raw(&mut mic.handle, AEC_MIC_IN);
-        let (mut ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
+        let (ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
+        let mut ref_mix = ref_mix.without_limiter();
         let (mut fanout, processed) = SourceFanout::new(ids::MIC, ENGINE_RATE);
         // Everything that may come out of the speakers and is not the user:
         // Claude, Discord, Claude in another program, added programs.
@@ -528,7 +542,7 @@ impl AudioHost {
             .collect();
         for s in &reference {
             if let Some(src) = self.sources.get_mut(s) {
-                connect(
+                connect_fixed(
                     &mut src.handle,
                     &mut ref_in,
                     GainParams::new(0.0, false),
@@ -558,12 +572,13 @@ impl AudioHost {
                 let mut m = vec![0f32; FRAME];
                 let mut r = vec![0f32; FRAME];
                 while !stop2.load(Ordering::Relaxed) {
-                    // Keep at most one block waiting: the microphone delivers
-                    // 10 ms packets and this thread reads them as they come,
-                    // so anything more is a stall (or start-up) backlog that
-                    // would otherwise add its delay for good.
+                    // The microphone delivers 10 ms packets (some USB and
+                    // Bluetooth mics several at once) and this thread reads
+                    // them as they come; more than 60 ms waiting is a stall
+                    // (or start-up) backlog that would otherwise add its
+                    // delay for good.
                     let backlog = raw.slots() / ch;
-                    if backlog > 2 * FRAME {
+                    if backlog > 6 * FRAME {
                         let drop_frames = backlog - FRAME;
                         if let Ok(c) = raw.read_chunk(drop_frames * ch) {
                             c.commit_all();
@@ -682,6 +697,8 @@ impl AudioHost {
         self.sources
             .get(&id)
             .and_then(|s| s.stream.as_ref())
+            // a paused or reopening stream has no current device
+            .filter(|st| st.status.state() == super::stream::StreamState::Running)
             .map(|st| {
                 st.status
                     .device_name
@@ -794,14 +811,10 @@ pub fn is_own_device(name: &str) -> bool {
 /// Name fragments of other virtual cables a user may have installed
 /// themselves (VB-CABLE A/B/C/D, Hi-Fi Cable). With one of these,
 /// Claude can also be used in another program ("Claude in Chrome or the app").
-pub const EXTRA_CABLE_PATTERNS: [&str; 6] = [
-    "cable-a",
-    "cable-b",
-    "cable-c",
-    "cable-d",
-    "voicemeeter",
-    "hi-fi cable",
-];
+/// VoiceMeeter is not one of them: it is a mixer whose own buses can send
+/// what we play straight back into a microphone, which we cannot see.
+pub const EXTRA_CABLE_PATTERNS: [&str; 5] =
+    ["cable-a", "cable-b", "cable-c", "cable-d", "hi-fi cable"];
 
 /// An extra virtual cable: where we play to, and the microphone the other
 /// program must choose.

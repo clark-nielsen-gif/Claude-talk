@@ -79,14 +79,14 @@ export function App() {
         ) : (
           <div className="body">
             <nav className="nav" aria-label={t.appName}>
-              {(['home', 'instructions', 'advanced', 'settings', 'help'] as Page[]).map((p) => (
+              {(['home', 'instructions', 'settings', 'help', 'advanced'] as Page[]).map((p) => (
                 <button key={p} aria-current={page === p ? 'page' : undefined} onClick={() => setPage(p)}>
                   {t.nav[p]}
                 </button>
               ))}
             </nav>
             <main className="content">
-              {page === 'home' && <Home info={info} />}
+              {page === 'home' && <Home info={info} onSettings={() => setPage('settings')} />}
               {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}

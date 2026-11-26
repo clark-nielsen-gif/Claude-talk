@@ -1,5 +1,6 @@
 //! Keeps Discord's microphone pointed at Claude Talk and checks that it
-//! really is: every 2 s, outside any audio thread.
+//! really is, outside any audio thread: whether Discord records is checked
+//! every 0.5 s (the microphone opens for a call), the rest every 2 s.
 
 use crate::state::AppState;
 use std::sync::atomic::Ordering;
@@ -23,7 +24,22 @@ pub fn spawn_watcher(app: AppHandle) {
             let state = app.state::<AppState>().inner().clone();
             let mut routed_since: Option<Instant> = None;
             let mut last_logged = (u8::MAX, false);
+            let mut last_good: [Option<String>; 3] = [None, None, None];
+            let mut tick = 0u32;
             while !state.shutting_down.load(Ordering::Relaxed) {
+                if !tick.is_multiple_of(4) {
+                    tick += 1;
+                    let cable = policy::cable_capture_id();
+                    let mic = sessions::discord_mic(&exes, cable.as_deref());
+                    let recording = mic != sessions::DiscordMic::Unknown;
+                    if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
+                        crate::audio::refresh_mic(&app);
+                    }
+                    std::thread::sleep(Duration::from_millis(500));
+                    continue;
+                }
+                tick += 1;
+                guard_default_output(&state, &mut last_good);
                 let enabled = state.config.lock().map(|c| c.route_discord).unwrap_or(true);
                 let running = !policy::pids_of(&exes).is_empty();
                 if !enabled && running && policy::discord_routed_to_cable(&exes) == Some(true) {
@@ -100,10 +116,73 @@ pub fn spawn_watcher(app: AppHandle) {
                     );
                     last_logged = (uses, restart);
                 }
-                std::thread::sleep(Duration::from_secs(2));
+                std::thread::sleep(Duration::from_millis(500));
             }
         })
         .expect("spawn discord watcher");
+}
+
+/// Windows must never play into our cable (or, in Chrome/app mode, into the
+/// extra cable): Discord would send everything the computer plays, its own
+/// call included, to everyone, and the user would hear nothing. That
+/// happens when someone picks "Claude Talk – intern" in the taskbar's sound
+/// menu, or a driver install took a role. Put the last real device back,
+/// role by role, and tell the user.
+#[cfg(windows)]
+fn guard_default_output(state: &crate::state::Inner, last_good: &mut [Option<String>; 3]) {
+    use ct_engine::win::{devices, host, policy};
+    let external = state
+        .config
+        .lock()
+        .map(|c| c.external_claude.is_some())
+        .unwrap_or(false);
+    let extra = if external {
+        host::extra_cable().map(|c| c.render.id)
+    } else {
+        None
+    };
+    let Ok(renders) = devices::list(devices::Flow::Render) else {
+        return;
+    };
+    let bad = |id: &str| {
+        extra.as_deref() == Some(id)
+            || renders
+                .iter()
+                .any(|e| e.id == id && host::is_own_device(&e.name))
+    };
+    let virtual_name = |n: &str| {
+        let n = n.to_lowercase();
+        ["virtual", "cable", "voicemeeter"]
+            .iter()
+            .any(|p| n.contains(p))
+    };
+    let ids = devices::default_ids(devices::Flow::Render);
+    for (role, id) in ids.iter().enumerate() {
+        let Some(id) = id else { continue };
+        if !bad(id) {
+            last_good[role] = Some(id.clone());
+            continue;
+        }
+        let back = last_good[role]
+            .clone()
+            .filter(|g| renders.iter().any(|e| &e.id == g) && !bad(g))
+            .or_else(|| {
+                renders
+                    .iter()
+                    .find(|e| !bad(&e.id) && !virtual_name(&e.name))
+                    .map(|e| e.id.clone())
+            });
+        let Some(back) = back else { continue };
+        match policy::set_default_endpoint_role(&back, role) {
+            Ok(()) => {
+                log::warn!("default output (role {role}) was our cable; set back to {back}");
+                if let Ok(mut n) = state.output_fixed_at.lock() {
+                    *n = Some(Instant::now());
+                }
+            }
+            Err(e) => log::warn!("could not set the default output back: {e}"),
+        }
+    }
 }
 
 /// A new default microphone (headset plugged in, chosen in Windows): the

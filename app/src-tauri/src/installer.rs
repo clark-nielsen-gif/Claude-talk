@@ -366,30 +366,35 @@ fn rename_devices() {
 }
 
 struct Defaults {
-    render: Option<String>,
-    capture: Option<String>,
+    render: [Option<String>; 3],
+    capture: [Option<String>; 3],
 }
 
 fn defaults() -> Defaults {
     Defaults {
-        render: devices::default_id(Flow::Render),
-        capture: devices::default_id(Flow::Capture),
+        render: devices::default_ids(Flow::Render),
+        capture: devices::default_ids(Flow::Capture),
     }
 }
 
 /// Installing a driver can make Windows pick the new device as default.
-/// Put the user's own defaults back (all roles).
+/// Put the user's own defaults back, role by role (a separate
+/// communications device stays separate).
 fn restore_defaults(before: &Defaults) {
     let now = defaults();
     for (was, is) in [
         (&before.render, &now.render),
         (&before.capture, &now.capture),
     ] {
-        if let (Some(was), Some(is)) = (was, is) {
-            if was != is {
-                match ct_engine::win::policy::set_default_endpoint(was) {
-                    Ok(()) => log::info!("installer: restored default device {was}"),
-                    Err(e) => log::warn!("installer: could not restore default device: {e}"),
+        for role in 0..3 {
+            if let (Some(was), Some(is)) = (&was[role], &is[role]) {
+                if was != is {
+                    match ct_engine::win::policy::set_default_endpoint_role(was, role) {
+                        Ok(()) => {
+                            log::info!("installer: restored default device {was} (role {role})")
+                        }
+                        Err(e) => log::warn!("installer: could not restore default device: {e}"),
+                    }
                 }
             }
         }

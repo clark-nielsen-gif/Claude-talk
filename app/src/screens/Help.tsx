@@ -34,7 +34,7 @@ export function Help({ info }: { info: AppInfo }) {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.help.selfTest}</span><span className="small">{t.help.selfTestHint}</span></div>
+          <div className="text"><span className="label">{t.help.selfTestTitle}</span><span className="small">{t.help.selfTestHint}</span></div>
           <button className="btn primary" disabled={running} onClick={async () => {
             setRunning(true);
             try { setResults(await api.selfTest()); }
@@ -72,7 +72,7 @@ export function Help({ info }: { info: AppInfo }) {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.help.report}</span><span className="small">{t.help.reportHint}</span></div>
+          <div className="text"><span className="label">{t.help.reportTitle}</span><span className="small">{t.help.reportHint}</span></div>
           <button className="btn secondary" onClick={async () => { try { await api.saveReport(); toast(t.help.reportSaved); } catch { toast(t.errors.report); } }}>{t.help.report}</button>
         </div>
         <div className="row">

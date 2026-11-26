@@ -22,7 +22,7 @@ use crate::dsp::{db_to_lin, AtomicF32, MeterValues, SmoothedGain, TruePeakLimite
 use crate::graph::{OutputId, SourceId};
 use crate::resample::AdaptiveResampler;
 use crate::{ENGINE_CHANNELS, ENGINE_RATE};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 
 /// Maximum routes into one output and outputs fed by one source.
@@ -82,6 +82,9 @@ pub struct SourceStats {
     pub meter: MeterValues,
     pub overflow_frames: AtomicU64,
     pub captured_frames: AtomicU64,
+    /// Counts (re)starts of the device or program behind the source; the
+    /// gap around a restart is not jitter and must not grow route buffers.
+    pub restarts: AtomicU32,
 }
 
 pub struct SourceTap {
@@ -91,6 +94,7 @@ pub struct SourceTap {
     gain: SmoothedGain,
     params: Arc<GainParams>,
     stats: Arc<TapStats>,
+    source_stats: Arc<SourceStats>,
     in_rate: u32,
 }
 
@@ -110,6 +114,9 @@ pub struct OutputMixer {
     scratch: Vec<f32>,
     mix: Vec<f32>,
     limiter: TruePeakLimiter,
+    /// false for an echo reference: the canceller needs the plain sum, not a
+    /// non-linearly limited one
+    limit: bool,
     master: SmoothedGain,
     master_params: Arc<GainParams>,
     stats: Arc<OutputStats>,
@@ -151,6 +158,7 @@ impl OutputMixer {
             scratch: vec![0.0; MAX_BLOCK * ENGINE_CHANNELS],
             mix: vec![0.0; MAX_BLOCK * ENGINE_CHANNELS],
             limiter: TruePeakLimiter::new(ENGINE_CHANNELS, ENGINE_RATE as f32, -1.0, 1.5, 80.0),
+            limit: true,
             master: SmoothedGain::new(1.0, ENGINE_RATE as f32, RAMP_MS),
             master_params: params.clone(),
             stats: stats.clone(),
@@ -171,7 +179,17 @@ impl OutputMixer {
     }
 
     pub fn latency_frames(&self) -> usize {
-        self.limiter.latency()
+        if self.limit {
+            self.limiter.latency()
+        } else {
+            0
+        }
+    }
+
+    /// Plain sum without the output limiter (echo reference).
+    pub fn without_limiter(mut self) -> Self {
+        self.limit = false;
+        self
     }
 
     pub fn blocks_per_second(&self) -> f64 {
@@ -264,6 +282,8 @@ impl OutputMixer {
         mix.fill(0.0);
         for tap in self.taps.iter_mut().flatten() {
             let scratch = &mut self.scratch[..n];
+            tap.resampler
+                .note_source_epoch(tap.source_stats.restarts.load(Ordering::Relaxed));
             let st = tap.resampler.pull(&mut tap.ring, scratch);
             if st.underrun_frames > 0 {
                 tap.stats
@@ -287,8 +307,10 @@ impl OutputMixer {
         }
         self.master.set_target(self.master_params.linear());
         self.master.apply(mix, ENGINE_CHANNELS);
-        self.limiter.process(mix);
-        self.stats.limiter_reduction.store(self.limiter.reduction);
+        if self.limit {
+            self.limiter.process(mix);
+            self.stats.limiter_reduction.store(self.limiter.reduction);
+        }
         self.stats.meter.feed(mix);
     }
 }
@@ -384,6 +406,11 @@ impl SourceFanout {
                 garbage: gb_rx,
             },
         )
+    }
+
+    /// The device or program behind this source is (re)starting.
+    pub fn mark_restart(&self) {
+        self.stats.restarts.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn source(&self) -> SourceId {
@@ -535,23 +562,50 @@ pub fn connect(
     route: Arc<GainParams>,
     target_ms: f64,
 ) -> Arc<TapStats> {
+    connect_with(source, output, route, target_ms, false)
+}
+
+/// Like [`connect`], but the delay never changes: no growth, no re-prime
+/// after a gap (the gap is silence). For an echo reference, whose timing
+/// the canceller has locked on to.
+pub fn connect_fixed(
+    source: &mut FanoutHandle,
+    output: &mut MixerHandle,
+    route: Arc<GainParams>,
+    target_ms: f64,
+) -> Arc<TapStats> {
+    connect_with(source, output, route, target_ms, true)
+}
+
+fn connect_with(
+    source: &mut FanoutHandle,
+    output: &mut MixerHandle,
+    route: Arc<GainParams>,
+    target_ms: f64,
+    fixed: bool,
+) -> Arc<TapStats> {
     // room for 500 ms: far more than ever buffered; overflow is counted
     let cap = (source.rate as usize / 2).max(MAX_BLOCK) * ENGINE_CHANNELS;
     let (prod, cons) = rtrb::RingBuffer::<f32>::new(cap);
     let stats = Arc::new(TapStats::default());
+    let mut resampler = AdaptiveResampler::new(
+        ENGINE_CHANNELS,
+        source.rate,
+        ENGINE_RATE,
+        target_ms,
+        output.blocks_per_second,
+    );
+    if fixed {
+        resampler.set_fixed();
+    }
     let tap = Box::new(SourceTap {
         source: source.source,
         ring: cons,
-        resampler: AdaptiveResampler::new(
-            ENGINE_CHANNELS,
-            source.rate,
-            ENGINE_RATE,
-            target_ms,
-            output.blocks_per_second,
-        ),
+        resampler,
         gain: SmoothedGain::new(0.0, ENGINE_RATE as f32, RAMP_MS),
         params: route,
         stats: stats.clone(),
+        source_stats: source.stats.clone(),
         in_rate: source.rate,
     });
     output.add_tap(tap);

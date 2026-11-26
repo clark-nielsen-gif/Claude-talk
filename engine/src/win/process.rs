@@ -5,8 +5,9 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 use windows::Win32::System::Threading::{
-    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+    GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,9 +17,17 @@ pub struct ProcInfo {
     pub exe: String,
 }
 
-/// Snapshot of all processes.
+/// Windows session of a process (`None` if it cannot be read).
+fn session_of(pid: u32) -> Option<u32> {
+    let mut s = 0u32;
+    unsafe { ProcessIdToSessionId(pid, &mut s) }.ok().map(|_| s)
+}
+
+/// Snapshot of the processes in this Windows session (fast user switching:
+/// another signed-in user's Discord is not ours to capture or restart).
 pub fn snapshot() -> Vec<ProcInfo> {
     let mut out = Vec::new();
+    let own = session_of(unsafe { GetCurrentProcessId() });
     unsafe {
         let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
             return out;
@@ -34,11 +43,14 @@ pub fn snapshot() -> Vec<ProcInfo> {
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(e.szExeFile.len());
-                out.push(ProcInfo {
-                    pid: e.th32ProcessID,
-                    parent: e.th32ParentProcessID,
-                    exe: String::from_utf16_lossy(&e.szExeFile[..len]).to_lowercase(),
-                });
+                let same_session = own.is_none() || session_of(e.th32ProcessID) == own;
+                if same_session {
+                    out.push(ProcInfo {
+                        pid: e.th32ProcessID,
+                        parent: e.th32ParentProcessID,
+                        exe: String::from_utf16_lossy(&e.szExeFile[..len]).to_lowercase(),
+                    });
+                }
                 if Process32NextW(snap, &mut e).is_err() {
                     break;
                 }

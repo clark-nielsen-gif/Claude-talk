@@ -136,7 +136,9 @@ export function Advanced({ info }: { info: AppInfo }) {
                   if (c.state === 'locked' || c.state === 'loop') {
                     return (
                       <td key={o.id}>
-                        <div className="cell locked">{c.state === 'loop' ? t.advanced.loop : c.who === 'Du' ? t.advanced.lockedYou : fill(t.advanced.locked, { who: c.who ?? '' })}</div>
+                        <div className="cell locked" title={c.state === 'loop' ? t.advanced.loop : c.who === 'Du' ? t.advanced.lockedYou : fill(t.advanced.locked, { who: c.who ?? '' })}>
+                          {c.state === 'loop' ? t.advanced.loopShort : t.advanced.lockedShort}
+                        </div>
                       </td>
                     );
                   }

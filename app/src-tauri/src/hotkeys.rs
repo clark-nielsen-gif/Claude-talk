@@ -14,26 +14,44 @@ pub fn register(app: &AppHandle) -> Result<(), String> {
         .lock()
         .map(|c| c.hotkeys.clone())
         .unwrap_or_default();
-    let mut failed = false;
+    let mut taken: Vec<String> = Vec::new();
+    let mut duplicate = false;
+    let mut seen: Vec<Shortcut> = Vec::new();
     for (accel, action) in [
         (hk.mute_claude_to_discord, "muteClaude"),
         (hk.mute_mic, "muteMic"),
         (hk.push_to_talk_claude, "ptt"),
     ] {
         let Ok(sc) = accel.parse::<Shortcut>() else {
-            failed = true;
+            taken.push(accel);
             continue;
         };
+        if seen.contains(&sc) {
+            duplicate = true;
+            continue;
+        }
+        seen.push(sc);
         let action = action.to_string();
         if gs
             .on_shortcut(sc, move |app, _sc, ev| handle(app, &action, ev.state()))
             .is_err()
         {
             log::warn!("hotkey {accel} is in use by another program");
-            failed = true;
+            taken.push(accel);
         }
     }
-    if failed {
+    // shown on the start page until fixed in Settings
+    let problem = if duplicate {
+        "duplicate".to_string()
+    } else {
+        taken.join(", ")
+    };
+    if let Ok(mut p) = app.state::<AppState>().hotkey_problem.lock() {
+        *p = problem;
+    }
+    if duplicate {
+        Err("error.hotkeyDuplicate".into())
+    } else if !taken.is_empty() {
         Err("error.hotkeyTaken".into())
     } else {
         Ok(())

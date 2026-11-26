@@ -193,17 +193,20 @@
   // ---- instructions: written into Claude's message field and sent -----------
   // Only the message field and its send button are touched; nothing on the
   // page is read.
+  // Only Claude's own message field on a conversation page, and only its own
+  // send button (inside the same form) – never any other field on the site.
+  const onChatPage = () => location.pathname === '/new' || location.pathname.startsWith('/chat/');
   function composer() {
-    return document.querySelector('div.ProseMirror[contenteditable="true"]')
-      || document.querySelector('div[contenteditable="true"][role="textbox"]')
-      || document.querySelector('fieldset div[contenteditable="true"]')
-      || document.querySelector('textarea');
+    if (!onChatPage()) return null;
+    return document.querySelector('div.ProseMirror[contenteditable="true"]');
   }
-  function sendButton() {
-    return document.querySelector('button[aria-label="Send message" i]')
-      || document.querySelector('button[aria-label="Send Message" i]')
-      || document.querySelector('button[aria-label*="send" i]')
-      || document.querySelector('button[type="submit"]');
+  function sendButton(box) {
+    const form = box.closest('form, fieldset');
+    if (!form) return null;
+    return form.querySelector('button[aria-label="Send message" i]')
+      || form.querySelector('button[aria-label="Send Message" i]')
+      || form.querySelector('button[aria-label*="send" i]')
+      || form.querySelector('button[type="submit"]');
   }
   function deliverPrompt(text) {
     const t0 = Date.now();
@@ -213,23 +216,27 @@
         if (Date.now() - t0 < 15000) return setTimeout(attempt, 300);
         return post({ type: 'prompt', ok: false, reason: 'noComposer' });
       }
+      // never overwrite something the user is typing
+      if (box.textContent.trim()) return post({ type: 'prompt', ok: false, reason: 'draft' });
       box.focus();
-      if (box.tagName === 'TEXTAREA') {
-        const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-        set.call(box, text);
-        box.dispatchEvent(new Event('input', { bubbles: true }));
-      } else {
-        document.execCommand('selectAll', false);
-        document.execCommand('insertText', false, text);
-      }
-      // the page enables its send button once it has seen the text
+      document.execCommand('insertText', false, text);
+      // the page enables its send button once it has seen the text; it is
+      // only "sent" when the field has been emptied by the page
       let tries = 0;
       const send = () => {
-        const btn = sendButton();
-        if (btn && !btn.disabled) { btn.click(); return post({ type: 'prompt', ok: true }); }
-        if (++tries < 20) return setTimeout(send, 100);
-        box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-        post({ type: 'prompt', ok: true, reason: 'enter' });
+        const btn = sendButton(box);
+        if (btn && !btn.disabled) {
+          btn.click();
+          let checks = 0;
+          const sentYet = () => {
+            if (!box.isConnected || !box.textContent.trim()) return post({ type: 'prompt', ok: true });
+            if (++checks < 30) return setTimeout(sentYet, 100);
+            post({ type: 'prompt', ok: false, reason: 'notSent' });
+          };
+          return setTimeout(sentYet, 100);
+        }
+        if (++tries < 30) return setTimeout(send, 100);
+        post({ type: 'prompt', ok: false, reason: 'notSent' });
       };
       setTimeout(send, 100);
     };

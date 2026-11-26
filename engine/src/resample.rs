@@ -40,8 +40,15 @@ pub struct AdaptiveResampler {
     in_rate: u32,
     blocks_since_underrun: u64,
     blocks_per_second: f64,
-    /// lowest fill seen before a pull since the last adaptation (frames)
-    min_fill: usize,
+    /// least room left after a pull since the last adaptation (frames)
+    min_slack: usize,
+    /// never shrink below the target that last ran dry
+    floor: usize,
+    /// fixed delay (echo reference): no growth, no re-prime, gaps are silence
+    fixed: bool,
+    /// the source restarted: the next underrun is that gap, not jitter
+    source_epoch: u32,
+    restart_grace: bool,
 }
 
 impl AdaptiveResampler {
@@ -86,7 +93,11 @@ impl AdaptiveResampler {
             in_rate,
             blocks_since_underrun: 0,
             blocks_per_second,
-            min_fill: usize::MAX,
+            min_slack: usize::MAX,
+            floor: 0,
+            fixed: false,
+            source_epoch: 0,
+            restart_grace: false,
         }
     }
 
@@ -95,32 +106,47 @@ impl AdaptiveResampler {
         self.target_frames as f32 * 1000.0 / self.in_rate as f32
     }
 
+    /// Keeps the delay constant (echo reference): no growth, no re-prime.
+    pub fn set_fixed(&mut self) {
+        self.fixed = true;
+    }
+
+    /// Called before each pull with the source's restart counter.
+    pub fn note_source_epoch(&mut self, epoch: u32) {
+        if epoch != self.source_epoch {
+            self.source_epoch = epoch;
+            self.restart_grace = true;
+        }
+    }
+
     fn adapt_after_underrun(&mut self) {
         // A source that delivers in bigger bursts than expected: give it more
         // room (5 ms at a time, up to 40 ms) instead of crackling forever.
         self.target_frames = (self.target_frames + self.step).min(self.max_target);
+        self.floor = self.floor.max(self.target_frames);
         self.drift.set_target(self.target_frames as f64);
         self.blocks_since_underrun = 0;
-        self.min_fill = usize::MAX;
+        self.min_slack = usize::MAX;
     }
 
     fn adapt_when_stable(&mut self) {
         // After 15 s without trouble, win back 1 ms of latency.
-        // ... but only if the buffer never ran low in that time: the lowest
-        // fill must have kept 4 ms to spare, or the source's bursts need it.
+        // ... but only if the buffer never ran low in that time (at least
+        // 4 ms left after every pull), and never below the level that last
+        // ran dry: the source's bursts need it.
         self.blocks_since_underrun += 1;
         if self.blocks_since_underrun as f64 > 15.0 * self.blocks_per_second {
             let spare = self.in_rate as usize * 4 / 1000 + CHUNK;
-            if self.target_frames > self.min_target
-                && self.min_fill != usize::MAX
-                && self.min_fill > spare
+            if self.target_frames > self.min_target.max(self.floor)
+                && self.min_slack != usize::MAX
+                && self.min_slack > spare
             {
                 self.target_frames =
                     (self.target_frames - (self.in_rate as usize / 1000)).max(self.min_target);
                 self.drift.set_target(self.target_frames as f64);
             }
             self.blocks_since_underrun = 0;
-            self.min_fill = usize::MAX;
+            self.min_slack = usize::MAX;
         }
     }
 
@@ -169,8 +195,12 @@ impl AdaptiveResampler {
             self.drift.reset();
         }
 
-        self.min_fill = self.min_fill.min(available);
-        self.adapt_when_stable();
+        self.min_slack = self
+            .min_slack
+            .min(available.saturating_sub(block_in.ceil() as usize));
+        if !self.fixed {
+            self.adapt_when_stable();
+        }
         // One controller update per pull (per output block).
         let rel = self.drift.update(available as f64);
         let _ = self.inner.set_resample_ratio(self.nominal * rel, true);
@@ -181,12 +211,20 @@ impl AdaptiveResampler {
             if self.out_pos == self.out_len {
                 let need = self.inner.input_frames_next();
                 if ring.slots() < need * ch {
-                    // Underrun: emit silence for the rest, enlarge the
-                    // buffer and re-prime.
                     out[written..].fill(0.0);
                     stats.underrun_frames += ((wanted - written) / ch) as u32;
+                    if self.fixed {
+                        // keep the timeline: the gap is silence, nothing moves
+                        return stats;
+                    }
+                    // Underrun: emit silence for the rest, re-prime, and
+                    // enlarge the buffer – unless the source just restarted.
                     self.priming = true;
-                    self.adapt_after_underrun();
+                    if std::mem::take(&mut self.restart_grace) {
+                        self.min_slack = usize::MAX;
+                    } else {
+                        self.adapt_after_underrun();
+                    }
                     return stats;
                 }
                 let chunk = ring.read_chunk(need * ch).expect("checked slots");
@@ -336,6 +374,76 @@ mod tests {
             main > -6.5 && main < -5.5,
             "level {main} dB (expected -6.0)"
         );
+    }
+
+    /// Two hours of 10 ms packets in and 10 ms pulls out, both with timing
+    /// jitter and a clock difference, at several phase offsets (the worst
+    /// case is when the two clocks' phases cross). Returns (dropouts after
+    /// the first minute, final target ms, max target ms).
+    fn simulate(start_ms: f64, phase_us: i64, seed: u64) -> (u32, f32, f32) {
+        let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
+        let mut r = AdaptiveResampler::new(1, 48000, 48000, start_ms, 100.0);
+        let mut rng = seed | 1;
+        let mut rand = move || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            (rng % 2001) as i64 - 1000 // -1000..=1000
+        };
+        let mut out = vec![0.0f32; 480];
+        let packet = vec![0.25f32; 480];
+        let mut k_in: i64 = 0;
+        let mut k_out: i64 = 0;
+        let end: i64 = 2 * 3600 * 1_000_000;
+        let mut next_in = 0i64;
+        let mut next_out = phase_us;
+        let (mut dropouts, mut max_target) = (0u32, 0.0f32);
+        let mut was_dry = false;
+        while next_in < end || next_out < end {
+            if next_in <= next_out {
+                let _ = prod
+                    .write_chunk_uninit(480)
+                    .map(|c| c.fill_from_iter(packet.iter().copied()));
+                k_in += 1;
+                // capture: ±2 ms jitter around its own grid
+                next_in = k_in * 10_000 + 2 * rand();
+            } else {
+                let st = r.pull(&mut cons, &mut out);
+                let dry = st.underrun_frames > 0;
+                if dry && !was_dry && next_out > 60_000_000 {
+                    dropouts += 1;
+                }
+                was_dry = dry;
+                max_target = max_target.max(r.target_ms());
+                k_out += 1;
+                // render clock 100 ppm fast, ±1 ms wake-up jitter
+                next_out = phase_us + (k_out as f64 * 10_000.0 / (1.0 + 100e-6)) as i64 + rand();
+            }
+        }
+        (dropouts, r.target_ms(), max_target)
+    }
+
+    #[test]
+    #[ignore = "slow: two simulated hours per case (run with --ignored --release)"]
+    fn two_hours_of_jitter_report() {
+        for start in [12.0, 17.0, 20.0] {
+            for (i, phase) in [0i64, 1_000, 5_000, 9_000].into_iter().enumerate() {
+                let (d, t, m) = simulate(start, phase, 0x9e37_79b9 + i as u64);
+                println!("start {start} ms phase {phase} us: {d} dropouts, target {t:.1} ms, max {m:.1} ms");
+            }
+        }
+    }
+
+    #[test]
+    fn jitter_does_not_keep_dropping_out() {
+        // a shortened (but still long) run of the case above: the buffer may
+        // grow once or twice at the start, but must not shrink back into
+        // dropouts every few minutes.
+        for (i, phase) in [0i64, 5_000, 9_500].into_iter().enumerate() {
+            let (d, _, m) = simulate(20.0, phase, 0x1234_5678 + i as u64);
+            assert_eq!(d, 0, "phase {phase}: {d} dropouts in two hours");
+            assert!(m <= 32.0, "phase {phase}: buffer grew to {m} ms");
+        }
     }
 
     #[test]

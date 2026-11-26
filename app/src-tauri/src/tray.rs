@@ -108,7 +108,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 }
                 after_change(app);
             }
-            "quit" => crate::shutdown(app),
+            "quit" => crate::request_quit(app),
             _ => {}
         }
     })

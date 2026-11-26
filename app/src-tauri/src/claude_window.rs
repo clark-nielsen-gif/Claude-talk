@@ -183,7 +183,7 @@ fn auto_send(app: &AppHandle) {
         if !c.instructions.auto_send {
             return;
         }
-        c.instructions.text(&c.language)
+        c.instructions.text(&c.language, c.claude_hears_discord)
     };
     if !text.is_empty() {
         log::info!("Claude window: sending the instructions to a new conversation");
@@ -307,8 +307,7 @@ mod win {
     use super::*;
     use std::cell::RefCell;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
-        COREWEBVIEW2_PERMISSION_STATE_ALLOW, COREWEBVIEW2_PERMISSION_STATE_DENY,
+        ICoreWebView2, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE, COREWEBVIEW2_PERMISSION_STATE_DENY,
     };
     use webview2_com::{PermissionRequestedEventHandler, WebMessageReceivedEventHandler};
     use windows::core::{HSTRING, PWSTR};
@@ -373,12 +372,18 @@ mod win {
                     let mut kind = Default::default();
                     args.PermissionKind(&mut kind)?;
                     if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE {
-                        let state = if uri_allowed(&uri) {
-                            COREWEBVIEW2_PERMISSION_STATE_ALLOW
-                        } else {
-                            COREWEBVIEW2_PERMISSION_STATE_DENY
-                        };
-                        args.SetState(state)?;
+                        // The page gets its microphone from bridge.js (what
+                        // Claude may hear). The real device is never handed
+                        // out: it would bypass every routing rule.
+                        log::info!(
+                            "Claude window: real microphone denied ({})",
+                            if uri_allowed(&uri) {
+                                "claude.ai"
+                            } else {
+                                "other site"
+                            }
+                        );
+                        args.SetState(COREWEBVIEW2_PERMISSION_STATE_DENY)?;
                     }
                     Ok(())
                 })),
@@ -433,17 +438,29 @@ mod win {
             );
             let fail_app = app2.clone();
             let _ = core.add_ProcessFailed(
-                &webview2_com::ProcessFailedEventHandler::create(Box::new(move |_, args| {
+                &webview2_com::ProcessFailedEventHandler::create(Box::new(move |sender, args| {
                     if let Some(args) = args {
                         let mut kind = Default::default();
                         args.ProcessFailedKind(&mut kind)?;
                         log::warn!("Claude window: a WebView2 process failed (kind {})", kind.0);
-                        // The browser process is gone: forget its id so a new
-                        // program that gets the same id is never recorded.
+                        // Whatever failed, the page no longer uses our microphone.
+                        let st = fail_app.state::<AppState>();
+                        st.claude_mic_active.store(false, Ordering::Relaxed);
+                        crate::audio::refresh_mic(&fail_app);
                         if kind.0 == 0 {
-                            let st = fail_app.state::<AppState>();
+                            // The browser process is gone: forget its id (a new
+                            // program could get it) and close the dead window;
+                            // "Open Claude" makes a fresh one.
                             st.claude_pid.store(0, Ordering::Relaxed);
-                            st.claude_mic_active.store(false, Ordering::Relaxed);
+                            let app = fail_app.clone();
+                            let _ = fail_app.run_on_main_thread(move || {
+                                if let Some(w) = app.get_webview_window(LABEL) {
+                                    let _ = w.destroy();
+                                }
+                            });
+                        } else if let Some(core) = sender {
+                            // the page's renderer crashed or hung: load it again
+                            let _ = core.Reload();
                         }
                     }
                     Ok(())

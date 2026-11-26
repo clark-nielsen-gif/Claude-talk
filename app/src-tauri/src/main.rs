@@ -22,10 +22,99 @@ use state::{AppState, Inner};
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, WindowEvent};
 
-/// Stops audio and exits (tray "Quit" and the quit command).
+/// Tray "Quit" and the quit command. In a call, Discord would keep
+/// recording our (now silent) cable until it restarts, so ask first.
+pub fn request_quit(app: &AppHandle) {
+    #[cfg(windows)]
+    {
+        let st = app.state::<AppState>();
+        let in_call = st.discord_recording.load(Ordering::Relaxed)
+            && st.discord_uses_cable.load(Ordering::Relaxed) == discord::YES;
+        if in_call {
+            let da = st.config.lock().map(|c| c.language != "en").unwrap_or(true);
+            match ask_restart_discord(da) {
+                QuitChoice::Cancel => return,
+                QuitChoice::RestartDiscord => {
+                    shutdown_inner(app);
+                    if let Err(e) = discord::restart() {
+                        log::warn!("could not restart Discord on quit: {e}");
+                    }
+                    finish(app);
+                    return;
+                }
+                QuitChoice::Quit => {}
+            }
+        }
+    }
+    shutdown(app);
+}
+
+#[cfg(windows)]
+enum QuitChoice {
+    RestartDiscord,
+    Quit,
+    Cancel,
+}
+
+#[cfg(windows)]
+fn ask_restart_discord(da: bool) -> QuitChoice {
+    use windows::core::HSTRING;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        MessageBoxW, IDCANCEL, IDYES, MB_ICONWARNING, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNOCANCEL,
+    };
+    let (title, text) = if da {
+        (
+            "Luk Claude Talk",
+            "Du er i et opkald i Discord, og Discord bruger Claude Talk som mikrofon.
+
+             Hvis du lukker Claude Talk nu, kan de andre ikke høre dig, før Discord              starter igen.
+
+Ja: Luk, og genstart Discord (opkaldet afbrydes kort).
+             Nej: Luk uden at genstarte Discord.
+Annuller: Bliv i opkaldet med Claude Talk.",
+        )
+    } else {
+        (
+            "Quit Claude Talk",
+            "You're in a Discord call, and Discord uses Claude Talk as its microphone.
+
+             If you quit Claude Talk now, nobody can hear you until Discord restarts.
+
+             Yes: Quit and restart Discord (the call drops for a moment).
+             No: Quit without restarting Discord.
+Cancel: Stay in the call with Claude Talk.",
+        )
+    };
+    let r = unsafe {
+        MessageBoxW(
+            None,
+            &HSTRING::from(text),
+            &HSTRING::from(title),
+            MB_YESNOCANCEL | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND,
+        )
+    };
+    if r == IDYES {
+        QuitChoice::RestartDiscord
+    } else if r == IDCANCEL {
+        QuitChoice::Cancel
+    } else {
+        QuitChoice::Quit
+    }
+}
+
+/// Stops audio and exits.
 pub fn shutdown(app: &AppHandle) {
+    shutdown_inner(app);
+    finish(app);
+}
+
+/// Stops audio and gives Discord its own microphone back. Safe to call more
+/// than once (also runs when Windows ends the session).
+fn shutdown_inner(app: &AppHandle) {
     let st = app.state::<AppState>();
-    st.shutting_down.store(true, Ordering::Relaxed);
+    if st.shutting_down.swap(true, Ordering::Relaxed) {
+        return;
+    }
     #[cfg(windows)]
     {
         // dropping the host stops and joins every audio thread
@@ -37,6 +126,9 @@ pub fn shutdown(app: &AppHandle) {
     }
     log::info!("Claude Talk quit");
     log::logger().flush();
+}
+
+fn finish(app: &AppHandle) {
     app.exit(0);
 }
 
@@ -167,6 +259,13 @@ fn main() {
                 }
             }
         })
-        .run(context)
-        .expect("error while running Claude Talk");
+        .build(context)
+        .expect("error while building Claude Talk")
+        .run(|app, event| {
+            // Windows ends the session (sign-out, shutdown) or the app exits
+            // any other way: Discord gets its own microphone back.
+            if let tauri::RunEvent::Exit = event {
+                shutdown_inner(app);
+            }
+        });
 }

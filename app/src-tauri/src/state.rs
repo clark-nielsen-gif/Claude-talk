@@ -18,6 +18,10 @@ pub struct Inner {
     pub discord_recording: AtomicBool,
     /// The default output is speakers (sound can reach the microphone).
     pub speakers: AtomicBool,
+    /// When the default output was last set back from our cable.
+    pub output_fixed_at: Mutex<Option<std::time::Instant>>,
+    /// Shortcuts that could not be registered (shown in the app).
+    pub hotkey_problem: Mutex<String>,
     /// While Some, the Claude bridge appends what it sends (self-test).
     pub bridge_probe: Mutex<Option<Vec<f32>>>,
     #[cfg(windows)]
@@ -38,6 +42,8 @@ impl Inner {
             discord_needs_restart: AtomicBool::new(false),
             discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),
+            output_fixed_at: Mutex::new(None),
+            hotkey_problem: Mutex::new(String::new()),
             bridge_probe: Mutex::new(None),
             #[cfg(windows)]
             audio: Mutex::new(None),

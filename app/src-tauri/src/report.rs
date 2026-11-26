@@ -49,8 +49,20 @@ pub fn save(_app: &AppHandle) -> Result<String, Box<dyn std::error::Error>> {
         }
     }
     if let Ok(bytes) = std::fs::read(crate::paths::config_file()) {
+        // the user's own instructions to Claude are their words, not settings
+        let text = match serde_json::from_slice::<serde_json::Value>(&bytes) {
+            Ok(mut v) => {
+                if let Some(own) = v.pointer_mut("/instructions/own") {
+                    if own.as_str().is_some_and(|s| !s.is_empty()) {
+                        *own = serde_json::Value::String("(removed)".into());
+                    }
+                }
+                serde_json::to_vec_pretty(&v).unwrap_or_default()
+            }
+            Err(_) => b"(config.json could not be read)".to_vec(),
+        };
         zip.start_file("config.json", opts)?;
-        zip.write_all(&bytes)?;
+        zip.write_all(&text)?;
     }
     zip.start_file("system.txt", opts)?;
     let info = crate::commands::app_info();
