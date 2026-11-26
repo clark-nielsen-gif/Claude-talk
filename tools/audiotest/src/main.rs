@@ -104,13 +104,24 @@ mod imp {
         stop: Arc<AtomicBool>,
         gen: Option<JoinHandle<()>>,
         render: StreamHandle,
+        fan_h: ct_engine::mixer::FanoutHandle,
+        mix_h: ct_engine::mixer::MixerHandle,
+        tap: Arc<ct_engine::mixer::TapStats>,
     }
     impl Player {
         fn describe(&self) -> Value {
             let st = &self.render.status;
             json!({"state": format!("{:?}", st.state()), "hr": format!("0x{:08X}", st.last_error.load(Ordering::Relaxed) as u32),
                    "device": st.device_name.lock().unwrap().clone(), "restarts": st.restarts.load(Ordering::Relaxed),
-                   "period": st.period_frames.load(Ordering::Relaxed)})
+                   "period": st.period_frames.load(Ordering::Relaxed),
+                   "src_frames": self.fan_h.stats.captured_frames.load(Ordering::Relaxed),
+                   "src_peak": self.fan_h.stats.meter.read().0,
+                   "src_overflow": self.fan_h.stats.overflow_frames.load(Ordering::Relaxed),
+                   "out_frames": self.mix_h.stats.rendered_frames.load(Ordering::Relaxed),
+                   "out_peak": self.mix_h.stats.meter.read().0,
+                   "tap_underrun": self.tap.underrun_frames.load(Ordering::Relaxed),
+                   "tap_buffered_ms": self.tap.buffered_ms.load(),
+                   "tap_drift_ppm": self.tap.drift_ppm.load()})
         }
     }
     impl Drop for Player {
@@ -127,14 +138,12 @@ mod imp {
         const OUT: OutputId = 1;
         let (fan, mut fan_h) = SourceFanout::new(SRC, ENGINE_RATE);
         let (mix, mut mix_h) = OutputMixer::new(OUT, ENGINE_CHANNELS, 480);
-        connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
+        let tap = connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
         let stop = Arc::new(AtomicBool::new(false));
         let mut sine = Sine::new(freq, ENGINE_RATE as f64, amp);
         let gen = clocked_source(fan, move |b| sine.fill(b, ENGINE_CHANNELS), stop.clone());
         let render = spawn_render("tone", device, mix);
-        std::mem::forget(fan_h); // keep rings alive for the player's lifetime
-        std::mem::forget(mix_h);
-        Player { stop, gen: Some(gen), render }
+        Player { stop, gen: Some(gen), render, fan_h, mix_h, tap }
     }
 
     pub fn tone(args: &[String]) -> i32 {
@@ -158,6 +167,7 @@ mod imp {
     /// Records a capture target for `secs` seconds through the engine.
     struct Recording {
         samples: Vec<f32>,
+        diag: Value,
         hr: String,
         state: StreamState,
         device: String,
@@ -168,7 +178,7 @@ mod imp {
     fn record(target: CaptureTarget, secs: f64, during: impl FnOnce(&StreamHandle)) -> Recording {
         let (fan, mut fan_h) = SourceFanout::new(1, ENGINE_RATE);
         let (mix, mut mix_h) = OutputMixer::new(2, ENGINE_CHANNELS, 480);
-        connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
+        let tap = connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
         let cap = spawn_capture("rec", target, fan);
         let rec = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -177,8 +187,21 @@ mod imp {
         std::thread::sleep(Duration::from_secs_f64(secs));
         stop.store(true, Ordering::Relaxed);
         let _ = sink.join();
+        let samples = std::mem::take(&mut *rec.lock().unwrap());
+        let raw_peak = samples.iter().fold(0f32, |m, v| m.max(v.abs()));
+        let diag = json!({
+            "captured_frames": fan_h.stats.captured_frames.load(Ordering::Relaxed),
+            "capture_peak_last": fan_h.stats.meter.read().0,
+            "overflow": fan_h.stats.overflow_frames.load(Ordering::Relaxed),
+            "silence_filled": cap.status.silence_filled_frames.load(Ordering::Relaxed),
+            "discontinuities": cap.status.discontinuities.load(Ordering::Relaxed),
+            "tap_underrun": tap.underrun_frames.load(Ordering::Relaxed),
+            "tap_buffered_ms": tap.buffered_ms.load(),
+            "recorded_peak": raw_peak,
+        });
         let r = Recording {
-            samples: std::mem::take(&mut *rec.lock().unwrap()),
+            diag,
+            samples,
             state: cap.status.state(),
             hr: format!("0x{:08X}", cap.status.last_error.load(Ordering::Relaxed) as u32),
             device: cap.status.device_name.lock().unwrap().clone(),
@@ -241,7 +264,7 @@ mod imp {
             drop(player);
             let l = levels(&r, 2.0, &[1000.0, 3000.0]);
             let pass = r.state == StreamState::Running && lv(&l, 1000.0) > -16.0 && lv(&l, 3000.0) < lv(&l, 1000.0) - 60.0;
-            check("render_capture_cable", pass, json!({"levels_db": l, "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "player": pl, "samples": r.samples.len()}), &mut report);
+            check("render_capture_cable", pass, json!({"levels_db": l, "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "player": pl, "samples": r.samples.len(), "diag": r.diag}), &mut report);
         }
 
         // B. process loopback isolates one program from another
@@ -254,7 +277,7 @@ mod imp {
             let r = record(CaptureTarget::Process(ProcessTarget::Pid(pid)), 3.0, |_| {});
             let l = levels(&r, 2.0, &[1500.0, 3000.0]);
             let pass = lv(&l, 1500.0) > -20.0 && lv(&l, 3000.0) < lv(&l, 1500.0) - 60.0;
-            check("process_loopback_isolation", pass, json!({"levels_db": l, "pid": r.pid, "state": format!("{:?}", r.state), "hr": r.hr}), &mut report);
+            check("process_loopback_isolation", pass, json!({"levels_db": l, "pid": r.pid, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}), &mut report);
             let _ = target.kill();
             let _ = other.kill();
             let _ = target.wait();
@@ -291,7 +314,7 @@ mod imp {
             });
             let l = levels(&r, 0.8, &[1500.0]);
             let pass = lv(&l, 1500.0) > -20.0 && r.restarts >= 1;
-            check("process_restart_recovery", pass, json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state), "hr": r.hr}), &mut report);
+            check("process_restart_recovery", pass, json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}), &mut report);
             let child = restarted.lock().unwrap().take();
             if let Some(mut c) = child {
                 let _ = c.kill();
@@ -309,9 +332,9 @@ mod imp {
             check("microphone_never_own_cable", pass, json!({"picked": mic, "default": devices::default_id(Flow::Capture)}), &mut report);
             let player = play(2500.0, 0.3, DeviceSelector::NameContains(Flow::Render, sink.clone()));
             std::thread::sleep(Duration::from_millis(500));
-            let r = record(CaptureTarget::Device(DeviceSelector::NameContains(Flow::Capture, "virtual mic".into())), 2.0, |_| {});
+            let r = record(CaptureTarget::Device(DeviceSelector::NameContains(Flow::Capture, "microphone array (virtual audio".into())), 2.0, |_| {});
             drop(player);
-            report.insert("info_sink_mic_echo".into(), json!({"levels_db": levels(&r, 1.5, &[2500.0]), "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr}));
+            report.insert("info_sink_mic_echo".into(), json!({"levels_db": levels(&r, 1.5, &[2500.0]), "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}));
         }
 
         report.insert("pass".into(), json!(ok));

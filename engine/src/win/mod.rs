@@ -8,6 +8,7 @@
 //! failures are reported through [`StreamStatus`].
 
 pub mod devices;
+pub mod host;
 pub mod process;
 pub mod stream;
 

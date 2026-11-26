@@ -60,6 +60,9 @@ pub enum DeviceSelector {
     /// microphone so the engine can never record its own virtual cable
     /// (which would feed "Til Discord" back into itself).
     DefaultExcluding(Flow, Vec<String>),
+    /// The first active endpoint matching the first pattern that matches
+    /// anything (patterns in order of preference).
+    FirstMatching(Flow, Vec<String>),
 }
 
 /// Name fragments of the virtual devices Claude Talk itself feeds. They are
@@ -177,6 +180,20 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
                     (found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?, *f)
                 }
             }
+        }
+        DeviceSelector::FirstMatching(f, patterns) => {
+            let coll = unsafe { e.EnumAudioEndpoints(data_flow(*f), DEVICE_STATE_ACTIVE) }?;
+            let n = unsafe { coll.GetCount() }?;
+            let mut all = Vec::new();
+            for i in 0..n {
+                let dev = unsafe { coll.Item(i) }?;
+                let name = read_string(&dev, &PKEY_Device_FriendlyName).to_lowercase();
+                all.push((dev, name));
+            }
+            let found = patterns
+                .iter()
+                .find_map(|p| all.iter().find(|(_, name)| name.contains(&p.to_lowercase())).map(|(d, _)| d.clone()));
+            (found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?, *f)
         }
         DeviceSelector::NameContains(f, text) => {
             let coll = unsafe { e.EnumAudioEndpoints(data_flow(*f), DEVICE_STATE_ACTIVE) }?;
