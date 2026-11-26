@@ -1,0 +1,63 @@
+﻿{
+    "Label":  "after-cable",
+    "Os":  {
+               "Caption":  "Microsoft Windows Server 2025 Datacenter",
+               "Version":  "10.0.26100",
+               "BuildNumber":  "26100"
+           },
+    "SecureBoot":  false,
+    "TestSigning":  true,
+    "Devices":  [
+                    {
+                        "Class":  "AudioEndpoint",
+                        "Name":  "Speakers (VB-Audio Virtual Cable)",
+                        "Status":  "OK",
+                        "ProblemCode":  0,
+                        "InstanceId":  "SWD\\MMDEVAPI\\{0.0.0.00000000}.{83B246B0-D139-4771-8F1F-4983E86A8802}"
+                    },
+                    {
+                        "Class":  "AudioEndpoint",
+                        "Name":  "CABLE Output (VB-Audio Virtual Cable)",
+                        "Status":  "OK",
+                        "ProblemCode":  0,
+                        "InstanceId":  "SWD\\MMDEVAPI\\{0.0.1.00000000}.{66DE9BFB-47C4-4340-83D3-9CDD0AB29F82}"
+                    },
+                    {
+                        "Class":  "AudioEndpoint",
+                        "Name":  "CABLE In 16 Ch (VB-Audio Virtual Cable)",
+                        "Status":  "OK",
+                        "ProblemCode":  0,
+                        "InstanceId":  "SWD\\MMDEVAPI\\{0.0.0.00000000}.{E0DA4FCF-5861-4235-B148-ABC7F18ED0D6}"
+                    },
+                    {
+                        "Class":  "MEDIA",
+                        "Name":  "VB-Audio Virtual Cable",
+                        "Status":  "OK",
+                        "ProblemCode":  0,
+                        "InstanceId":  "ROOT\\MEDIA\\0000"
+                    }
+                ],
+    "Endpoints":  [
+                      {
+                          "Flow":  "Capture",
+                          "Id":  "{66de9bfb-47c4-4340-83d3-9cdd0ab29f82}",
+                          "State":  1,
+                          "DeviceDesc":  "CABLE Output",
+                          "Interface":  "VB-Audio Virtual Cable"
+                      },
+                      {
+                          "Flow":  "Render",
+                          "Id":  "{83b246b0-d139-4771-8f1f-4983e86a8802}",
+                          "State":  1,
+                          "DeviceDesc":  "CABLE Input",
+                          "Interface":  "VB-Audio Virtual Cable"
+                      },
+                      {
+                          "Flow":  "Render",
+                          "Id":  "{e0da4fcf-5861-4235-b148-abc7f18ed0d6}",
+                          "State":  1,
+                          "DeviceDesc":  "CABLE In 16ch",
+                          "Interface":  "VB-Audio Virtual Cable"
+                      }
+                  ]
+}
