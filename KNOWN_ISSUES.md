@@ -41,3 +41,21 @@ Windows' lydtjeneste husker Discords mikrofonvalg i hukommelsen, så det kan fø
 
 ## K14 – Ekkodæmpningen skal lige finde sig til rette
 Når ekkodæmpningen starter (Claude Talk opdager højttalere), tager WebRTC AEC3 ca. 6 sekunder om at se, at din stemme ikke er ekko. Taler Claude eller Discord i de sekunder, bliver din stemme dæmpet kraftigt. Derefter går den uændret igennem (målt i `aec.rs`-testene). AEC3's hurtigere HMM-tilstand forkorter det til 2 sekunder, men klipper så ca. 20 ms af hver sætningsstart, mens Claude taler, resten af opkaldet. Den er derfor fravalgt.
+
+## K15 – VoiceMeeter kan ikke bruges til »Claude i Chrome eller Claude-appen«
+VoiceMeeter er en mixer med egne lydveje. Det, Claude Talk sender ind i den, kan VoiceMeeter sende videre til en mikrofon eller til dine høretelefoner, uden at Claude Talk kan se det. Det ville give hyl eller lade folk høre sig selv. Kun rene kabler (VB-CABLE A/B/C/D, Hi-Fi Cable) kan derfor bruges, og deres optageside kan aldrig vælges som mikrofon.
+
+## K16 – Højttalere opdages på Windows' standardudgang
+Ekkodæmpningen slås automatisk til, når Windows' standardudgang er højttalere. Spiller Discord eller Claude-vinduet på en anden enhed end standarden, og er den enhed højttalere, opdages det ikke. Slå så ekkodæmpning til under **Indstillinger**.
+
+## K17 – Links til hjælp og opdateringer kræver et offentligt projekt
+»Skriv til os« og hentelinket peger på projektets GitHub-side. Så længe projektet er privat, virker de kun for folk med adgang. Opdateringer er ikke slået til i denne udgave (der er ingen signeringsnøgle til opdateringer endnu, se `SIGNING.md`). Når projektet gøres offentligt, virker linkene uden ændringer i programmet.
+
+## K18 – Hvis Claude Talk bliver dræbt, mens Discord optager
+Lukker man Claude Talk normalt, spørger den først og giver Discord sin egen mikrofon tilbage. Bliver programmet dræbt (Jobliste → Afslut opgave, eller strømmen går), kan det ikke nå det. Discord optager så fra en tavs mikrofon, indtil Claude Talk startes igen, eller man vælger sin mikrofon i Discord. Ved næste start retter Claude Talk det selv.
+
+## K19 – Mindre ting fra lydgennemgangen, der ikke er ændret
+- Hver mixer regner med 10 ms-blokke til drift-regulering og efterslæbsgrænser. Enheder med andre perioder fungerer, men reguleringen er tunet til 10 ms.
+- Broen til Claude-vinduet begrænser antallet af ventende pakker, ikke deres alder i Chromiums kø. Målt forsinkelse til Claude står i `PROGRESS.md`.
+- Når en tilføjet kilde fjernes i **Avanceret**, stopper dens lyd uden udtoning (et lille klik er muligt).
+

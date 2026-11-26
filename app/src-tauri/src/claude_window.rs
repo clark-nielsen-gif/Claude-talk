@@ -476,7 +476,6 @@ mod win {
                 let st = app3.state::<AppState>();
                 st.claude_pid.store(0, Ordering::Relaxed);
                 st.claude_mic_active.store(false, Ordering::Relaxed);
-                let _ = app3.emit("claude-window", serde_json::json!({"open": false}));
             }
         });
     }
@@ -500,10 +499,6 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
                 "Claude window microphone {}",
                 if active { "in use" } else { "released" }
             );
-            let _ = app.emit(
-                "claude-window",
-                serde_json::json!({"open": true, "micActive": active}),
-            );
         }
         Some("fresh") => auto_send(app),
         Some("prompt") => {
@@ -522,7 +517,6 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
             // a new page: it has not asked for the microphone yet
             state.claude_mic_active.store(false, Ordering::Relaxed);
             crate::audio::refresh_mic(app);
-            let _ = app.emit("claude-window", serde_json::json!({"open": true}));
         }
         Some("source") => log::info!(
             "bridge source mode: {}",

@@ -27,15 +27,42 @@ const CAPTURE_NAME: &str = "Claude Talk – til Discord";
 const RENDER_NAME: &str = "Claude Talk – intern";
 const IFACE: &str = "VB-Audio";
 
+/// Windows' Program Files folder, asked from Windows itself (environment
+/// variables can be set by whoever starts the program).
+pub fn program_files() -> PathBuf {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{FOLDERID_ProgramFiles, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+    unsafe {
+        match SHGetKnownFolderPath(&FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, None) {
+            Ok(p) => {
+                let s = p.to_string().unwrap_or_default();
+                CoTaskMemFree(Some(p.0 as *const _));
+                if !s.is_empty() {
+                    return PathBuf::from(s);
+                }
+                PathBuf::from(r"C:\Program Files")
+            }
+            Err(_) => PathBuf::from(r"C:\Program Files"),
+        }
+    }
+}
+
 /// Kept under Program Files: only administrators can write there, so nobody
 /// can plant or swap the files the elevated installer and uninstaller run.
 fn data_dir() -> PathBuf {
-    std::env::var_os("ProgramW6432")
-        .or_else(|| std::env::var_os("ProgramFiles"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"))
-        .join("Claude Talk")
-        .join("vbcable")
+    program_files().join("Claude Talk").join("vbcable")
+}
+
+/// Log folder for the elevated modes: not the user's %APPDATA% (an
+/// elevated program must not write where the user can redirect it).
+pub fn elevated_log_dir() -> PathBuf {
+    program_files().join("Claude Talk").join("logs")
+}
+
+/// Who signs VB-Audio's own setup program (Vincent Burel's VB-Audio).
+fn vb_audio_signer(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("burel") || n.contains("vb-audio")
 }
 /// Written when Claude Talk installed VB-CABLE; holds the SHA-256 of the
 /// setup program, checked again before it is run to uninstall.
@@ -71,21 +98,37 @@ pub fn install_cable() -> i32 {
         return code;
     }
     let hash_ok = sha256_hex(&zip).is_some_and(|h| h == KNOWN_SHA256);
+    log::info!(
+        "installer: package hash {}",
+        if hash_ok {
+            "is the tested one"
+        } else {
+            "is new"
+        }
+    );
     if let Err(e) = extract(&zip, &dir) {
         log::error!("installer: extract: {e}");
         return 5;
     }
     let _ = std::fs::remove_file(&zip);
     let setup = dir.join(SETUP_EXE);
-    // The tested package (exact hash), or a newer one from VB-Audio whose
-    // driver catalog is signed by Microsoft's hardware program; the setup
-    // program must carry a valid signature either way.
-    let catalog_ok = signer_name(&dir.join(CATALOG)).is_some_and(|n| n.contains(WHCP));
-    if !(hash_ok || catalog_ok) || signer_name(&setup).is_none() {
+    // The tested package (exact hash), or a newer one whose driver catalog
+    // is signed by Microsoft's hardware program and whose setup program is
+    // signed by VB-Audio; signatures checked with revocation (we are online:
+    // the package was just downloaded).
+    let catalog_ok = signer_name(&dir.join(CATALOG), true).is_some_and(|n| n.contains(WHCP));
+    let setup_signer = signer_name(&setup, true);
+    let setup_ok = match &setup_signer {
+        Some(_) if hash_ok => true,
+        Some(n) => vb_audio_signer(n),
+        None => false,
+    };
+    if !(hash_ok || catalog_ok) || !setup_ok {
         log::error!("installer: package failed the checks (hash {hash_ok}, catalog {catalog_ok})");
         let _ = std::fs::remove_dir_all(&dir);
         return 3;
     }
+    let setup_hash = sha256_hex(&setup).unwrap_or_default();
     match run_with_timeout(&setup, &["-i", "-h"], Duration::from_secs(180)) {
         Some(code) => log::info!("installer: VB-CABLE setup exit {code}"),
         None => {
@@ -93,7 +136,6 @@ pub fn install_cable() -> i32 {
             return 4;
         }
     }
-    let _ = std::fs::write(marker(), sha256_hex(&setup).unwrap_or_default());
     // the endpoints appear a moment after the driver loads
     let t0 = Instant::now();
     while !cable_present() && t0.elapsed() < Duration::from_secs(20) {
@@ -103,6 +145,9 @@ pub fn install_cable() -> i32 {
         log::error!("installer: driver installed but no endpoints appeared");
         return 4;
     }
+    // Only now is it ours: the marker lets the uninstaller remove it, and
+    // only with this very setup program.
+    let _ = std::fs::write(marker(), setup_hash);
     rename_devices();
     restore_defaults(&before);
     log::info!("installer: virtual microphone ready");
@@ -119,7 +164,9 @@ pub fn uninstall_cleanup() -> i32 {
         let setup = data_dir().join(SETUP_EXE);
         let same =
             !expected.trim().is_empty() && sha256_hex(&setup).is_some_and(|h| h == expected.trim());
-        if same && signer_name(&setup).is_some() {
+        // no revocation check here: uninstalling must work offline, and the
+        // exact hash is the real check
+        if same && signer_name(&setup, false).is_some() {
             let code = run_with_timeout(&setup, &["-u", "-h"], Duration::from_secs(180));
             log::info!("uninstall: VB-CABLE removal exit {code:?}");
         } else {
@@ -127,69 +174,14 @@ pub fn uninstall_cleanup() -> i32 {
         }
     }
     let _ = std::fs::remove_dir_all(data_dir());
+    let _ = std::fs::remove_dir_all(elevated_log_dir());
     0
 }
 
-/// Removes "start with Windows" entries that start Claude Talk, whatever
-/// name they were written under.
+/// Removes "start with Windows" entries that start Claude Talk, for this
+/// user and (written by early builds when run elevated) for all users.
 fn remove_autostart() {
-    use windows::core::{HSTRING, PCWSTR, PWSTR};
-    use windows::Win32::System::Registry::*;
-    for path in [
-        r"Software\Microsoft\Windows\CurrentVersion\Run",
-        r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
-    ] {
-        unsafe {
-            let mut key = HKEY::default();
-            if RegOpenKeyExW(
-                HKEY_CURRENT_USER,
-                &HSTRING::from(path),
-                None,
-                KEY_READ | KEY_SET_VALUE,
-                &mut key,
-            )
-            .is_err()
-            {
-                continue;
-            }
-            let mut doomed: Vec<Vec<u16>> = Vec::new();
-            let mut i = 0u32;
-            loop {
-                let mut name = [0u16; 512];
-                let mut nlen = name.len() as u32;
-                let mut data = vec![0u8; 4096];
-                let mut dlen = data.len() as u32;
-                if RegEnumValueW(
-                    key,
-                    i,
-                    Some(PWSTR(name.as_mut_ptr())),
-                    &mut nlen,
-                    None,
-                    None,
-                    Some(data.as_mut_ptr()),
-                    Some(&mut dlen),
-                )
-                .is_err()
-                {
-                    break;
-                }
-                let n = String::from_utf16_lossy(&name[..nlen as usize]).to_lowercase();
-                let words: Vec<u16> = data[..dlen as usize]
-                    .chunks_exact(2)
-                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                    .collect();
-                let d = String::from_utf16_lossy(&words).to_lowercase();
-                if d.contains("claude-talk.exe") || n == "claude talk" || n == "claude-talk" {
-                    doomed.push(name[..nlen as usize].iter().copied().chain([0]).collect());
-                }
-                i += 1;
-            }
-            for n in doomed {
-                let _ = RegDeleteValueW(key, PCWSTR(n.as_ptr()));
-            }
-            let _ = RegCloseKey(key);
-        }
-    }
+    crate::autostart::remove_entries(true);
 }
 
 fn cable_present() -> bool {
@@ -224,17 +216,11 @@ fn download(url: &str, to: &Path) -> Result<(), i32> {
 }
 
 fn sha256_hex(path: &Path) -> Option<String> {
-    // Windows' certutil computes the hash without extra crates.
-    let out = std::process::Command::new("certutil")
-        .args(["-hashfile"])
-        .arg(path)
-        .arg("SHA256")
-        .output()
-        .ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    text.lines()
-        .nth(1)
-        .map(|l| l.trim().replace(' ', "").to_lowercase())
+    use sha2::{Digest, Sha256};
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut h = Sha256::new();
+    std::io::copy(&mut f, &mut h).ok()?;
+    Some(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 fn extract(zip: &Path, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -257,9 +243,10 @@ fn extract(zip: &Path, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Verifies a file's signature with WinVerifyTrust (no UI, revocation from
-/// cache) and returns the signer's name, or `None` if it is not validly signed.
-fn signer_name(file: &Path) -> Option<String> {
+/// Verifies a file's signature with WinVerifyTrust (no UI; with
+/// `revocation`, the whole chain is checked against revocation lists) and
+/// returns the signer's name, or `None` if it is not validly signed.
+fn signer_name(file: &Path, revocation: bool) -> Option<String> {
     use windows::core::{GUID, HSTRING, PCWSTR};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::Security::Cryptography::{
@@ -278,10 +265,18 @@ fn signer_name(file: &Path) -> Option<String> {
     let mut data = WINTRUST_DATA {
         cbStruct: std::mem::size_of::<WINTRUST_DATA>() as u32,
         dwUIChoice: WTD_UI_NONE,
-        fdwRevocationChecks: WTD_REVOKE_NONE,
+        fdwRevocationChecks: if revocation {
+            WTD_REVOKE_WHOLECHAIN
+        } else {
+            WTD_REVOKE_NONE
+        },
         dwUnionChoice: WTD_CHOICE_FILE,
         dwStateAction: WTD_STATEACTION_VERIFY,
-        dwProvFlags: WTD_CACHE_ONLY_URL_RETRIEVAL,
+        dwProvFlags: if revocation {
+            WTD_REVOCATION_CHECK_CHAIN
+        } else {
+            WTD_CACHE_ONLY_URL_RETRIEVAL
+        },
         ..Default::default()
     };
     data.Anonymous.pFile = &mut fi;
@@ -405,6 +400,19 @@ fn restore_defaults(before: &Defaults) {
 /// mikrofon"): one Windows prompt. Returns the exit code, or `None` if the
 /// user said no to the prompt.
 pub fn install_cable_elevated() -> Result<Option<u32>, String> {
+    // Only the installed program is elevated: a copy in a folder the user
+    // can write to (the portable zip, Downloads) could have planted DLLs
+    // next to it.
+    let here = std::env::current_exe().map_err(|e| e.to_string())?;
+    let pf = program_files();
+    if !here.starts_with(&pf) {
+        log::warn!(
+            "install cable: {} is not under {}; use the installer",
+            here.display(),
+            pf.display()
+        );
+        return Err("error.cableNeedsInstaller".into());
+    }
     use windows::core::{HSTRING, PCWSTR};
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};

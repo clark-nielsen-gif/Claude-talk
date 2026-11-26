@@ -22,6 +22,21 @@ use state::{AppState, Inner};
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, WindowEvent};
 
+/// Creates the (hidden) main window from its configuration.
+pub fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(cfg) = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "main")
+        .cloned()
+    {
+        tauri::WebviewWindowBuilder::from_config(app, &cfg)?.build()?;
+    }
+    Ok(())
+}
+
 /// Tray "Quit" and the quit command. In a call, Discord would keep
 /// recording our (now silent) cable until it restarts, so ask first.
 pub fn request_quit(app: &AppHandle) {
@@ -133,19 +148,24 @@ fn finish(app: &AppHandle) {
 }
 
 fn main() {
-    logging::init();
-    // Run elevated by the NSIS installer / uninstaller.
+    // Run elevated by the NSIS installer / uninstaller (logs in an
+    // admin-only folder, never the user's %APPDATA%).
     #[cfg(windows)]
     for (flag, f) in [
         ("--install-cable", installer::install_cable as fn() -> i32),
         ("--uninstall-cleanup", installer::uninstall_cleanup),
     ] {
         if std::env::args().any(|a| a == flag) {
+            // (the uninstaller removes that folder, so it logs nowhere)
+            if flag == "--install-cable" {
+                logging::init_in(installer::elevated_log_dir());
+            }
             let code = f();
             log::logger().flush();
             std::process::exit(code);
         }
     }
+    logging::init();
     let config = config::Config::load(&paths::config_file());
     let started_minimized = std::env::args().any(|a| a == "--minimized");
     let state = Inner::new(config);
@@ -155,10 +175,6 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             commands::show_main(app.clone());
         }))
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--minimized"]),
-        ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(state);
@@ -239,13 +255,11 @@ fn main() {
             }
             // The main window is created here, after the sound is running:
             // its WebView2 can take seconds on a first start, and Discord's
-            // microphone should not wait for it.
-            if let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main").cloned() {
-                let w = tauri::WebviewWindowBuilder::from_config(&handle, &cfg)?.build()?;
-                if !started_minimized {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+            // microphone should not wait for it. Started with Windows
+            // (in the tray), it is not created at all until it is opened:
+            // no WebView2 processes, memory or CPU while nobody looks.
+            if !started_minimized {
+                commands::show_main(handle.clone());
             }
             Ok(())
         })

@@ -27,7 +27,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
     setInstalling(true);
     api.installCable()
       .then((code) => { if (code === 2) toast(t.errors.cableNoInternet); else if (code !== 0) toast(t.errors.cableInstallFailed); })
-      .catch((e) => { if (String(e) !== 'cancelled') toast(t.errors.cableInstallFailed); })
+      .catch((e) => { if (String(e) === 'error.cableNeedsInstaller') toast(t.errors.cableNeedsInstaller); else if (String(e) !== 'cancelled') toast(t.errors.cableInstallFailed); })
       .finally(() => setInstalling(false));
   };
   useEffect(() => api.onUpdate(setUpdate), []);

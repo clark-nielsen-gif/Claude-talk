@@ -32,13 +32,17 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
 
     let _com = ComGuard::new();
     let state = app.state::<AppState>().inner().clone();
-    // The tones would be heard in a call: not while Discord records us.
-    if state
-        .discord_uses_cable
-        .load(std::sync::atomic::Ordering::Relaxed)
-        == crate::discord::YES
+    // The tones would be heard in a call, or by Claude in a voice
+    // conversation: not while Discord records, Discord's state is not known
+    // yet, or the Claude page uses its microphone.
     {
-        return Err("error.selftestInCall".into());
+        use std::sync::atomic::Ordering::Relaxed;
+        let busy = state.discord_recording.load(Relaxed)
+            || state.discord_uses_cable.load(Relaxed) == crate::discord::YES
+            || state.claude_mic_active.load(Relaxed);
+        if busy {
+            return Err("error.selftestInCall".into());
+        }
     }
     // one at a time (the test sources share their ids)
     static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -52,6 +56,21 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
         }
     }
     let _done = Done;
+    // the test sources go again whatever happens below (error, panic)
+    struct Cleanup(AppState, usize);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            if let Some(p) = self.0.bridge_probe.lock().ok().as_mut() {
+                **p = None;
+            }
+            let mut g = self.0.audio.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(host) = g.as_mut() {
+                for i in 0..self.1 {
+                    host.remove_source(900 + i as u32);
+                }
+            }
+        }
+    }
     // (route name, party, output, tone)
     let tests = [
         ("micToDiscord", Party::User, ids::TO_DISCORD, 700.0),
@@ -59,6 +78,7 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
         ("micToClaude", Party::User, ids::TO_CLAUDE, 1700.0),
         ("discordToClaude", Party::Discord, ids::TO_CLAUDE, 2300.0),
     ];
+    let cleanup = Cleanup(state.clone(), tests.len());
     {
         let mut g = state.audio.lock().map_err(|_| "error.internal")?;
         let host = g.as_mut().ok_or("error.internal")?;
@@ -111,14 +131,7 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
         .map_err(|_| "error.internal")?
         .take()
         .unwrap_or_default();
-    {
-        let mut g = state.audio.lock().map_err(|_| "error.internal")?;
-        if let Some(host) = g.as_mut() {
-            for i in 0..tests.len() {
-                host.remove_source(900 + i as u32);
-            }
-        }
-    }
+    drop(cleanup);
     // analyse the last second
     let tail = |v: &[f32], ch: usize| {
         let m = mono(v, ch);

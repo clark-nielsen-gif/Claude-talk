@@ -166,11 +166,16 @@ mod imp {
             }
         }
         // echo reduction: always, never, or automatically with speakers
+        let speakers = state.speakers.load(Ordering::Relaxed);
         let echo = match cfg.echo {
             crate::config::EchoMode::On => true,
             crate::config::EchoMode::Off => false,
-            crate::config::EchoMode::Auto => state.speakers.load(Ordering::Relaxed),
+            crate::config::EchoMode::Auto => speakers,
         };
+        // "Claude hears only you" with speakers: the others' voices come out
+        // of the speakers into the microphone; echo reduction takes them out
+        // (its reference is everything that is not you).
+        let echo = echo || (speakers && cfg.claude_in_discord && !cfg.claude_hears_discord);
         // CI builds only: force echo reduction on or off for the test run
         #[cfg(feature = "ci-testpage")]
         let echo = match std::env::var("CLAUDE_TALK_TEST_ECHO").as_deref() {
@@ -345,8 +350,9 @@ mod imp {
                     st.drift_ppm = r.drift_ppm;
                 }
             }
-            // capture period (10 ms) + route buffer + render period (10 ms)
-            st.latency_ms = worst_latency + 20.0;
+            // capture period (10 ms) + route buffer + render queue (1.5
+            // periods, 15 ms) + limiter look-ahead (1.5 ms)
+            st.latency_ms = worst_latency + 26.5;
             st.discord_uses_cable = match state.discord_uses_cable.load(Ordering::Relaxed) {
                 crate::discord::YES => "yes",
                 crate::discord::NO => "no",

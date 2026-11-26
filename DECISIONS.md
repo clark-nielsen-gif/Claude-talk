@@ -69,7 +69,8 @@ Optagelse af ét programs lyd med hele dets procestræ (`PROCESS_LOOPBACK_MODE_I
 - Hver route (kilde → udgang) har sin egen låsefri SPSC-ring og sin egen resampler. Derfor kører hver udgang på sit eget ur, helt uden låse. Routes tilføjes og fjernes via en kommandokø, og frigivne objekter sendes tilbage til kontroltråden, så lydtråden aldrig frigiver hukommelse. Det er bevist med en test, der tæller allokeringer (`engine/tests/realtime.rs`).
 - WASAPI leverer altid 48 kHz float stereo (`AUTOCONVERTPCM`). Resampleren (`rubato`, kubisk polynomiel, 1 ms-chunks) håndterer derfor kun clock drift.
 - **Drift-regulering:** PI-sløjfe med naturlig frekvens 1,5·10⁻³ rad pr. blok og dæmpning ≈ 0,7. Fyldningen midles over 2 s, P-leddet er begrænset til ±1000 ppm og det samlede udsving til ±2500 ppm, så ingen korrektion kan høres. Resultatet er målt i tests: −557 ppm ramt med under 5 ppm fejl og under 200 ppm rippel ved 22 ms-ryk.
-- **Adaptiv jitterbuffer:** Hver route starter med 20 ms. Den vokser 5 ms ved hver underrun (højst 60 ms) og skrumper 1 ms pr. minut uden problemer. Et stort efterslæb (f.eks. ved opstart) kasseres med det samme i stedet for at blive indhentet langsomt.
+- **Adaptiv jitterbuffer:** Hver route starter med 20 ms. Den vokser 5 ms ved hver underrun (højst 40 ms). Efter 15 s uden problemer skrumper den 1 ms, men kun hvis der var mindst 4 ms tilbage efter hver aflæsning, og aldrig under det niveau, der sidst løb tørt. En kilde, der genstarter (enheden åbnes igen, programmet kommer tilbage), får ikke bufferen til at vokse. En simulering af to timer med 10 ms-pakker og ±2 ms jitter (`resample.rs`, testen `jitter_does_not_keep_dropping_out`) giver ingen udfald ved 20 ms og gentagne udfald under det. Huller tones 1 ms ud og ind, så de ikke klikker. Et stort efterslæb (f.eks. ved opstart) kasseres med det samme i stedet for at blive indhentet langsomt.
+- **Ekkodæmperens reference har fast forsinkelse:** Referencen vokser ikke og fyldes ikke op igen efter et hul (hullet bliver stilhed), så AEC3 ikke skal finde forsinkelsen igen. Den går ikke gennem limiteren, fordi ekkodæmperen skal have den rene sum.
 - **Fraværende kilder leverer stilhed i realtid:** Når Discord lukkes, eller en mikrofon tages ud, holdes routes kørende med stilhed. Så vokser bufferen og latenstiden ikke, når kilden vender tilbage.
 - **True-peak-limiter pr. udgang:** 8× polyfase-estimat og sliding minimum med boksfilter. Ingen sample overskrider loftet. Med 0,3 dB intern margen holdes −1 dBTP mod en uafhængig 16× referencemåler (2.000 property-tests).
 - Lydtrådene logger aldrig. De publicerer tilstand via atomics, som kontroltråden logger.
@@ -100,7 +101,7 @@ Alle tråde, der tager tid efter uret (stilhed for ventende kilder, testtoner, e
 Mikrofonen åbnes kun, mens Discord optager (i et opkald), Claude-siden bruger mikrofonen, Claude kører i et andet program, eller Claude Talks vindue er åbent (dets »Vi kan høre dig«-måler). Ellers er enheden lukket. Windows' mikrofonikon slukker, og Bluetooth-headsets skifter ikke til den dårlige håndfri-lyd. Mens mikrofonen er lukket, leverer motoren stilhed i realtid, så alt andet kører videre.
 
 ## D19 – Genvejstaster bruger F-taster
-Ctrl+Alt+bogstav er det samme som AltGr+bogstav på danske tastaturer (Ctrl+Alt+M skriver µ). Standardtasterne er derfor Ctrl+Shift+F9 (gør Claude stille i Discord), Ctrl+Shift+F10 (min mikrofon) og Ctrl+Shift+F12 (hold for at tale til Claude). Tastvælgeren tager kun bogstaver, tal, F-taster og mellemrum.
+Ctrl+Alt+bogstav er det samme som AltGr+bogstav på danske tastaturer (Ctrl+Alt+M skriver µ). Standardtasterne er derfor Ctrl+Shift+F9 (gør Claude stille i Discord), Ctrl+Shift+F10 (min mikrofon) og Ctrl+Shift+F11 (hold for at tale til Claude). F12 bruges ikke: Windows reserverer den til fejlfinding, så den kan ikke registreres som genvej. Tastvælgeren tager kun bogstaver, tal, F-taster og mellemrum.
 
 ## D20 – Installerens tillidskæde
 VB-CABLE hentes til en mappe under Program Files, hvor kun administratorer kan skrive. Pakken accepteres kun, hvis dens SHA-256 er den testede, eller hvis driverkataloget er signeret af »Microsoft Windows Hardware Compatibility Publisher«. Installationsprogrammet skal desuden være gyldigt signeret. Ved afinstallation køres det kun, hvis det har samme SHA-256 som ved installationen. Claude Talk omdøber og fjerner kun et VB-CABLE, som det selv har installeret. Et VB-CABLE, brugeren havde i forvejen, bruges med sine egne navne.
@@ -111,5 +112,21 @@ Referencen er alle kilder, der ikke er brugeren: Claude, Discord, Claude i et an
 ## D22 – Instruktioner til Claude
 Brugeren kan bestemme, hvordan Claude opfører sig i opkaldet: aktiveringsord, korte svar, dansk, »flere personer taler« og egne instruktioner. De bliver til én besked, som Claude Talk skriver ind i Claudes beskedfelt og sender, når en ny samtale starter (`/new`), eller med »Send til Claude nu«. Sidens script rører kun beskedfeltet og send-knappen og læser intet på siden.
 - **Følges af Claude:** Aktiveringsordet er en instruktion. Claude følger den godt, men ikke garanteret. Et ægte lokalt aktiveringsord, hvor lyden slet ikke når Claude før ordet, kræver talegenkendelse på pc'en (se K13).
-- **Håndhæves af Claude Talk:** »Claude hører kun mig« er routing. Discords lyd når slet ikke Claude, uanset hvad Claude gør.
+- **Håndhæves af Claude Talk:** »Claude hører kun mig« er routing. Discords lyd sendes slet ikke til Claude, uanset hvad Claude gør. Med højttalere kan de andres stemmer stadig nå mikrofonen gennem luften. Derfor slås ekkodæmpningen altid til i den situation (også hvis den er slået fra), og den fjerner Discords lyd fra mikrofonen. Det er god dæmpning, ikke 100 %.
 - **Test:** Playwright-testen `instructions are written into the message field and sent` tjekker leveringen mod en side, der efterligner Claudes beskedfelt. Det rigtige forløb står i `MANUAL_TEST.md` trin 13.
+
+## D23 – Windows' standardudgang må aldrig være vores kabel
+Vælger nogen »Claude Talk – intern« som højttaler i Windows (det står i lydmenuen ved uret), sender Discord alt, hvad pc'en spiller, til alle i opkaldet, og brugeren hører intet. Claude Talk tjekker derfor hvert andet sekund standardudgangen for alle tre roller (standard, multimedier, kommunikation). Er den vores kabel, eller i Chrome-tilstand det ekstra kabel, sættes den sidste rigtige enhed tilbage, og startsiden viser »Vi har sat din lyd tilbage«. Installeren genskaber også standardenhederne rolle for rolle, så en separat kommunikationsenhed bevares.
+
+## D24 – Autostart skrives af Claude Talk selv, kun for brugeren
+Autostart-pluginnet skriver til HKLM (alle brugere), når programmet kører som administrator, og citerer ikke stien. Claude Talk skriver derfor selv `"C:\Program Files\Claude Talk\claude-talk.exe" --minimized` i HKCU\…\Run. Slår brugeren autostart fra i Jobliste, respekteres det. Afinstallationen fjerner poster i både HKCU og HKLM.
+
+## D25 – Hovedvinduet oprettes først, når det åbnes
+Startet med Windows (`--minimized`) opretter Claude Talk ikke hovedvinduet. Så kører der ingen WebView2-processer, før brugeren åbner vinduet fra ikonet ved uret. Det sparer hukommelse og CPU, mens ingen kigger. Lyden og Discords mikrofon kører uafhængigt af vinduet.
+
+## D26 – Afslutning midt i et opkald
+Discord bliver ved med at optage fra kablet, til Discord genstarter. Lukker brugeren Claude Talk, mens Discord optager fra kablet, spørger Claude Talk derfor: »Luk, og genstart Discord«, »Luk uden at genstarte« eller »Annuller«. Når Windows lukker sessionen, og hvis hovedtråden går ned, gives Discords mikrofon tilbage.
+
+## D27 – Installerens ekstra sikkerhed
+Kun et installeret Claude Talk (under Program Files) må bede om administratorrettigheder for at installere kablet. En bærbar kopi i en mappe, brugeren kan skrive i, viser i stedet »brug installeren«. Signaturer tjekkes med tilbagekaldelse ved installation (vi er online). Er pakken nyere end den testede, skal installationsprogrammet være signeret af VB-Audio. SHA-256 beregnes i programmet. Mærket »installeret af Claude Talk« skrives først, når kablets enheder findes. De forhøjede tilstande logger i Program Files, aldrig i brugerens %APPDATA%.
+

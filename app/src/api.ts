@@ -95,7 +95,7 @@ const defaultConfig: Config = {
   version: 1, language: (params.get('lang') as 'da' | 'en') ?? 'da', theme: (params.get('theme') as Theme) ?? 'light',
   autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off',
   micMuted: scenario === 'main-muted', claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
-  hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F12' },
+  hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F11' },
   advancedUnlocked: false,
   presets: [{ name: 'Musik' }],
   instructions: { onlyWhenCalled: scenario === 'instructions', wakeWord: 'Claude', short: scenario === 'instructions', danish: true, group: true, own: '', autoSend: true },

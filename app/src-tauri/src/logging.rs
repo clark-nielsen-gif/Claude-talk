@@ -46,7 +46,11 @@ impl log::Log for FileLogger {
 }
 
 pub fn init() {
-    let dir = crate::paths::logs_dir();
+    init_in(crate::paths::logs_dir());
+}
+
+/// Logs into `dir` (the elevated installer modes use an admin-only folder).
+pub fn init_in(dir: std::path::PathBuf) {
     let _ = std::fs::create_dir_all(&dir);
     let day = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

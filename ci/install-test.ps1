@@ -91,22 +91,32 @@ function Tree {
     $all | Where-Object { $ids -contains $_.ProcessId }
 }
 function CpuSeconds($p) { ($p | ForEach-Object { $_.TotalProcessorTime.TotalSeconds } | Measure-Object -Sum).Sum }
-$cpu0 = CpuSeconds (Get-Process -Id (Tree).ProcessId)
+$before = @{}; Get-Process -Id (Tree).ProcessId | ForEach-Object { $before[$_.Id] = $_.TotalProcessorTime.TotalSeconds }
+$cpu0 = ($before.Values | Measure-Object -Sum).Sum
 $w0 = Get-Date
 Start-Sleep 10
 $procs = Get-Process -Id (Tree).ProcessId
 $cpu1 = CpuSeconds $procs
+# where the time and memory go, per process (CPU % of one core)
+$span = ((Get-Date) - $w0).TotalSeconds
+$perProcess = @($procs | ForEach-Object {
+    $was = if ($before.ContainsKey($_.Id)) { $before[$_.Id] } else { 0 }
+    '{0} {1}: cpu {2}% ram {3} MB' -f $_.ProcessName, $_.Id, [math]::Round(100 * ($_.TotalProcessorTime.TotalSeconds - $was) / $span, 2), [math]::Round($_.WorkingSet64 / 1MB, 1)
+})
 $cores = [Environment]::ProcessorCount
 $cpuPct = [math]::Round(100 * ($cpu1 - $cpu0) / ((Get-Date) - $w0).TotalSeconds / $cores, 2)
 $ramMB = [math]::Round(($procs | Measure-Object WorkingSet64 -Sum).Sum / 1MB, 1)
-Check 'performance' ($startS -lt 2 -and $cpuPct -lt 3 -and $ramMB -lt 150) @{ start_s = $startS; cpu_percent = $cpuPct; ram_mb = $ramMB; processes = $procs.Count; cores = $cores }
-function AutostartEntries {
-    $k = Get-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
+Check 'performance' ($startS -lt 2 -and $cpuPct -lt 3 -and $ramMB -lt 150) @{ start_s = $startS; cpu_percent = $cpuPct; ram_mb = $ramMB; processes = $procs.Count; cores = $cores; per_process = $perProcess }
+function AutostartEntries($root = 'HKCU') {
+    $k = Get-Item "$($root):\Software\Microsoft\Windows\CurrentVersion\Run" -ErrorAction SilentlyContinue
     if (-not $k) { return @() }
     @($k.GetValueNames() | Where-Object { "$($k.GetValue($_))" -like '*claude-talk.exe*' } | ForEach-Object { "$_ = $($k.GetValue($_))" })
 }
 $auto = AutostartEntries
-Check 'autostart_registered' ($auto.Count -gt 0) $auto
+$autoAll = AutostartEntries 'HKLM'
+# for this user only (the test runs elevated: nothing may land in HKLM),
+# with the path quoted (it contains a space)
+Check 'autostart_registered' ($auto.Count -gt 0 -and $autoAll.Count -eq 0 -and ($auto -join ' ') -like '*"C:\Program Files\Claude Talk\claude-talk.exe" --minimized*') @{ user = $auto; all_users = $autoAll }
 Get-ChildItem $logs -ErrorAction SilentlyContinue | Copy-Item -Destination $Out
 Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep 2
@@ -122,7 +132,7 @@ Check 'program_removed' (-not (Test-Path $exe)) @{ dir_exists = (Test-Path $dir)
 $gone = Get-ChildItem 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
     Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -eq 'Claude Talk' }
 Check 'removed_from_installed_apps' ($null -eq $gone) $null
-$auto = AutostartEntries
+$auto = @(AutostartEntries) + @(AutostartEntries 'HKLM')
 Check 'autostart_removed' ($auto.Count -eq 0) $auto
 $end = Endpoints
 $r.endpoints_end = $end

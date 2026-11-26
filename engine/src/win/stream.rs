@@ -446,7 +446,9 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
 impl IAgileObject_Impl for ActivationDone_Impl {}
 
 /// Opens an `IAudioClient` that records only `pid` and its children.
-fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
+/// `wake` (stop or restart) ends the wait early: dropping a stream never
+/// waits seconds for Windows here while the caller holds the audio lock.
+fn activate_process_loopback(pid: u32, wake: HANDLE) -> windows::core::Result<IAudioClient> {
     let params = AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
@@ -476,7 +478,8 @@ fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
             &handler,
         )
     }?;
-    if unsafe { WaitForSingleObject(done.0, 5000) } != WAIT_OBJECT_0 {
+    // the handler keeps its own reference to `done`: a late completion is safe
+    if unsafe { WaitForMultipleObjects(&[done.0, wake], false, 5000) } != WAIT_OBJECT_0 {
         return Err(windows::Win32::Foundation::E_ABORT.into());
     }
     let mut hr = HRESULT(0);
@@ -528,7 +531,7 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             }
             ctx.status.pid.store(pid, Ordering::Relaxed);
             fill_silence = true;
-            match activate_process_loopback(pid) {
+            match activate_process_loopback(pid, ctx.wake.0) {
                 Ok(c) => c,
                 Err(e) => return Ended::Failed(e.code()),
             }

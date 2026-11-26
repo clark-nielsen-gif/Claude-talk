@@ -20,7 +20,7 @@ impl Default for Hotkeys {
             // many other keyboards (Ctrl+Alt+M types µ).
             mute_claude_to_discord: "Ctrl+Shift+F9".into(),
             mute_mic: "Ctrl+Shift+F10".into(),
-            push_to_talk_claude: "Ctrl+Shift+F12".into(),
+            push_to_talk_claude: "Ctrl+Shift+F11".into(),
         }
     }
 }
@@ -304,6 +304,11 @@ impl Config {
 
     fn migrate(mut self) -> Config {
         // Version 1 is the first format; future versions convert here.
+        // F12 cannot be a global shortcut (Windows keeps it for debuggers);
+        // early builds used it for push-to-talk
+        if self.hotkeys.push_to_talk_claude.ends_with("+F12") {
+            self.hotkeys.push_to_talk_claude = Hotkeys::default().push_to_talk_claude;
+        }
         if !["da", "en"].contains(&self.language.as_str()) {
             self.language = "da".into();
         }

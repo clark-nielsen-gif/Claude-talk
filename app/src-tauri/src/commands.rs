@@ -232,7 +232,15 @@ pub fn quit(app: AppHandle) {
 
 #[tauri::command]
 pub fn show_main(app: AppHandle) {
+    // started with Windows: the window (and its WebView2) is made only
+    // when it is first opened
+    if app.get_webview_window("main").is_none() {
+        if let Err(e) = crate::create_main_window(&app) {
+            log::warn!("main window: {e}");
+        }
+    }
     if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
     }

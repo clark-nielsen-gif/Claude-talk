@@ -17,7 +17,7 @@ function KeyPicker({ value, onChange }: { value: string; onChange: (v: string) =
       if (mods.length === 0) return; // a global shortcut needs a modifier
       // letters, digits, F-keys and Space only: other keys (Æ, Ø, Å, "+")
       // cannot be registered as global shortcuts reliably
-      const key = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : e.code === 'Space' ? 'Space' : /^F\d{1,2}$/.test(e.code) ? e.code : null;
+      const key = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : e.code === 'Space' ? 'Space' : /^F\d{1,2}$/.test(e.code) && e.code !== 'F12' ? e.code : null;
       if (!key) return;
       onChange([...mods, key].join('+'));
       setListening(false);

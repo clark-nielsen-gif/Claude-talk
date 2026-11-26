@@ -17,4 +17,12 @@
   DetailPrint "Claude Talk: lydindstillinger gendannes / restoring sound settings"
   nsExec::ExecToLog '"$INSTDIR\claude-talk.exe" --uninstall-cleanup'
   Pop $0
+  ; The Claude window's login (claude.ai cookies) and the settings stay
+  ; unless the user says so; a silent uninstall (/S) keeps them.
+  MessageBox MB_YESNO|MB_ICONQUESTION "Vil du også slette dine indstillinger og logge ud af Claude i Claude Talk?$\r$\n$\r$\nDo you also want to delete your settings and sign out of Claude in Claude Talk?" /SD IDNO IDNO keep_user_data
+    SetShellVarContext current
+    RMDir /r "$LOCALAPPDATA\Claude Talk"
+    RMDir /r "$APPDATA\Claude Talk"
+    SetShellVarContext all
+  keep_user_data:
 !macroend
