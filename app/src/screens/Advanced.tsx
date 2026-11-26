@@ -78,7 +78,7 @@ const builtIn: Record<number, { da: string; en: string }> = {
 /** Sources × outputs, a volume per cell. Echo cells are locked, loops refused. */
 export function Advanced({ info }: { info: AppInfo }) {
   const t = useT();
-  const { config, update, toast, lang } = useApp();
+  const { config, update, toast, lang, setConfig } = useApp();
   const name = (item: Labeled) => {
     if (item.removable) return item.label;
     // Claude in another program: "Claude-appen", "Claude i Chrome", "Claude i Edge"
@@ -89,15 +89,17 @@ export function Advanced({ info }: { info: AppInfo }) {
   const act = (f: () => Promise<unknown>) => async () => {
     try { await f(); } catch { toast(t.errors.generic); } finally { reload(); }
   };
-  const [external, setExternal] = useState<string | null>(config.externalClaude ?? null);
+  // the mode in force, from the settings (every page reads the same)
+  const external = config.externalClaude ?? null;
   const chooseExternal = async (v: string) => {
     const exe = v === 'off' ? null : v;
     try {
       await api.setExternalClaude(exe);
-      setExternal(exe);
-      reload();
     } catch {
       toast(t.errors.generic);
+    } finally {
+      setConfig(await api.getConfig());
+      reload();
     }
   };
   const seg = (value: string, options: [string, string][], set: (v: string) => void, label: string) => (

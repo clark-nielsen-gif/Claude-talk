@@ -181,7 +181,8 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
                 "Lukker du Claude Talk nu, kan de andre ikke høre dig, før Discord starter igen.\n\n",
                 "Ja: Luk, og genstart Discord. Du skal selv gå ind i opkaldet igen bagefter.\n\n",
                 "Nej: Luk uden at genstarte Discord. De andre kan ikke høre dig, før du selv genstarter Discord.\n\n",
-                "Annuller: Luk ikke. Bliv i opkaldet med Claude Talk.",
+                "Annuller: Luk ikke. Bliv i opkaldet med Claude Talk.\n\n",
+                "Har du selv valgt »Claude Talk – til Discord« som inputenhed i Discord, så vælg »Standard« dér, før du lukker.",
             ),
         )
     } else {
@@ -192,7 +193,8 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
                 "If you quit Claude Talk now, nobody can hear you until Discord starts again.\n\n",
                 "Yes: Quit and restart Discord. Join the call again yourself afterwards.\n\n",
                 "No: Quit without restarting Discord. Nobody can hear you until you restart Discord yourself.\n\n",
-                "Cancel: Don't quit. Stay in the call with Claude Talk.",
+                "Cancel: Don't quit. Stay in the call with Claude Talk.\n\n",
+                "If you chose “Claude Talk – til Discord” as the input device in Discord yourself, choose “Default” there before you quit.",
             ),
         )
     };

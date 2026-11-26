@@ -5,7 +5,7 @@ import { test } from '@playwright/test';
 
 const scenarios = [
   'onboarding-welcome', 'onboarding-setup', 'onboarding-cable-missing', 'onboarding-mic-blocked', 'onboarding-ready',
-  'main-ok', 'main-off', 'main-restored', 'main-output-elsewhere', 'main-muted', 'main-output-fixed', 'main-hotkey-taken', 'main-claude-closed', 'main-claude-login', 'main-claude-not-listening',
+  'main-ok', 'main-off', 'main-restored', 'main-restored-cable-chosen', 'main-output-elsewhere', 'main-muted', 'main-output-fixed', 'main-hotkey-taken', 'main-claude-closed', 'main-claude-login', 'main-claude-not-listening',
   'main-discord-closed', 'main-discord-wrong-mic', 'main-discord-restart', 'main-speakers', 'main-update',
   'error-mic-blocked', 'error-mic-missing', 'error-cable-missing', 'error-unsupported',
   'instructions', 'advanced', 'advanced-add', 'settings', 'advanced-extra-cable', 'help',

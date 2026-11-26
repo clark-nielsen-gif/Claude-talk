@@ -37,6 +37,13 @@ fn t(lang: &str, key: &str) -> &'static str {
                 "My microphone is off"
             }
         }
+        "mute_claude" => {
+            if da {
+                "Claude hører ikke min mikrofon"
+            } else {
+                "Claude can't hear my microphone"
+            }
+        }
         "quit" => {
             if da {
                 "Luk Claude Talk"
@@ -70,7 +77,23 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
                 cfg.claude_in_discord,
                 None::<&str>,
             )?,
-            &CheckMenuItem::with_id(app, "mute", t(l, "mute"), true, cfg.mic_muted, None::<&str>)?,
+            &CheckMenuItem::with_id(
+                app,
+                "mute",
+                // after "Gendan" Discord records the microphone itself: the
+                // mute only keeps it from Claude (as the main window says)
+                t(
+                    l,
+                    if cfg.route_discord {
+                        "mute"
+                    } else {
+                        "mute_claude"
+                    },
+                ),
+                true,
+                cfg.mic_muted,
+                None::<&str>,
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "quit", t(l, "quit"), true, None::<&str>)?,
         ],

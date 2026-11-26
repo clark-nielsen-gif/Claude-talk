@@ -222,6 +222,7 @@ pub fn set_microphone(
         // the input it replaces is not to be taken back as the user's own
         if let Some(old) = ct_engine::win::policy::discord_own_input() {
             ct_engine::win::policy::forget_as_own(&old);
+            crate::discord::save_given_back();
         }
         ct_engine::win::policy::set_discord_own_input(None);
     }

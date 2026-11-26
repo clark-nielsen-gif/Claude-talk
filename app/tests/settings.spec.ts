@@ -34,3 +34,10 @@ test('a shortcut without Ctrl is refused, and Fortryd works from the keyboard', 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Fortryd' })).toHaveCount(0);
 });
+
+test('after “Gendan”, Discord set to the Claude Talk cable itself is pointed out with a fix', async ({ page }) => {
+  await page.goto('/?scenario=main-restored-cable-chosen&theme=light&freeze=1');
+  await expect(page.getByText('Discord er sat til »Claude Talk – til Discord«', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Vis mig hvordan' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Sæt Discords mikrofon til »Standard«' })).toBeVisible();
+});

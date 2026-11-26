@@ -194,14 +194,46 @@ pub fn discord_given_back() -> Vec<String> {
 /// A value that must never be taken as the user's own setting again (one the
 /// user replaced with a choice in Claude Talk).
 pub fn forget_as_own(path: &str) {
-    note_given_back(path);
+    let mut f = FORGOTTEN.lock().unwrap_or_else(|p| p.into_inner());
+    if !f.iter().any(|v| v.eq_ignore_ascii_case(path)) {
+        f.push(path.to_string());
+    }
 }
 
+/// Values the user replaced with a choice in Claude Talk (see `forget_as_own`).
+static FORGOTTEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+pub fn forgotten() -> Vec<String> {
+    FORGOTTEN.lock().unwrap_or_else(|p| p.into_inner()).clone()
+}
+
+pub fn set_forgotten(paths: Vec<String>) {
+    *FORGOTTEN.lock().unwrap_or_else(|p| p.into_inner()) = paths;
+}
+
+pub fn is_forgotten(path: &str) -> bool {
+    FORGOTTEN
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .iter()
+        .any(|v| v.eq_ignore_ascii_case(path))
+}
+
+/// Remembered as written, last in the list (the list's last value is the one
+/// Claude Talk wrote most recently).
 fn note_given_back(path: &str) {
     let mut g = DISCORD_GIVEN_BACK.lock().unwrap_or_else(|p| p.into_inner());
-    if !g.iter().any(|v| v.eq_ignore_ascii_case(path)) {
-        g.push(path.to_string());
-    }
+    g.retain(|v| !v.eq_ignore_ascii_case(path));
+    g.push(path.to_string());
+}
+
+/// The value Claude Talk wrote for Discord most recently, if any.
+pub fn last_given_back() -> Option<String> {
+    DISCORD_GIVEN_BACK
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .last()
+        .cloned()
 }
 
 /// What Discord's input should be while Claude Talk doesn't route it: the
@@ -266,7 +298,8 @@ pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
             // put back)
             let given = discord_given_back()
                 .iter()
-                .any(|g| g.eq_ignore_ascii_case(&d));
+                .any(|g| g.eq_ignore_ascii_case(&d))
+                || is_forgotten(&d);
             if !d.is_empty() && !given && !d.to_lowercase().contains(&id.to_lowercase()) {
                 set_discord_own_input(Some(d));
             }

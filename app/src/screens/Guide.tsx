@@ -31,7 +31,9 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
   useEffect(() => {
     // focus moves into the dialog, stays there, and goes back when it closes
     const opener = document.activeElement as HTMLElement | null;
-    first.current?.focus({ preventScroll: true });
+    // the heading first: what the dialog is about, at its top
+    const heading = dialog.current?.querySelector<HTMLElement>('#guide-title');
+    if (heading) { heading.tabIndex = -1; heading.focus(); } else first.current?.focus();
     dialog.current?.scrollTo?.({ top: 0 });
     const keys = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();

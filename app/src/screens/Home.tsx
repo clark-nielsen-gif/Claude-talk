@@ -54,6 +54,8 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onHotkeys} />);
   // (only while the Claude window is the Claude in the call)
   const outputElsewhere = on && !config.externalClaude && !!s?.claudeWindowOpen ? s?.outputMismatch : null;
+  // an amber notice about where the sound plays
+  const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive);
   if (s && outputElsewhere) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: outputElsewhere[0], claude: outputElsewhere[1] })} action={fill(t.notices.outputElsewhereAction, { discord: outputElsewhere[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.echoAction} onAction={s.echoActive ? undefined : () => { updateConfig({ echo: 'auto' }); onEcho(); }} />);
 
@@ -71,6 +73,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   else if (cableBroken) discordCheck = { state: 'warn', text: t.main.discordCableBroken };
   else if (cableMissing) discordCheck = { state: 'warn', text: t.main.discordNoMic };
   else if (!s?.discordRunning) discordCheck = { state: 'wait', text: t.main.discordNotRunning };
+  else if (!config.routeDiscord && s.discordCableChosen) discordCheck = { state: 'warn', text: t.main.discordCableChosen, fix: 'mic' };
   else if (s.discordNeedsRestart) discordCheck = { state: 'warn', text: t.guide.restartDiscordTitle, fix: 'restart' };
   else if (s.discordUsesCable === 'no') {
     // after "Gendan normale lydindstillinger" Discord is meant to use the
@@ -139,12 +142,13 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : !external && !s.claudeListening ? t.main.switchOnClaudeNotListening
     : external && !s.claudeExternalRunning ? t.main.switchOnExternalWaiting
     : s.discordUsesCable !== 'yes' ? t.main.switchOnNoCall
+    : soundNotice ? t.main.switchOnSeeBelow
     : config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
     : config.micMuted ? t.main.switchOnMicMuted
     : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })
     : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
     : t.main.switchOn;
-  const switchWarn = cableMissing || micBroken || (on && discordBroken)
+  const switchWarn = cableMissing || micBroken || (on && discordBroken) || (on && soundNotice)
     || (config.micMuted && s?.discordUsesCable === 'no');
 
   return (

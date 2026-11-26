@@ -35,6 +35,7 @@ pub struct AudioStatus {
     /// "yes": Discord records from our cable, "no": another mic, "": unknown.
     pub discord_uses_cable: String,
     pub discord_needs_restart: bool,
+    pub discord_cable_chosen: bool,
     /// Windows' default output was our cable and was set back (last 30 s).
     pub output_fixed: bool,
     /// Shortcuts that could not be registered ("" = all fine).
@@ -106,10 +107,15 @@ mod imp {
                 // the extra cable is gone: turn the mode off, or the mic would
                 // stay open for good with no switch to turn it off
                 log::warn!("external Claude not started ({e}); mode turned off");
-                if let Ok(mut c) = state.config.lock() {
+                let cfg = state.config.lock().map(|mut c| {
                     c.external_claude = None;
-                }
+                    c.clone()
+                });
                 state.save_config();
+                if let Ok(cfg) = cfg {
+                    use tauri::Emitter;
+                    let _ = app.emit("config-changed", cfg);
+                }
             }
         }
         *state.audio.lock().unwrap_or_else(|p| p.into_inner()) = Some(host);
@@ -407,6 +413,7 @@ mod imp {
             }
             .into();
             st.discord_needs_restart = state.discord_needs_restart.load(Ordering::Relaxed);
+            st.discord_cable_chosen = state.discord_cable_chosen.load(Ordering::Relaxed);
             st.claude_login = state.claude_login.load(Ordering::Relaxed);
             st.output_fixed = state
                 .output_fixed_at

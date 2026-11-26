@@ -65,6 +65,8 @@ export interface AudioStatus {
   /** 'yes' Discord records our cable, 'no' it records another mic, '' unknown */
   discordUsesCable: 'yes' | 'no' | '';
   discordNeedsRestart: boolean;
+  /** Discord itself is set to "Claude Talk – til Discord" (seen after Gendan) */
+  discordCableChosen?: boolean;
   /** Windows' default output was our cable and was just set back */
   outputFixed: boolean;
   /** shortcuts that could not be registered: '' fine, 'duplicate', or the keys */
@@ -105,7 +107,7 @@ const scenario = params.get('scenario') ?? 'main-ok';
 
 const defaultConfig: Config = {
   version: 1, language: (params.get('lang') as 'da' | 'en') ?? 'da', theme: (params.get('theme') as Theme) ?? 'light',
-  autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off' && scenario !== 'main-restored', routeDiscord: scenario !== 'main-restored', microphone: null,
+  autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off' && !scenario.startsWith('main-restored'), routeDiscord: !scenario.startsWith('main-restored'), microphone: null,
   micMuted: scenario === 'main-muted', claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
   hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F11' },
   advancedUnlocked: false,
@@ -138,7 +140,8 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-speakers': return { ...ok, speakers: true, echoActive: true, micName: 'Mikrofon (Realtek High Definition Audio)' };
     case 'main-muted': return { ...ok, mic: quiet };
     case 'main-output-elsewhere': return { ...ok, outputMismatch: ['Headset (Jabra Evolve2)', 'Højttalere (Realtek High Definition Audio)'] };
-    case 'main-restored': return { ...ok, discordUsesCable: 'no' };
+    case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
+    case 'main-restored-cable-chosen': return { ...ok, discordUsesCable: 'yes', discordCableChosen: true, claudeListening: false };
     case 'main-output-fixed': return { ...ok, outputFixed: true };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
     case 'onboarding-cable-missing': return { ...ok, cableOk: false };

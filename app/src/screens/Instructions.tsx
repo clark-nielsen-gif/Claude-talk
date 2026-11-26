@@ -102,11 +102,15 @@ export function Instructions() {
             }}>{t.instructions.copy}</button>
           )}
         </div>
-        {row(t.instructions.autoSend, ins.autoSend, (v) => change({ autoSend: v }))}
-        <div className="row">
-          <span className="small text">{t.instructions.note}</span>
-          <button className="btn primary" disabled={!preview} onClick={send}>{t.instructions.sendNow}</button>
-        </div>
+        {config.externalClaude
+          ? <div className="row"><span className="small text">{t.instructions.externalNote}</span></div>
+          : <>
+            {row(t.instructions.autoSend, ins.autoSend, (v) => change({ autoSend: v }))}
+            <div className="row">
+              <span className="small text">{t.instructions.note}</span>
+              <button className="btn primary" disabled={!preview} onClick={send}>{t.instructions.sendNow}</button>
+            </div>
+          </>}
       </div>
     </div>
   );

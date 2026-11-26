@@ -103,7 +103,7 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
             {problem === 'cable' && <Notice kind="error" title={t.errors.cableMissingTitle} body={t.onboarding.cableMissingBody} action={installing ? t.errors.cableInstalling : t.errors.cableMissingAction} onAction={installing ? undefined : install} />}
             {problem === 'cableBroken' && <Notice kind="error" title={t.errors.cableBrokenTitle} body={t.errors.cableBrokenBody} action={t.errors.cableBrokenAction} onAction={() => api.openPlace('soundSettings')} />}
             {problem === 'micBlocked' && <Notice kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />}
-            {problem === 'micMissing' && <Notice kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />}
+            {problem === 'micMissing' && <Notice kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />}
             {problem === 'slow' && <Notice kind="warn" title={t.onboarding.slowTitle} body={t.onboarding.slowBody} />}
             {problem && <div><button className="btn secondary" onClick={onDone}>{t.onboarding.toOverview}</button></div>}
             <Dots at={1} />

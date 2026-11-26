@@ -22,9 +22,11 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
     || (!status.cableOk && !info.cableInstalled) || cableBroken
     || status.micState === 'blocked' || status.micState === 'missing'
     || status.discordNeedsRestart
+    || (!config.routeDiscord && !!status.discordCableChosen)
     || (status.discordUsesCable === 'no' && config.routeDiscord)
     // speakers without echo reduction: the overview warns about echo
     || (status.speakers && !status.echoActive)
+    || (!config.claudeInDiscord && status.claudeListening)
     || (!!status.outputMismatch && config.claudeInDiscord && !config.externalClaude && status.claudeWindowOpen));
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<SelfTestResult[] | null>(null);

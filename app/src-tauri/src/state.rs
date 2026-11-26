@@ -16,6 +16,9 @@ pub struct Inner {
     /// Discord records from our cable: 0 unknown, 1 yes, 2 no (see discord.rs).
     pub discord_uses_cable: AtomicU8,
     pub discord_needs_restart: AtomicBool,
+    /// Discord records the cable although Claude Talk doesn't route it: set
+    /// to "Claude Talk – til Discord" in Discord itself.
+    pub discord_cable_chosen: AtomicBool,
     /// The recording side of the cable ("Claude Talk – til Discord") is
     /// there and enabled (checked by the Discord watcher every 2 s).
     pub cable_capture_ok: AtomicBool,
@@ -51,6 +54,7 @@ impl Inner {
             ptt_down: AtomicBool::new(false),
             discord_uses_cable: AtomicU8::new(0),
             discord_needs_restart: AtomicBool::new(false),
+            discord_cable_chosen: AtomicBool::new(false),
             cable_capture_ok: AtomicBool::new(true),
             discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),

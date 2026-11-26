@@ -668,7 +668,15 @@ pub async fn set_external_claude(
     exe: Option<String>,
 ) -> Result<(), String> {
     let st = state.inner().clone();
-    off_main(move || set_external_claude_blocking(&app, &st, exe)).await
+    let app2 = app.clone();
+    let st2 = st.clone();
+    let r = off_main(move || set_external_claude_blocking(&app, &st, exe)).await;
+    // every page shows the mode that is really in force (also after an error)
+    if let Ok(cfg) = st2.config.lock().map(|c| c.clone()) {
+        use tauri::Emitter;
+        let _ = app2.emit("config-changed", cfg);
+    }
+    r
 }
 
 #[tauri::command]
