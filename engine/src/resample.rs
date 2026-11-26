@@ -34,6 +34,12 @@ pub struct AdaptiveResampler {
     /// is played, so a stall becomes one clean gap instead of crackle.
     priming: bool,
     target_frames: usize,
+    min_target: usize,
+    max_target: usize,
+    step: usize,
+    in_rate: u32,
+    blocks_since_underrun: u64,
+    blocks_per_second: f64,
 }
 
 impl AdaptiveResampler {
@@ -58,6 +64,35 @@ impl AdaptiveResampler {
             nominal,
             priming: true,
             target_frames,
+            min_target: target_frames,
+            max_target: (in_rate as usize * 60 / 1000).max(target_frames),
+            step: (in_rate as usize * 5 / 1000).max(1),
+            in_rate,
+            blocks_since_underrun: 0,
+            blocks_per_second,
+        }
+    }
+
+    /// Current buffer target in milliseconds (adapts to the source's jitter).
+    pub fn target_ms(&self) -> f32 {
+        self.target_frames as f32 * 1000.0 / self.in_rate as f32
+    }
+
+    fn adapt_after_underrun(&mut self) {
+        // A source that delivers in bigger bursts than expected: give it more
+        // room (up to 60 ms) instead of crackling forever.
+        self.target_frames = (self.target_frames + self.step).min(self.max_target);
+        self.drift.set_target(self.target_frames as f64);
+        self.blocks_since_underrun = 0;
+    }
+
+    fn adapt_when_stable(&mut self) {
+        // After a minute without trouble, win back 1 ms of latency.
+        self.blocks_since_underrun += 1;
+        if self.target_frames > self.min_target && self.blocks_since_underrun as f64 > 60.0 * self.blocks_per_second {
+            self.target_frames = (self.target_frames - (self.in_rate as usize / 1000)).max(self.min_target);
+            self.drift.set_target(self.target_frames as f64);
+            self.blocks_since_underrun = 0;
         }
     }
 
@@ -106,6 +141,7 @@ impl AdaptiveResampler {
             self.drift.reset();
         }
 
+        self.adapt_when_stable();
         // One controller update per pull (per output block).
         let rel = self.drift.update(available as f64);
         let _ = self.inner.set_resample_ratio(self.nominal * rel, true);
@@ -116,10 +152,12 @@ impl AdaptiveResampler {
             if self.out_pos == self.out_len {
                 let need = self.inner.input_frames_next();
                 if ring.slots() < need * ch {
-                    // Underrun: emit silence for the rest and re-prime.
+                    // Underrun: emit silence for the rest, enlarge the
+                    // buffer and re-prime.
                     out[written..].fill(0.0);
                     stats.underrun_frames += ((wanted - written) / ch) as u32;
                     self.priming = true;
+                    self.adapt_after_underrun();
                     return stats;
                 }
                 let chunk = ring.read_chunk(need * ch).expect("checked slots");
@@ -211,6 +249,47 @@ mod tests {
         let off = tone_level(&last, 1500.0, 48000.0);
         assert!(main > 0.4, "main {main}");
         assert!(20.0 * (off / main).log10() < -60.0, "spur {} dB", 20.0 * (off / main).log10());
+    }
+
+    /// The CI failure scenario: a device that delivers 22 ms packets and
+    /// runs 557 ppm slow, read in 10 ms blocks. The tone must stay a clean,
+    /// correctly pitched 1 kHz.
+    #[test]
+    fn bursty_slow_device_keeps_tone_clean() {
+        let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
+        let mut r = AdaptiveResampler::new(1, 48000, 48000, 20.0, 100.0);
+        let mut phase = 0.0;
+        let mut acc = 0.0f64;
+        let mut out = vec![0f32; 480];
+        let mut tail = Vec::new();
+        let blocks = 100 * 120;
+        let mut late_underruns = 0;
+        let mut skipped = 0;
+        for b in 0..blocks {
+            acc += 480.0 * (1.0 - 557e-6);
+            while acc >= 1056.0 {
+                for v in sine(1000.0, 48000.0, 1056, &mut phase) {
+                    let _ = prod.push(v);
+                }
+                acc -= 1056.0;
+            }
+            let st = r.pull(&mut cons, &mut out);
+            // the buffer may grow during the first seconds; after that, none
+            if b > 100 * 10 {
+                late_underruns += st.underrun_frames;
+                skipped += st.skipped_frames;
+            }
+            if b >= blocks - 300 {
+                tail.extend_from_slice(&out);
+            }
+        }
+        assert_eq!(late_underruns, 0);
+        assert!(r.target_ms() <= 45.0, "buffer grew to {} ms", r.target_ms());
+        // the slow device's 1000 Hz plays at 1000·(1-557 ppm) in real time
+        let f = 1000.0 * (1.0 - 557e-6);
+        assert_eq!(skipped, 0);
+        let main = 20.0 * tone_level(&tail, f, 48000.0).log10();
+        assert!(main > -6.5 && main < -5.5, "level {main} dB (expected -6.0)");
     }
 
     #[test]

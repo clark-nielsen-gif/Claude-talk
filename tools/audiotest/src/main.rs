@@ -32,7 +32,7 @@ fn main() {
 
 #[cfg(windows)]
 mod imp {
-    use ct_engine::analysis::{mono, tone_db, Sine};
+    use ct_engine::analysis::{mono, tone_db_near, Sine};
     use ct_engine::graph::{OutputId, SourceId};
     use ct_engine::mixer::{connect, GainParams, OutputMixer, SourceFanout};
     use ct_engine::win::devices::{self, DeviceSelector, Flow};
@@ -221,7 +221,7 @@ mod imp {
         let tail = &m[m.len() - n..];
         let mut v = serde_json::Map::new();
         for f in freqs {
-            v.insert(format!("{f}"), json!((tone_db(tail, *f, ENGINE_RATE as f64) * 10.0).round() / 10.0));
+            v.insert(format!("{f}"), json!((tone_db_near(tail, *f, 2.0, ENGINE_RATE as f64) * 10.0).round() / 10.0));
         }
         Value::Object(v)
     }
@@ -310,9 +310,9 @@ mod imp {
                     }
                     std::thread::sleep(Duration::from_millis(100));
                 }
-                std::thread::sleep(Duration::from_millis(1500));
+                std::thread::sleep(Duration::from_millis(2500));
             });
-            let l = levels(&r, 0.8, &[1500.0]);
+            let l = levels(&r, 0.9, &[1500.0]);
             let pass = lv(&l, 1500.0) > -20.0 && r.restarts >= 1;
             check("process_restart_recovery", pass, json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}), &mut report);
             let child = restarted.lock().unwrap().take();

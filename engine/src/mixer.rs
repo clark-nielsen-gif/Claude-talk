@@ -60,6 +60,8 @@ pub struct TapStats {
     pub skipped_frames: AtomicU64,
     pub drift_ppm: AtomicF32,
     pub buffered_ms: AtomicF32,
+    /// Current jitter-buffer target of the route (adapts to the source).
+    pub target_ms: AtomicF32,
 }
 
 /// Live statistics and meter of one output.
@@ -242,6 +244,7 @@ impl OutputMixer {
                 tap.stats.skipped_frames.fetch_add(st.skipped_frames as u64, Ordering::Relaxed);
             }
             tap.stats.drift_ppm.store(tap.resampler.drift().drift_ppm() as f32);
+            tap.stats.target_ms.store(tap.resampler.target_ms());
             tap.stats.buffered_ms.store(tap.ring.slots() as f32 / ENGINE_CHANNELS as f32 / tap.in_rate as f32 * 1000.0);
             tap.gain.set_target(tap.params.linear());
             tap.gain.mix_into(scratch, mix, ENGINE_CHANNELS);

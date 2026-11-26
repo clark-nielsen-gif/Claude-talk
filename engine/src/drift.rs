@@ -25,19 +25,28 @@ impl DriftController {
     /// * `target_frames` – fill level to hold (the jitter margin).
     /// * `update_hz` – how often `update` is called (blocks per second).
     pub fn new(target_frames: f64, update_hz: f64) -> Self {
-        // Gains are expressed per update so the loop behaves the same at any
-        // block size: the proportional term corrects a 1-frame error in about
-        // 4 s (~250 ppm per 1000 frames of error at 48 kHz), the integral term
-        // absorbs the constant drift.
-        let kp = 2.0e-6;
-        let ki = 2.0e-6 / update_hz.max(1.0);
+        // Devices deliver audio in bursts (e.g. 22 ms packets read every
+        // 10 ms), so the fill level has a large saw-tooth that says nothing
+        // about drift. The level is therefore averaged over ~2 s, and the
+        // proportional term is small (1000 frames of error → 100 ppm) so the
+        // remaining ripple cannot frequency-modulate the audio. The integral
+        // term absorbs the real, constant drift within a few seconds.
+        //
+        // Loop design (per update, B = frames consumed per update): the plant
+        // integrates B·(drift + u). With natural frequency ω = 1.5e-3 rad per
+        // update and damping ≈ 0.7: kp·B = 2ζω ≈ 2.1e-3, ki·B = ω² = 2.25e-6.
+        // That settles in ~40 s, keeps the 2 s averaging well inside the loop
+        // bandwidth, and turns ±1 frame of residual ripple into < 5 ppm.
+        let b = 48_000.0 / update_hz.max(1.0);
+        let kp = 2.1e-3 / b;
+        let ki = 2.25e-6 / b;
         DriftController {
             target: target_frames,
             kp,
             ki,
             integral: 0.0,
             filtered: None,
-            smoothing: (-1.0 / (0.5 * update_hz.max(1.0))).exp(),
+            smoothing: (-1.0 / (2.0 * update_hz.max(1.0))).exp(),
             max_rel: 0.005, // ±5000 ppm: far beyond any real crystal, still inaudible
             ratio: 1.0,
         }
@@ -145,6 +154,41 @@ mod tests {
             assert!((end - 960.0).abs() < 50.0, "did not settle at {ppm} ppm: {end}");
             assert!((est - ppm).abs() < 5.0, "drift estimate {est} vs {ppm}");
         }
+    }
+
+    /// Packets of 1056 frames (22 ms) read in 480-frame blocks: the ratio
+    /// must stay smooth (no audible FM) while still tracking the drift.
+    #[test]
+    fn bursty_device_does_not_modulate_ratio() {
+        let mut c = DriftController::new(960.0, 100.0);
+        let mut fill = 960.0f64;
+        let mut acc = 0.0f64;
+        let ppm = -557.0;
+        let mut ratios = Vec::new();
+        for i in 0..(100 * 600) {
+            // producer: one 1056-frame packet every 22 ms of its own clock
+            acc += 480.0 * (1.0 + ppm * 1e-6);
+            while acc >= 1056.0 {
+                fill += 1056.0;
+                acc -= 1056.0;
+            }
+            let r = c.update(fill);
+            fill -= 480.0 / r;
+            assert!(fill > -480.0, "ran dry at block {i}");
+            if i > 100 * 540 {
+                ratios.push(r);
+            }
+        }
+        let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
+        let max_dev = ratios.iter().map(|r| (r - mean).abs()).fold(0.0, f64::max);
+        // block-to-block change: this is what would be heard as FM
+        let step = ratios.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f64::max);
+        eprintln!("bursty: mean {:.1} ppm, max dev {:.2} ppm, max step {:.4} ppm", (1.0 / mean - 1.0) * 1e6, max_dev * 1e6, step * 1e6);
+        // 200 ppm = 0.35 cent: far below audibility (the old tuning swung by
+        // ±2000 ppm and smeared a 1 kHz test tone in CI).
+        assert!(max_dev * 1e6 < 200.0, "ratio ripple {} ppm", max_dev * 1e6);
+        assert!(step * 1e6 < 50.0, "ratio step {} ppm", step * 1e6);
+        assert!(((1.0 / mean - 1.0) * 1e6 - ppm).abs() < 5.0, "mean drift {}", (1.0 / mean - 1.0) * 1e6);
     }
 
     proptest! {

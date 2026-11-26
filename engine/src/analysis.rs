@@ -24,6 +24,14 @@ pub fn tone_db(x: &[f32], freq: f64, rate: f64) -> f64 {
     20.0 * mag.max(1e-10).log10()
 }
 
+/// Highest level of a tone within ±`tolerance_hz` of `freq` (devices run a
+/// few hundred ppm off nominal, which moves a test tone by a fraction of a
+/// hertz). Searched in 0.1 Hz steps.
+pub fn tone_db_near(x: &[f32], freq: f64, tolerance_hz: f64, rate: f64) -> f64 {
+    let steps = (tolerance_hz / 0.1).ceil() as i64;
+    (-steps..=steps).map(|k| tone_db(x, freq + k as f64 * 0.1, rate)).fold(-400.0, f64::max)
+}
+
 /// First channel of an interleaved buffer.
 pub fn mono(x: &[f32], channels: usize) -> Vec<f32> {
     x.chunks_exact(channels.max(1)).map(|f| f[0]).collect()
@@ -87,6 +95,14 @@ mod tests {
         assert!((tone_db(&x, 1000.0, 48000.0) - (-6.02)).abs() < 0.1);
         assert!((tone_db(&x, 1400.0, 48000.0) - (-66.02)).abs() < 1.0);
         assert!(tone_db(&x, 2500.0, 48000.0) < -120.0);
+    }
+
+    #[test]
+    fn near_search_finds_slightly_detuned_tone() {
+        let mut a = Sine::new(999.44, 48000.0, 0.5);
+        let mut x = vec![0f32; 96000];
+        a.fill(&mut x, 1);
+        assert!((tone_db_near(&x, 1000.0, 2.0, 48000.0) + 6.02).abs() < 0.3);
     }
 
     #[test]
