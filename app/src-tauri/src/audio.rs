@@ -39,6 +39,9 @@ pub struct AudioStatus {
     pub discord_still_on_cable: bool,
     /// Windows' default output was our cable and was set back (last 30 s).
     pub output_fixed: bool,
+    pub mic_fixed: bool,
+    /// the device the output or microphone was set to
+    pub fixed_device: Option<String>,
     /// Shortcuts that could not be registered ("" = all fine).
     pub hotkey_problem: String,
     /// Claude in another program (Chrome, Edge, the app): its sound and
@@ -420,12 +423,17 @@ mod imp {
             st.discord_cable_chosen = state.discord_cable_chosen.load(Ordering::Relaxed);
             st.discord_still_on_cable = state.discord_still_on_cable.load(Ordering::Relaxed);
             st.claude_login = state.claude_login.load(Ordering::Relaxed);
-            st.output_fixed = state
-                .output_fixed_at
+            if let Some((_, output, name)) = state
+                .device_fixed
                 .lock()
                 .ok()
-                .and_then(|t| *t)
-                .is_some_and(|t| t.elapsed() < Duration::from_secs(30));
+                .and_then(|f| f.clone())
+                .filter(|(t, _, _)| t.elapsed() < Duration::from_secs(30))
+            {
+                st.output_fixed = output;
+                st.mic_fixed = !output;
+                st.fixed_device = name;
+            }
             st.hotkey_problem = state
                 .hotkey_problem
                 .lock()

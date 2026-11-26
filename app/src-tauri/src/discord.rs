@@ -352,11 +352,10 @@ fn guard_default_input(state: &crate::state::Inner, guard: &mut DefaultGuard) {
 }
 
 /// Per role: the user's last real default device, and – after Claude Talk
-/// had to pick another one because the cable had become the default – the
-/// device it picked (the stand-in) and what to go back to: the user's device
-/// when it returns, or, if Claude Talk never knew it (the cable was already
-/// the default at start), a device that appears later. Kept in a file, so a
-/// restart in between (overnight, an update) doesn't make the stand-in stick.
+/// had to pick another one because the cable had become the default while
+/// the user's device was gone – the device it picked (the stand-in) and the
+/// user's device to go back to when it returns. Kept in a file, so a restart
+/// in between (overnight, an update) doesn't make the stand-in stick.
 #[cfg(windows)]
 #[derive(Default)]
 pub struct DefaultGuard {
@@ -368,13 +367,11 @@ pub struct DefaultGuard {
 #[derive(Clone, PartialEq)]
 struct StandIn {
     id: String,
-    wanted: Option<String>,
-    /// devices there when the stand-in was picked
-    present_then: Vec<String>,
+    wanted: String,
 }
 
 #[cfg(windows)]
-fn stand_in_file() -> std::path::PathBuf {
+pub fn stand_in_file() -> std::path::PathBuf {
     crate::paths::app_dir().join("default-stand-ins.txt")
 }
 
@@ -391,26 +388,29 @@ fn flow_tag(flow: ct_engine::win::devices::Flow) -> &'static str {
 impl DefaultGuard {
     fn load(flow: ct_engine::win::devices::Flow) -> Self {
         let mut g = Self::default();
+        let active: Vec<String> = ct_engine::win::devices::list(flow)
+            .map(|v| v.into_iter().map(|e| e.id).collect())
+            .unwrap_or_default();
         let text = std::fs::read_to_string(stand_in_file()).unwrap_or_default();
         for line in text.lines() {
             let f: Vec<&str> = line.trim().split('\t').collect();
-            if f.len() != 5 || f[0] != flow_tag(flow) {
+            if f.len() != 4 || f[0] != flow_tag(flow) || f[2].is_empty() || f[3].is_empty() {
                 continue;
             }
             let Ok(role) = f[1].parse::<usize>() else {
                 continue;
             };
-            if role > 2 || f[2].is_empty() {
+            if role > 2 {
+                continue;
+            }
+            // the user's device is back already, and they have lived with
+            // the stand-in while Claude Talk was closed: their choice now
+            if active.iter().any(|a| a == f[3]) {
                 continue;
             }
             g.stand_in[role] = Some(StandIn {
                 id: f[2].to_string(),
-                wanted: (!f[3].is_empty()).then(|| f[3].to_string()),
-                present_then: f[4]
-                    .split(',')
-                    .filter(|x| !x.is_empty())
-                    .map(String::from)
-                    .collect(),
+                wanted: f[3].to_string(),
             });
         }
         g
@@ -433,18 +433,16 @@ impl DefaultGuard {
             .collect();
         for (role, si) in self.stand_in.iter().enumerate() {
             if let Some(si) = si {
-                lines.push(format!(
-                    "{tag}\t{role}\t{}\t{}\t{}",
-                    si.id,
-                    si.wanted.clone().unwrap_or_default(),
-                    si.present_then.join(",")
-                ));
+                lines.push(format!("{tag}\t{role}\t{}\t{}", si.id, si.wanted));
             }
         }
         let _ = std::fs::create_dir_all(crate::paths::app_dir());
         let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
         if std::fs::write(&tmp, lines.join("\n")).is_ok() {
-            let _ = std::fs::rename(&tmp, &file);
+            if let Err(e) = std::fs::rename(&tmp, &file) {
+                log::warn!("could not save {}: {e}", file.display());
+                let _ = std::fs::remove_file(&tmp);
+            }
         }
     }
 }
@@ -455,6 +453,7 @@ fn guard_default(
     flow: ct_engine::win::devices::Flow,
     guard: &mut DefaultGuard,
 ) {
+    use ct_engine::win::devices::FormFactor;
     use ct_engine::win::{devices, host, policy};
     let (external, routing) = state
         .config
@@ -463,10 +462,9 @@ fn guard_default(
         .unwrap_or((false, true));
     // A VB-CABLE the user had before Claude Talk is theirs to use as a
     // default device (a common streaming setup); only while Claude Talk
-    // sends Discord through it does the output matter (D31).
-    if !policy::cable_is_ours() && !(flow == devices::Flow::Render && routing) {
-        return;
-    }
+    // sends Discord through it does the output matter (D31). A stand-in
+    // already picked still goes back when the user's device returns.
+    let guarding = policy::cable_is_ours() || (flow == devices::Flow::Render && routing);
     let extra = if external && flow == devices::Flow::Render {
         host::extra_cable().map(|c| c.render.id)
     } else {
@@ -482,18 +480,25 @@ fn guard_default(
                 .any(|e| e.id == id && host::is_own_device(&e.name))
     };
     let present = |id: &str| devs.iter().any(|e| e.id == id);
-    // a device that can stand in: no virtual device, and for recording no
-    // loopback input ("Stereo Mix" would send the computer's sound)
+    // a device that can stand in: no virtual or streaming device, and for
+    // recording no loopback input ("Stereo Mix" would send the computer's
+    // sound); headsets, headphones, speakers and microphones before the rest
+    // (a monitor's sound often goes nowhere)
     let fit = |e: &devices::Endpoint| {
         let n = e.name.to_lowercase();
         !bad(&e.id)
-            && !["virtual", "cable", "voicemeeter"]
+            && !["virtual", "cable", "voicemeeter", "steam streaming"]
                 .iter()
                 .any(|p| n.contains(p))
             && (flow == devices::Flow::Render
                 || !devices::NOT_A_MICROPHONE
                     .iter()
                     .any(|p| n.contains(&p.to_lowercase())))
+    };
+    let rank = |e: &devices::Endpoint| match e.form_factor {
+        FormFactor::Headset | FormFactor::Headphones => 0,
+        FormFactor::Speakers | FormFactor::Microphone => 1,
+        FormFactor::Other => 2,
     };
     let set = |id: &str, role: usize| match policy::set_default_endpoint_role(id, role) {
         Ok(()) => {
@@ -505,6 +510,7 @@ fn guard_default(
             false
         }
     };
+    let mut fixed: Option<String> = None;
     let ids = devices::default_ids(flow);
     let before = guard.stand_in.clone();
     for (role, id) in ids.iter().enumerate() {
@@ -512,21 +518,12 @@ fn guard_default(
         if !bad(id) {
             match guard.stand_in[role].clone() {
                 // still the stand-in Claude Talk picked: back to the user's
-                // device as soon as it is there again (or, if Claude Talk
-                // never knew it, to a device plugged in since)
+                // device as soon as it is there again
                 Some(si) if *id == si.id => {
-                    let back = match &si.wanted {
-                        Some(w) => Some(w.clone()).filter(|w| present(w) && !bad(w)),
-                        None => devs
-                            .iter()
-                            .find(|e| fit(e) && !si.present_then.contains(&e.id))
-                            .map(|e| e.id.clone()),
-                    };
-                    if let Some(b) = back {
-                        if set(&b, role) {
-                            guard.stand_in[role] = None;
-                            guard.last_good[role] = Some(b);
-                        }
+                    if present(&si.wanted) && !bad(&si.wanted) && set(&si.wanted, role) {
+                        guard.stand_in[role] = None;
+                        guard.last_good[role] = Some(si.wanted.clone());
+                        fixed = Some(si.wanted);
                     }
                 }
                 // the user (or Windows) chose something else meanwhile
@@ -537,35 +534,53 @@ fn guard_default(
             }
             continue;
         }
+        if !guarding {
+            continue;
+        }
+        // the user's device: the last real default seen, or – the cable was
+        // the default already when Claude Talk started – the one Windows
+        // itself remembers as the default before the cable
         let wanted = guard.last_good[role]
             .clone()
-            .or_else(|| guard.stand_in[role].as_ref().and_then(|s| s.wanted.clone()))
+            .or_else(|| guard.stand_in[role].as_ref().map(|s| s.wanted.clone()))
+            .or_else(|| {
+                let exclude: Vec<String> = devs
+                    .iter()
+                    .filter(|e| bad(&e.id) || !fit(e))
+                    .map(|e| e.id.clone())
+                    .chain(std::iter::once(id.clone()))
+                    .collect();
+                policy::last_default_by_windows(flow == devices::Flow::Render, role, &exclude)
+            })
             .filter(|g| !bad(g));
-        let back = wanted
-            .clone()
-            .filter(|g| present(g))
-            .or_else(|| devs.iter().find(|e| fit(e)).map(|e| e.id.clone()));
+        let back = wanted.clone().filter(|g| present(g)).or_else(|| {
+            devs.iter()
+                .filter(|e| fit(e))
+                .min_by_key(|e| rank(e))
+                .map(|e| e.id.clone())
+        });
         let Some(back) = back else { continue };
         if set(&back, role) {
             log::warn!("default {flow:?} (role {role}) was our cable; set back");
-            guard.stand_in[role] = if wanted.as_deref() == Some(back.as_str()) {
-                None
-            } else {
-                Some(StandIn {
-                    id: back,
-                    wanted,
-                    present_then: devs.iter().map(|e| e.id.clone()).collect(),
-                })
+            guard.stand_in[role] = match wanted {
+                Some(w) if w != back => Some(StandIn {
+                    id: back.clone(),
+                    wanted: w,
+                }),
+                _ => None,
             };
-            if flow == devices::Flow::Render {
-                if let Ok(mut n) = state.output_fixed_at.lock() {
-                    *n = Some(Instant::now());
-                }
-            }
+            fixed = Some(back);
         }
     }
     if guard.stand_in != before {
         guard.save(flow);
+    }
+    // tell the user, naming the device the sound or microphone is on now
+    if let Some(id) = fixed {
+        let name = devs.iter().find(|e| e.id == id).map(|e| e.name.clone());
+        if let Ok(mut n) = state.device_fixed.lock() {
+            *n = Some((Instant::now(), flow == devices::Flow::Render, name));
+        }
     }
 }
 
@@ -733,7 +748,10 @@ pub fn save_given_back() {
         let list = lines.join("\n");
         // (a file per process: the helper and the app may write at once)
         if std::fs::write(&tmp, list).is_ok() {
-            let _ = std::fs::rename(&tmp, &file);
+            if let Err(e) = std::fs::rename(&tmp, &file) {
+                log::warn!("could not save {}: {e}", file.display());
+                let _ = std::fs::remove_file(&tmp);
+            }
         }
     }
 }
@@ -757,12 +775,12 @@ fn tell_restart_discord(da: bool) {
     let (title, text) = if da {
         (
             "Genstart Discord",
-            "Discord bruger stadig Claude Talk-mikrofonen, som er tavs, nu hvor Claude Talk er lukket. Luk Discord helt (højreklik på ikonet ved uret, og vælg »Afslut Discord« (på engelsk »Quit Discord«)), og start det igen. Ellers kan de andre ikke høre dig.",
+            "Discord bruger stadig Claude Talk-mikrofonen, som er tavs, nu hvor Claude Talk er lukket. Luk Discord helt (højreklik på Discords ikon ved uret, og vælg »Afslut Discord« (på engelsk »Quit Discord«)), og start det igen. Ellers kan de andre ikke høre dig.",
         )
     } else {
         (
             "Restart Discord",
-            "Discord still uses the Claude Talk microphone, which is silent now that Claude Talk is closed. Quit Discord completely (right-click its icon by the clock and choose “Quit Discord”), and start it again. Otherwise the others can't hear you.",
+            "Discord still uses the Claude Talk microphone, which is silent now that Claude Talk is closed. Quit Discord completely (right-click Discord's icon by the clock and choose “Quit Discord”), and start it again. Otherwise the others can't hear you.",
         )
     };
     unsafe {
@@ -1057,7 +1075,7 @@ pub fn restart() -> Result<(), String> {
         // Discord runs as administrator (or refused): it is still running,
         // and starting it again would only bring the old one to the front
         log::warn!("restart Discord: Discord could not be closed");
-        return Err("error.discordRestart".into());
+        return Err("error.discordClose".into());
     }
     std::process::Command::new(updater)
         .args(["--processStart", start])

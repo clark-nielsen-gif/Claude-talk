@@ -141,12 +141,12 @@ fn tell_restart_discord_yourself(da: bool) {
     let (title, text) = if da {
         (
             "Genstart Discord selv",
-            "Claude Talk kunne ikke genstarte Discord. Luk Discord helt (højreklik på ikonet ved uret, og vælg »Afslut Discord« (på engelsk »Quit Discord«)), og start det igen. Ellers kan de andre ikke høre dig.",
+            "Claude Talk kunne ikke genstarte Discord. Luk Discord helt (højreklik på Discords ikon ved uret, og vælg »Afslut Discord« (på engelsk »Quit Discord«)), og start det igen. Ellers kan de andre ikke høre dig.",
         )
     } else {
         (
             "Restart Discord yourself",
-            "Claude Talk couldn't restart Discord. Quit Discord completely (right-click its icon by the clock and choose “Quit Discord”), and start it again. Otherwise the others can't hear you.",
+            "Claude Talk couldn't restart Discord. Quit Discord completely (right-click Discord's icon by the clock and choose “Quit Discord”), and start it again. Otherwise the others can't hear you.",
         )
     };
     unsafe {
@@ -180,7 +180,7 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
                 "Du er i et opkald i Discord, og Discord bruger Claude Talk-mikrofonen.\n\n",
                 "Lukker du Claude Talk nu, kan de andre ikke høre dig, før Discord starter igen.\n\n",
                 "Ja: Luk, og genstart Discord. Du skal selv gå ind i opkaldet igen bagefter.\n\n",
-                "Nej: Luk uden at genstarte Discord. De andre kan ikke høre dig, før du selv genstarter Discord.\n\n",
+                "Nej: Luk uden at genstarte Discord. De andre kan ikke høre dig, før du selv genstarter Discord (højreklik på Discords ikon ved uret, vælg »Afslut Discord«, og start det igen).\n\n",
                 "Annuller: Luk ikke. Bliv i opkaldet med Claude Talk.\n\n",
                 "Har du selv valgt »Claude Talk – til Discord« som inputenhed i Discord, så vælg »Standard« dér, før du lukker.",
             ),
@@ -192,7 +192,7 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
                 "You're in a Discord call, and Discord uses the Claude Talk microphone.\n\n",
                 "If you quit Claude Talk now, nobody can hear you until Discord starts again.\n\n",
                 "Yes: Quit and restart Discord. Join the call again yourself afterwards.\n\n",
-                "No: Quit without restarting Discord. Nobody can hear you until you restart Discord yourself.\n\n",
+                "No: Quit without restarting Discord. Nobody can hear you until you restart Discord yourself (right-click Discord's icon by the clock, choose “Quit Discord”, and start it again).\n\n",
                 "Cancel: Don't quit. Stay in the call with Claude Talk.\n\n",
                 "If you chose “Claude Talk – til Discord” as the input device in Discord yourself, choose “Default” there before you quit.",
             ),

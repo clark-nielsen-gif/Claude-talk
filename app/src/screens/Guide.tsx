@@ -28,6 +28,10 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
   const { toast, status, config } = useApp();
   const first = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
+  // the parent passes a new onClose on every status update: read it through
+  // a ref, so the dialog is set up once (focus and scroll stay where they are)
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     // focus moves into the dialog, stays there, and goes back when it closes
     const opener = document.activeElement as HTMLElement | null;
@@ -36,7 +40,7 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
     if (heading) { heading.tabIndex = -1; heading.focus(); } else first.current?.focus();
     dialog.current?.scrollTo?.({ top: 0 });
     const keys = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') close.current();
       if (e.key !== 'Tab' || !dialog.current) return;
       const items = Array.from(dialog.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea'));
       if (items.length === 0) return;
@@ -46,7 +50,7 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
     };
     window.addEventListener('keydown', keys);
     return () => { window.removeEventListener('keydown', keys); opener?.focus?.(); };
-  }, [onClose]);
+  }, []);
   return (
     <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={dialog} className="dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title">
@@ -73,7 +77,7 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
             <p className="muted">{t.guide.restartDiscordBody}</p>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>
-              <button className="btn secondary" onClick={() => api.restartDiscord().then(onClose, () => { onClose(); toast(t.errors.discordRestart); })}>{t.guide.restartDiscord}</button>
+              <button className="btn secondary" onClick={() => api.restartDiscord().then(onClose, (e) => { onClose(); toast(String(e).includes('discordClose') ? t.errors.discordClose : t.errors.discordRestart); })}>{t.guide.restartDiscord}</button>
               <button ref={first} className="btn primary" onClick={() => api.openPlace('discordVoice')}>{t.guide.discordButton}</button>
             </div>
           </>

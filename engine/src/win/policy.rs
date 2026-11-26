@@ -639,6 +639,93 @@ pub fn set_device_rate(endpoint_id: &str, rate: u32) -> windows::core::Result<()
     .ok()
 }
 
+/// The device Windows last made the default for `role` (0 console,
+/// 1 multimedia, 2 communications), as an endpoint id, leaving out
+/// `exclude`; also a device that is unplugged right now. Windows keeps the
+/// time of each default change per device (`Role:N`, a SYSTEMTIME) under
+/// HKLM\…\MMDevices\Audio\{Render|Capture}\{guid}, readable by every user.
+pub fn last_default_by_windows(render: bool, role: usize, exclude: &[String]) -> Option<String> {
+    use windows::Win32::System::Registry::*;
+    let flow = if render { "Render" } else { "Capture" };
+    let prefix = if render {
+        "{0.0.0.00000000}."
+    } else {
+        "{0.0.1.00000000}."
+    };
+    let path = format!(r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\{flow}");
+    let mut root = HKEY::default();
+    if unsafe {
+        RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            &HSTRING::from(path),
+            None,
+            KEY_READ,
+            &mut root,
+        )
+    }
+    .is_err()
+    {
+        return None;
+    }
+    let value = HSTRING::from(format!("Role:{role}"));
+    let mut best: Option<([u16; 7], String)> = None;
+    let mut i = 0u32;
+    loop {
+        let mut name = [0u16; 256];
+        let mut len = name.len() as u32;
+        let r = unsafe {
+            RegEnumKeyExW(
+                root,
+                i,
+                Some(windows::core::PWSTR(name.as_mut_ptr())),
+                &mut len,
+                None,
+                None,
+                None,
+                None,
+            )
+        };
+        if r.is_err() {
+            break;
+        }
+        i += 1;
+        let guid = String::from_utf16_lossy(&name[..len as usize]);
+        let id = format!("{prefix}{guid}");
+        if exclude.iter().any(|e| e.eq_ignore_ascii_case(&id)) {
+            continue;
+        }
+        let mut data = [0u8; 16];
+        let mut dlen = data.len() as u32;
+        let r = unsafe {
+            RegGetValueW(
+                root,
+                &HSTRING::from(&guid),
+                &value,
+                RRF_RT_REG_BINARY,
+                None,
+                Some(data.as_mut_ptr().cast()),
+                Some(&mut dlen),
+            )
+        };
+        if r.is_err() || dlen != 16 {
+            continue;
+        }
+        let w: Vec<u16> = data
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        // year, month, day, hour, minute, second, ms (w[2] is the weekday)
+        let when = [w[0], w[1], w[3], w[4], w[5], w[6], w[7]];
+        if best.as_ref().is_none_or(|(b, _)| when > *b) {
+            best = Some((when, id));
+        }
+    }
+    unsafe {
+        let _ = RegCloseKey(root);
+    }
+    best.map(|(_, id)| id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

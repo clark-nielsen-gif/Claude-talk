@@ -157,11 +157,14 @@ const da = {
 
   notices: {
     speakersTitle: 'Lyden spiller i højttalere',
-    speakersBody: 'Windows kalder din lydenhed »Højttalere«. Ekkodæmpning er slået til, så din mikrofon ikke sender Claude og Discord tilbage, hvis det er højttalere i rummet. Høretelefoner giver den bedste lyd.',
+    speakersBody: 'Windows kalder din lydenhed »Højttalere«. Ekkodæmpning er slået til, så de andre ikke hører Claude og sig selv igen gennem din mikrofon, hvis det er højttalere i rummet. Høretelefoner giver den bedste lyd.',
     speakersBodyOff: 'Windows kalder din lydenhed »Højttalere«. Er det højttalere i rummet (ikke høretelefoner), kan din mikrofon høre Claude og Discord. Brug høretelefoner, eller slå ekkodæmpning til under Indstillinger.',
     dismiss: 'OK',
     outputFixedTitle: 'Vi har sat din lyd tilbage',
     outputFixedBody: 'Windows var sat til at spille lyden i »Claude Talk – intern«, som kun Claude Talk må bruge. Så ville de andre i Discord høre sig selv, og du ville ikke høre noget. Nu spiller lyden igen i dine højttalere eller høretelefoner.',
+    outputFixedBodyNamed: 'Windows var sat til at spille lyden i »Claude Talk – intern«, som kun Claude Talk må bruge. Så ville de andre i Discord høre sig selv, og du ville ikke høre noget. Nu spiller lyden i »{name}«. Er det forkert, så vælg din lydenhed i lydmenuen ved uret.',
+    micFixedTitle: 'Vi har valgt din mikrofon igen',
+    micFixedBody: 'Windows var sat til at bruge »Claude Talk – til Discord« som mikrofon. Så ville andre programmer høre Claude Talk i stedet for dig. Nu er »{name}« Windows’ mikrofon igen.',
     hotkeyTitle: 'En genvejstast virker ikke',
     hotkeyBody: 'Et andet program bruger allerede {keys}. Vælg en anden under Indstillinger.',
     hotkeyDuplicateBody: 'To handlinger har samme genvejstast. Vælg forskellige under Indstillinger.',
@@ -218,6 +221,7 @@ const da = {
     update: 'Opdateringen kunne ikke hentes. Prøv igen senere.',
     discordNotRunning: 'Discord kører ikke. Start Discord først.',
     discordRestart: 'Discord kunne ikke startes igen. Start Discord selv.',
+    discordClose: 'Discord kunne ikke lukkes. Højreklik på Discords ikon ved uret, vælg »Afslut Discord«, og start det igen.',
   },
 
   advanced: {
@@ -294,6 +298,7 @@ const da = {
     restore: 'Gendan normale lydindstillinger',
     restoreHint: 'Discord bruger igen din almindelige mikrofon, og Claude går ud af opkaldet. Tænd for »Claude i Discord« på Oversigt for at tage Claude med igen.',
     restoredHint: 'Lydindstillingerne er gendannet. Tænd for »Claude i Discord« på Oversigt for at tage Claude med igen.',
+    restoredTitle: 'Normale lydindstillinger',
     restored: 'Lydindstillingerne er gendannet',
     externalTitle: 'Claude i et andet program',
     externalLabel: 'Brug Claude i Chrome, Edge eller Claude-appen',
@@ -491,11 +496,14 @@ const en: Dict = {
   },
   notices: {
     speakersTitle: 'Sound plays through speakers',
-    speakersBody: 'Windows calls your sound device “Speakers”. Echo reduction is on, so your microphone doesn’t send Claude and Discord back if they are speakers in the room. Headphones sound best.',
+    speakersBody: 'Windows calls your sound device “Speakers”. Echo reduction is on, so the others don’t hear Claude and themselves again through your microphone if they are speakers in the room. Headphones sound best.',
     speakersBodyOff: 'Windows calls your sound device “Speakers”. If they are speakers in the room (not headphones), your microphone can hear Claude and Discord. Use headphones, or turn on echo reduction in Settings.',
     dismiss: 'OK',
     outputFixedTitle: 'We put your sound back',
     outputFixedBody: 'Windows was set to play sound into “Claude Talk – intern”, which only Claude Talk may use. People in Discord would have heard themselves, and you would have heard nothing. Sound plays through your speakers or headphones again.',
+    outputFixedBodyNamed: 'Windows was set to play sound into “Claude Talk – intern”, which only Claude Talk may use. People in Discord would have heard themselves, and you would have heard nothing. Sound now plays through “{name}”. If that’s wrong, pick your sound device in the sound menu by the clock.',
+    micFixedTitle: 'We chose your microphone again',
+    micFixedBody: 'Windows was set to use “Claude Talk – til Discord” as its microphone. Other programs would have heard Claude Talk instead of you. “{name}” is Windows’ microphone again.',
     hotkeyTitle: 'A shortcut doesn’t work',
     hotkeyBody: 'Another app already uses {keys}. Choose a different one in Settings.',
     hotkeyDuplicateBody: 'Two actions have the same shortcut. Choose different ones in Settings.',
@@ -551,6 +559,7 @@ const en: Dict = {
     update: 'The update couldn’t be downloaded. Try again later.',
     discordNotRunning: 'Discord isn’t running. Start Discord first.',
     discordRestart: 'Discord couldn’t be started again. Start Discord yourself.',
+    discordClose: 'Discord couldn’t be closed. Right-click Discord’s icon by the clock, choose “Quit Discord”, and start it again.',
   },
   advanced: {
     title: 'Advanced',
@@ -625,6 +634,7 @@ const en: Dict = {
     restore: 'Restore normal sound settings',
     restoreHint: 'Discord goes back to your usual microphone, and Claude leaves the call. Turn on “Claude in Discord” in the overview to bring Claude back.',
     restoredHint: 'Sound settings restored. Turn on “Claude in Discord” in the overview to bring Claude back.',
+    restoredTitle: 'Normal sound settings',
     restored: 'Sound settings restored',
     externalTitle: 'Claude in another program',
     externalLabel: 'Use Claude in Chrome, Edge or the Claude app',

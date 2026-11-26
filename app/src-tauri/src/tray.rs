@@ -18,9 +18,9 @@ fn t(lang: &str, key: &str) -> &'static str {
         }
         "claude" => {
             if da {
-                "Åbn Claude-vinduet"
+                "Åbn Claude"
             } else {
-                "Open the Claude window"
+                "Open Claude"
             }
         }
         "switch" => {

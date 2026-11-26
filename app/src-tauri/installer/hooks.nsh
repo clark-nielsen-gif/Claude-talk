@@ -61,6 +61,11 @@
     ; if the user ticks Tauri's own "delete data" box on the uninstall page
     ; (its Danish text: "Slet også indstillinger og Claude-login"). Tauri's
     ; box removes only its own folders, so ours are removed here.
+    ; Which device stood in for a headset describes devices of this PC as
+    ; they were with the cable installed: never kept for a later install.
+    SetShellVarContext current
+    Delete "$APPDATA\Claude Talk\default-stand-ins.txt"
+    SetShellVarContext all
     ${If} $DeleteAppDataCheckboxState = 1
       SetShellVarContext current
       RMDir /r "$LOCALAPPDATA\Claude Talk"

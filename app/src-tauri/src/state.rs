@@ -31,7 +31,9 @@ pub struct Inner {
     /// An output added in Advanced is speakers (same risk).
     pub added_speakers: AtomicBool,
     /// When the default output was last set back from our cable.
-    pub output_fixed_at: Mutex<Option<std::time::Instant>>,
+    /// When the default output or microphone was set back from the cable:
+    /// (when, output (else microphone), the device's name).
+    pub device_fixed: Mutex<Option<(std::time::Instant, bool, Option<String>)>>,
     /// Shortcuts that could not be registered (shown in the app).
     pub hotkey_problem: Mutex<String>,
     /// Discord plays on another device than Windows' default (where the
@@ -62,7 +64,7 @@ impl Inner {
             discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),
             added_speakers: AtomicBool::new(false),
-            output_fixed_at: Mutex::new(None),
+            device_fixed: Mutex::new(None),
             hotkey_problem: Mutex::new(String::new()),
             output_mismatch: Mutex::new(None),
             bridge_probe: Mutex::new(None),

@@ -135,7 +135,7 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.restore}</span><span className="small">{config.routeDiscord ? t.settings.restoreHint : t.settings.restoredHint}</span></div>
+          <div className="text"><span className="label">{config.routeDiscord ? t.settings.restore : t.settings.restoredTitle}</span><span className="small">{config.routeDiscord ? t.settings.restoreHint : t.settings.restoredHint}</span></div>
           {config.routeDiscord && <div className="confirm" aria-live="polite">
             {confirmRestore && <span className="small">{t.settings.restoreAsk}</span>}
             {confirmRestore && <button className="btn quiet" onClick={() => setConfirmRestore(false)}>{t.settings.restoreNo}</button>}

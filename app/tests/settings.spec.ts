@@ -47,3 +47,15 @@ test('after “Gendan”, a Discord still on the cable from before is told calml
   await expect(page.getByText('Discord hører dig gennem Claude Talk, indtil du genstarter Discord.', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Vis mig hvordan' })).toHaveCount(0);
 });
+
+test('the Discord guide keeps focus and scroll while the status updates', async ({ page }) => {
+  await page.goto('/?scenario=main-discord-wrong-mic&theme=light');
+  await page.getByRole('button', { name: 'Vis mig hvordan' }).first().click();
+  const open = page.getByRole('button', { name: 'Åbn Discords lydindstillinger' });
+  await open.focus();
+  await page.waitForTimeout(300);
+  await expect(open).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await page.waitForTimeout(300);
+  await expect(page.getByRole('button', { name: 'Luk', exact: true })).toBeFocused();
+});
