@@ -134,6 +134,31 @@ pub struct AudioHost {
     outputs: BTreeMap<OutputId, OutputEntry>,
     routes: BTreeMap<(SourceId, OutputId), RouteEntry>,
     pulled: BTreeMap<OutputId, OutputMixer>,
+    aec: Option<AecStage>,
+}
+
+/// Internal ids of the echo-reduction stage (never in the routing graph).
+const AEC_MIC_IN: OutputId = 9001;
+const AEC_REF_IN: OutputId = 9002;
+
+/// Echo reduction between the raw microphone and the outputs. The
+/// microphone's routes are moved from the raw capture to the processed
+/// stream while it is active.
+struct AecStage {
+    processed: FanoutHandle,
+    mic_in: MixerHandle,
+    ref_in: MixerHandle,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for AecStage {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
 }
 
 fn info(s: &StreamHandle) -> StreamInfo {
@@ -149,7 +174,14 @@ fn info(s: &StreamHandle) -> StreamInfo {
 impl AudioHost {
     /// An empty host (for the advanced mixer and tests).
     pub fn empty() -> Self {
-        AudioHost { graph: RoutingGraph::new(), sources: BTreeMap::new(), outputs: BTreeMap::new(), routes: BTreeMap::new(), pulled: BTreeMap::new() }
+        AudioHost {
+            graph: RoutingGraph::new(),
+            sources: BTreeMap::new(),
+            outputs: BTreeMap::new(),
+            routes: BTreeMap::new(),
+            pulled: BTreeMap::new(),
+            aec: None,
+        }
     }
 
     /// The standard Claude Talk setup (see `graph::RoutingGraph::claude_talk_default`).
@@ -237,6 +269,9 @@ impl AudioHost {
     }
 
     pub fn remove_source(&mut self, id: SourceId) {
+        if id == ids::MIC || id == ids::CLAUDE || id == ids::DISCORD {
+            self.set_echo_reduction(false);
+        }
         let outs: Vec<OutputId> = self.routes.keys().filter(|(s, _)| *s == id).map(|&(_, o)| o).collect();
         for o in outs {
             self.unwire(id, o);
@@ -255,19 +290,125 @@ impl AudioHost {
         self.pulled.remove(&id);
     }
 
+    /// The fanout a source's routes hang off (the processed microphone
+    /// while echo reduction is on).
+    fn route_source(&mut self, s: SourceId) -> Option<&mut FanoutHandle> {
+        if s == ids::MIC {
+            if let Some(a) = self.aec.as_mut() {
+                return Some(&mut a.processed);
+            }
+        }
+        self.sources.get_mut(&s).map(|e| &mut e.handle)
+    }
+
     fn wire(&mut self, s: SourceId, o: OutputId, r: Route) {
-        let (Some(src), Some(out)) = (self.sources.get_mut(&s), self.outputs.get_mut(&o)) else { return };
         let params = GainParams::new(r.gain_db, r.muted);
-        let stats = connect(&mut src.handle, &mut out.handle, params.clone(), ROUTE_BUFFER_MS);
-        self.routes.insert((s, o), RouteEntry { params, stats });
+        let Some(mut out) = self.outputs.remove(&o) else { return };
+        let stats = self.route_source(s).map(|src| connect(src, &mut out.handle, params.clone(), ROUTE_BUFFER_MS));
+        self.outputs.insert(o, out);
+        if let Some(stats) = stats {
+            self.routes.insert((s, o), RouteEntry { params, stats });
+        }
     }
 
     fn unwire(&mut self, s: SourceId, o: OutputId) {
         if self.routes.remove(&(s, o)).is_some() {
-            if let (Some(src), Some(out)) = (self.sources.get_mut(&s), self.outputs.get_mut(&o)) {
-                disconnect(&mut src.handle, &mut out.handle);
+            let Some(mut out) = self.outputs.remove(&o) else { return };
+            if let Some(src) = self.route_source(s) {
+                disconnect(src, &mut out.handle);
+            }
+            self.outputs.insert(o, out);
+        }
+    }
+
+    pub fn echo_reduction_active(&self) -> bool {
+        self.aec.is_some()
+    }
+
+    /// Turns echo reduction on or off while running.
+    pub fn set_echo_reduction(&mut self, on: bool) {
+        if on == self.aec.is_some() {
+            return;
+        }
+        // the microphone's current routes move between raw and processed
+        let mic_routes: Vec<(OutputId, Route)> = self.graph.routes().filter(|(s, _, _)| *s == ids::MIC).map(|(_, o, r)| (o, r)).collect();
+        for (o, _) in &mic_routes {
+            self.unwire(ids::MIC, *o);
+        }
+        if on {
+            match self.start_aec() {
+                Ok(stage) => self.aec = Some(stage),
+                Err(e) => log::warn!("echo reduction unavailable: {e}"),
+            }
+        } else if let Some(mut stage) = self.aec.take() {
+            if let Some(mic) = self.sources.get_mut(&ids::MIC) {
+                disconnect(&mut mic.handle, &mut stage.mic_in);
+            }
+            for s in [ids::CLAUDE, ids::DISCORD] {
+                if let Some(src) = self.sources.get_mut(&s) {
+                    disconnect(&mut src.handle, &mut stage.ref_in);
+                }
+            }
+            drop(stage);
+        }
+        for (o, r) in mic_routes {
+            self.wire(ids::MIC, o, r);
+        }
+    }
+
+    fn start_aec(&mut self) -> Result<AecStage, String> {
+        use crate::aec::{EchoReducer, FRAME};
+        let (mut mic_mix, mut mic_in) = OutputMixer::new(AEC_MIC_IN, 1, FRAME);
+        let (mut ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
+        let (mut fanout, processed) = SourceFanout::new(ids::MIC, ENGINE_RATE);
+        if let Some(mic) = self.sources.get_mut(&ids::MIC) {
+            connect(&mut mic.handle, &mut mic_in, GainParams::new(0.0, false), ROUTE_BUFFER_MS);
+        }
+        for s in [ids::CLAUDE, ids::DISCORD] {
+            if let Some(src) = self.sources.get_mut(&s) {
+                connect(&mut src.handle, &mut ref_in, GainParams::new(0.0, false), ROUTE_BUFFER_MS);
             }
         }
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop2 = stop.clone();
+        let thread = std::thread::Builder::new()
+            .name("echo-reduction".into())
+            .spawn(move || {
+                unsafe { windows::Win32::Media::timeBeginPeriod(1) };
+                // created here: the AEC3 graph is bound to its thread
+                let mut reducer = match EchoReducer::new() {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        log::warn!("echo reduction could not start ({e}); microphone passes through");
+                        None
+                    }
+                };
+                let start = std::time::Instant::now();
+                let mut done: u64 = 0;
+                let mut m = vec![0f32; FRAME];
+                let mut r = vec![0f32; FRAME];
+                while !stop2.load(Ordering::Relaxed) {
+                    let due = (start.elapsed().as_secs_f64() * ENGINE_RATE as f64) as u64;
+                    if due < done + FRAME as u64 {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                        continue;
+                    }
+                    if due > done + 10 * FRAME as u64 {
+                        done = due - FRAME as u64; // resync after a stall
+                    }
+                    mic_mix.render(&mut m);
+                    ref_mix.render(&mut r);
+                    match reducer.as_mut() {
+                        Some(red) => fanout.push(Some(red.process(&r, &m)), 1, FRAME),
+                        None => fanout.push(Some(&m), 1, FRAME),
+                    }
+                    done += FRAME as u64;
+                }
+                unsafe { windows::Win32::Media::timeEndPeriod(1) };
+            })
+            .map_err(|e| e.to_string())?;
+        log::info!("echo reduction on");
+        Ok(AecStage { processed, mic_in, ref_in, stop, thread: Some(thread) })
     }
 
     /// Adds or updates a route (refused if it breaks the echo/feedback rules).
@@ -343,6 +484,11 @@ impl AudioHost {
 
     /// Frees memory the audio threads have released. Call ~every 100 ms.
     pub fn maintain(&mut self) {
+        if let Some(a) = self.aec.as_mut() {
+            a.processed.collect_garbage();
+            a.mic_in.collect_garbage();
+            a.ref_in.collect_garbage();
+        }
         for s in self.sources.values_mut() {
             s.handle.collect_garbage();
         }

@@ -61,7 +61,10 @@ pub fn spawn_watcher(app: AppHandle) {
                 let speakers = devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
                     .map(|(_, e)| e.form_factor.is_open_air() && !ct_engine::win::host::is_own_device(&e.name))
                     .unwrap_or(false);
-                state.speakers.store(speakers, Ordering::Relaxed);
+                if state.speakers.swap(speakers, Ordering::Relaxed) != speakers {
+                    log::info!("default output is now {}", if speakers { "speakers" } else { "headphones/headset" });
+                    crate::audio::apply_switches(&app);
+                }
                 if (uses, restart) != last_logged {
                     log::info!("Discord microphone: {:?}{}", mic, if restart { " (restart suggested)" } else { "" });
                     last_logged = (uses, restart);

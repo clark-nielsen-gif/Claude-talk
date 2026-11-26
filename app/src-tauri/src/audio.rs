@@ -35,6 +35,8 @@ pub struct AudioStatus {
     pub discord_needs_restart: bool,
     /// Default output is speakers (echo risk).
     pub speakers: bool,
+    /// Echo reduction is running on the microphone.
+    pub echo_active: bool,
     /// The virtual cable (Discord's microphone) is installed and playing.
     pub cable_ok: bool,
     pub latency_ms: f32,
@@ -93,6 +95,13 @@ mod imp {
         // push-to-talk is on, the key.
         host.set_route_muted(ids::MIC, ids::TO_CLAUDE, !on || (cfg.push_to_talk && !ptt_down));
         host.set_route_muted(ids::MIC, ids::TO_DISCORD, false);
+        // echo reduction: always, never, or automatically with speakers
+        let echo = match cfg.echo {
+            crate::config::EchoMode::On => true,
+            crate::config::EchoMode::Off => false,
+            crate::config::EchoMode::Auto => state.speakers.load(Ordering::Relaxed),
+        };
+        host.set_echo_reduction(echo);
     }
 
     fn level(peak: f32, rms: f32) -> Level {
@@ -104,11 +113,11 @@ mod imp {
         let mut last_states: Vec<(u32, StreamState)> = Vec::new();
         while !state.shutting_down.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_millis(33));
-            let snap = {
+            let (snap, echo_active) = {
                 let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
                 let Some(host) = g.as_mut() else { continue };
                 host.maintain();
-                host.snapshot()
+                (host.snapshot(), host.echo_reduction_active())
             };
             let mut st = AudioStatus { engine_running: true, ..Default::default() };
             for s in &snap.sources {
@@ -169,6 +178,7 @@ mod imp {
             .into();
             st.discord_needs_restart = state.discord_needs_restart.load(Ordering::Relaxed);
             st.speakers = state.speakers.load(Ordering::Relaxed);
+            st.echo_active = echo_active;
             st.claude_window_open = state.claude_pid.load(Ordering::Relaxed) != 0;
             st.claude_listening = state.claude_mic_active.load(Ordering::Relaxed);
             let _ = app.emit("audio-status", &st);

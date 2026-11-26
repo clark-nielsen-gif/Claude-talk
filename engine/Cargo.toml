@@ -9,6 +9,7 @@ description = "Claude Talk real-time audio engine"
 rtrb = "0.4"
 rubato = "5"
 log = "0.4"
+aec3 = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.62"
@@ -31,6 +32,7 @@ windows = { version = "0.62", features = [
     "Wdk_System_SystemServices",
     "Win32_System_WinRT",
     "Win32_System_Registry",
+    "Win32_Media",
 ] }
 
 [dev-dependencies]

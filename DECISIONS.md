@@ -61,3 +61,23 @@ Anthropics hjælpeside (support.claude.com, "Use voice mode", tjekket 26-11-2026
 
 ## D9 – CI-minutter (privat repository)
 Hurtige tests kører kun på `windows-latest`. Matrixen køres kun ved milepæle, og udholdenhedstesten (2 timer) køres én gang til sidst. Ren DSP-logik testes desuden på Linux i udviklingsmiljøet, hvilket er gratis.
+
+## D10 – Windows 11 er et krav (process loopback)
+Optagelse af ét programs lyd med hele dets procestræ (`PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE`) kræver Windows build 20348 eller nyere. Det svarer til Windows 11 og Server 2022. Windows 10 22H2 er build 19045 og understøttes derfor ikke. Programmet viser i så fald en venlig besked ("Claude Talk kræver Windows 11") i stedet for at starte lyden. Process loopback er ikke bundet til en bestemt udgang, så Discords lyd fanges også, når Discord spiller på et headset, der ikke er standardenheden.
+
+## D11 – Realtidsdesign af lydmotoren
+- Hver route (kilde → udgang) har sin egen låsefri SPSC-ring og sin egen resampler. Derfor kører hver udgang på sit eget ur, helt uden låse. Routes tilføjes og fjernes via en kommandokø, og frigivne objekter sendes tilbage til kontroltråden, så lydtråden aldrig frigiver hukommelse. Det er bevist med en test, der tæller allokeringer (`engine/tests/realtime.rs`).
+- WASAPI leverer altid 48 kHz float stereo (`AUTOCONVERTPCM`). Resampleren (`rubato`, kubisk polynomiel, 1 ms-chunks) håndterer derfor kun clock drift.
+- **Drift-regulering:** PI-sløjfe med naturlig frekvens 1,5·10⁻³ rad pr. blok og dæmpning ≈ 0,7. Fyldningen midles over 2 s, P-leddet er begrænset til ±1000 ppm og det samlede udsving til ±2500 ppm, så ingen korrektion kan høres. Resultatet er målt i tests: −557 ppm ramt med under 5 ppm fejl og under 200 ppm rippel ved 22 ms-ryk.
+- **Adaptiv jitterbuffer:** Hver route starter med 20 ms. Den vokser 5 ms ved hver underrun (højst 60 ms) og skrumper 1 ms pr. minut uden problemer. Et stort efterslæb (f.eks. ved opstart) kasseres med det samme i stedet for at blive indhentet langsomt.
+- **Fraværende kilder leverer stilhed i realtid:** Når Discord lukkes, eller en mikrofon tages ud, holdes routes kørende med stilhed. Så vokser bufferen og latenstiden ikke, når kilden vender tilbage.
+- **True-peak-limiter pr. udgang:** 8× polyfase-estimat og sliding minimum med boksfilter. Ingen sample overskrider loftet. Med 0,3 dB intern margen holdes −1 dBTP mod en uafhængig 16× referencemåler (2.000 property-tests).
+- Lydtrådene logger aldrig. De publicerer tilstand via atomics, som kontroltråden logger.
+
+## D12 – Ekko og "egen kabel"-sikring
+Mikrofonkilden springer altid Claude Talks egne virtuelle enheder over, også hvis Windows' standardmikrofon er VB-CABLE. Ellers ville "Til Discord" løbe ind i sig selv. Det er testet i CI (`microphone_never_own_cable`).
+
+## D13 – Sådan testes det, CI ikke kan gøre "rigtigt"
+- **claude.ai:** En testside med streng nonce-CSP efterligner en stemme-webapp (getUserMedia med typiske constraints, enumerateDevices, permissions, Web Audio, MediaRecorder og WebRTC-loopback). Den kører i det rigtige Claude-vindue i en CI-build med featuren `ci-testpage`. Den feature findes ikke i release-builds.
+- **Mikrofon i e2e-testen:** Runnerne har ingen mikrofon, der kan afspille en kendt tone (testdriverens mikrofon er stum, målt i CI). I e2e-testen er "mikrofonen" derfor et testprograms lyd (process loopback). Optagelse fra en rigtig optageenhed er bevist separat i `audio-e2e` ved at optage VB-CABLE.
+- **Testudgang:** De falske programmer spiller ud på en ekstra virtuel enhed (VirtualDrivers-driveren). Den kan kun installeres, fordi runnerne har test-signing slået til, og den bruges kun som CI-fixture.

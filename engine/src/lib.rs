@@ -5,6 +5,7 @@
 //! * [`drift`] / [`resample`] – clock-drift compensation and rate conversion.
 //! * [`mixer`] – the real-time mixing core used by every output.
 
+pub mod aec;
 pub mod analysis;
 pub mod drift;
 pub mod dsp;

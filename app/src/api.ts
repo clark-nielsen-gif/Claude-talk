@@ -41,6 +41,7 @@ export interface AudioStatus {
   discordUsesCable: 'yes' | 'no' | '';
   discordNeedsRestart: boolean;
   speakers: boolean;
+  echoActive: boolean;
   cableOk: boolean;
   latencyMs: number;
   driftPpm: number;
@@ -80,7 +81,7 @@ function scenarioStatus(t: number): AudioStatus {
   const ok: AudioStatus = {
     engineRunning: true, mic: lv(0.5), claude: lv(0.6, 5), discord: lv(0.35, 9), toDiscord: lv(0.6, 6), toClaude: lv(0.45, 8),
     micState: 'ok', micName: 'Headset-mikrofon (Jabra Evolve2)', claudeWindowOpen: true, claudeListening: true,
-    discordRunning: true, discordUsesCable: 'yes', discordNeedsRestart: false, speakers: false, cableOk: true,
+    discordRunning: true, discordUsesCable: 'yes', discordNeedsRestart: false, speakers: false, echoActive: false, cableOk: true,
     latencyMs: 31, driftPpm: -12, xruns: 0,
   };
   const quiet = { peak: 0, rms: 0 };
@@ -93,7 +94,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'error-mic-blocked': return { ...ok, micState: 'blocked', mic: quiet };
     case 'error-mic-missing': return { ...ok, micState: 'missing', micName: '', mic: quiet };
     case 'error-cable-missing': return { ...ok, cableOk: false };
-    case 'main-speakers': return { ...ok, speakers: true };
+    case 'main-speakers': return { ...ok, speakers: true, echoActive: true };
     case 'main-muted': return { ...ok, mic: quiet };
     case 'onboarding-setup': return { ...ok, engineRunning: t < 1.2 ? false : true };
     default: return ok;

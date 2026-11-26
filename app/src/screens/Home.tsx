@@ -34,7 +34,7 @@ export function Home({ info }: { info: AppInfo }) {
   }
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
-  if (s?.speakers) errors.push(<Notice key="s" title={t.notices.speakersTitle} body={t.notices.speakersBody} />);
+  if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} />);
 
   // --- Discord card state
   let discordCheck: { state: 'ok' | 'wait' | 'warn'; text: string; fix?: 'mic' | 'restart' };

@@ -67,6 +67,7 @@ const da = {
   notices: {
     speakersTitle: 'Du bruger højttalere',
     speakersBody: 'Så kan din mikrofon høre Claude og Discord. Vi har slået ekkodæmpning til, men høretelefoner giver den bedste lyd.',
+    speakersBodyOff: 'Så kan din mikrofon høre Claude og Discord. Brug høretelefoner, eller slå ekkodæmpning til under Indstillinger.',
     krispTitle: 'Bliver Claudes stemme svag i Discord?',
     krispBody: 'Slå Discords støjfjernelse fra under Stemme og video, så kommer Claudes stemme tydeligt igennem.',
   },
@@ -216,6 +217,7 @@ const en: Dict = {
   notices: {
     speakersTitle: 'You’re using speakers',
     speakersBody: 'Your microphone can hear Claude and Discord. We turned on echo reduction, but headphones sound best.',
+    speakersBodyOff: 'Your microphone can hear Claude and Discord. Use headphones, or turn on echo reduction in Settings.',
     krispTitle: 'Is Claude’s voice faint in Discord?',
     krispBody: 'Turn off Discord’s noise suppression under Voice & Video, and Claude’s voice comes through clearly.',
   },

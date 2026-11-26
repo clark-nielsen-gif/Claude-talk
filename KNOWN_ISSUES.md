@@ -1,7 +1,7 @@
 # Kendte begrænsninger
 
-## K1 – Ingen ægte Windows 10-runner
-GitHub Actions tilbyder kun Windows Server-billeder. `windows-2022` bruges som det nærmeste til Windows 10. En ægte test på Windows 10 22H2 skal ske manuelt efter `MANUAL_TEST.md`.
+## K1 – Windows 10 understøttes ikke
+At optage ét programs lyd kræver Windows build 20348 eller nyere (`DECISIONS.md` D10). Windows 10 22H2 (19045) kan det ikke, så programmet viser beskeden "Claude Talk kræver Windows 11". **Bedste alternativ:** opdater til Windows 11. Der findes heller ingen Windows 10-runner i GitHub Actions. `windows-2022` (build 20348) dækker det ældste understøttede API-niveau.
 
 ## K2 – Runnere har test-signing slået til
 Driverindlæsning på runneren beviser derfor ikke signaturen. Signaturen bevises i stedet med `signtool /kp` og Microsofts katalogsignatur på den installerede pakke (se `DECISIONS.md` D1). Secure Boot er slået fra på runnerne.
@@ -14,3 +14,6 @@ CI kan ikke logge ind på claude.ai. Indsprøjtningen testes mod en lokal testsi
 
 ## K5 – "Fortsæt med Google" virker ikke i Claude-vinduet
 Google blokerer login i indlejrede browsere. Brug login med e-mail i stedet. Vinduet viser en vejledning, når det sker.
+
+## K6 – Mikrofonen i e2e-testen er simuleret
+CI-runnere har ingen mikrofon, der kan spille en kendt tone. I e2e-testen leveres "mikrofonen" derfor som et testprograms lyd. Optagelse fra en rigtig optageenhed er testet separat (`audio-e2e`, `render_capture_cable`), og den rigtige mikrofon testes i `MANUAL_TEST.md`.
