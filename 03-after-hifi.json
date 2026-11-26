@@ -1,0 +1,29 @@
+﻿{
+    "Label":  "after-hifi",
+    "Os":  {
+               "Caption":  "Microsoft Windows Server 2022 Datacenter",
+               "Version":  "10.0.20348",
+               "BuildNumber":  "20348"
+           },
+    "SecureBoot":  false,
+    "TestSigning":  true,
+    "Devices":  [
+                    {
+                        "Class":  "MEDIA",
+                        "Name":  "VB-Audio Virtual Cable",
+                        "Status":  "OK",
+                        "ProblemCode":  0,
+                        "InstanceId":  "ROOT\\MEDIA\\0000"
+                    },
+                    {
+                        "Class":  "MEDIA",
+                        "Name":  "VB-Audio Hi-Fi Cable",
+                        "Status":  "OK",
+                        "ProblemCode":  0,
+                        "InstanceId":  "ROOT\\MEDIA\\0001"
+                    }
+                ],
+    "Endpoints":  [
+
+                  ]
+}
