@@ -1,0 +1,505 @@
+{
+  "pass": false,
+  "samples": [
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": null,
+      "isolation": true,
+      "latency_to_claude_ms": 75.7919921875,
+      "levels_db": {
+        "1000": -149.5,
+        "1000_hz": 1001.8,
+        "2500": -10.5,
+        "2500_hz": 2506.9,
+        "3000": -121.3,
+        "3000_hz": 2988.2,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 265.1,
+      "minute": 0.0,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 60.755126953125,
+      "levels_db": {
+        "1000": -148.5,
+        "1000_hz": 1003.3,
+        "2500": -10.5,
+        "2500_hz": 2499.9,
+        "3000": -144.8,
+        "3000_hz": 3003.2,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 99.2,
+      "minute": 5.0,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 62.5771484375,
+      "levels_db": {
+        "1000": -148.4,
+        "1000_hz": 1000.3,
+        "2500": -10.5,
+        "2500_hz": 2500.1,
+        "3000": -148.7,
+        "3000_hz": 2989.0,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 70.0,
+      "minute": 10.1,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 61.067626953125,
+      "levels_db": {
+        "1000": -151.5,
+        "1000_hz": 999.7,
+        "2500": -10.5,
+        "2500_hz": 2500.0,
+        "3000": -147.4,
+        "3000_hz": 3004.7,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 68.2,
+      "minute": 15.1,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 65.52294921875,
+      "levels_db": {
+        "1000": -150.9,
+        "1000_hz": 996.3,
+        "2500": -10.5,
+        "2500_hz": 2500.1,
+        "3000": -149.0,
+        "3000_hz": 2985.8,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 59.9,
+      "minute": 20.1,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 64.33642578125,
+      "levels_db": {
+        "1000": -151.0,
+        "1000_hz": 1003.2,
+        "2500": -10.5,
+        "2500_hz": 2499.9,
+        "3000": -148.3,
+        "3000_hz": 3007.2,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 57.4,
+      "minute": 25.2,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 59.8798828125,
+      "levels_db": {
+        "1000": -149.7,
+        "1000_hz": 1003.7,
+        "2500": -10.5,
+        "2500_hz": 2501.1,
+        "3000": -145.8,
+        "3000_hz": 3013.8,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 67.1,
+      "minute": 30.2,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 57.482666015625,
+      "levels_db": {
+        "1000": -150.2,
+        "1000_hz": 1002.7,
+        "2500": -10.5,
+        "2500_hz": 2500.3,
+        "3000": -147.7,
+        "3000_hz": 2997.5,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 62.4,
+      "minute": 35.2,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 53.359130859375,
+      "levels_db": {
+        "1000": -150.2,
+        "1000_hz": 1001.3,
+        "2500": -10.5,
+        "2500_hz": 2499.6,
+        "3000": -148.7,
+        "3000_hz": 3001.9,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 65.2,
+      "minute": 40.3,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 50.738037109375,
+      "levels_db": {
+        "1000": -149.1,
+        "1000_hz": 1003.8,
+        "2500": -10.5,
+        "2500_hz": 2500.2,
+        "3000": -145.1,
+        "3000_hz": 3005.5,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 67.6,
+      "minute": 45.3,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 61.8671875,
+      "levels_db": {
+        "1000": -151.7,
+        "1000_hz": 1001.3,
+        "2500": -10.5,
+        "2500_hz": 2500.0,
+        "3000": -147.2,
+        "3000_hz": 2997.3,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 64.0,
+      "minute": 50.4,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 60.711669921875,
+      "levels_db": {
+        "1000": -150.7,
+        "1000_hz": 1003.5,
+        "2500": -10.7,
+        "2500_hz": 2498.0,
+        "3000": -139.4,
+        "3000_hz": 2997.9,
+        "440": -10.5,
+        "440_hz": 439.6
+      },
+      "memory_mb": 59.2,
+      "minute": 55.4,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 57.2041015625,
+      "levels_db": {
+        "1000": -148.7,
+        "1000_hz": 1002.8,
+        "2500": -10.5,
+        "2500_hz": 2500.5,
+        "3000": -146.3,
+        "3000_hz": 2996.2,
+        "440": -10.5,
+        "440_hz": 440.1
+      },
+      "memory_mb": 65.7,
+      "minute": 60.4,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 65.357666015625,
+      "levels_db": {
+        "1000": -152.3,
+        "1000_hz": 1003.4,
+        "2500": -10.5,
+        "2500_hz": 2500.3,
+        "3000": -147.2,
+        "3000_hz": 2987.0,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 64.0,
+      "minute": 65.5,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 48.9091796875,
+      "levels_db": {
+        "1000": -151.0,
+        "1000_hz": 997.5,
+        "2500": -10.5,
+        "2500_hz": 2500.3,
+        "3000": -145.8,
+        "3000_hz": 3009.1,
+        "440": -10.5,
+        "440_hz": 440.1
+      },
+      "memory_mb": 59.2,
+      "minute": 70.5,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 56.825439453125,
+      "levels_db": {
+        "1000": -151.3,
+        "1000_hz": 1002.2,
+        "2500": -10.5,
+        "2500_hz": 2500.0,
+        "3000": -145.7,
+        "3000_hz": 2992.7,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 65.0,
+      "minute": 75.5,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 52.9599609375,
+      "levels_db": {
+        "1000": -150.4,
+        "1000_hz": 995.8,
+        "2500": -10.5,
+        "2500_hz": 2500.3,
+        "3000": -146.6,
+        "3000_hz": 2995.0,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 59.5,
+      "minute": 80.6,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 55.372314453125,
+      "levels_db": {
+        "1000": -150.7,
+        "1000_hz": 1004.6,
+        "2500": -11.1,
+        "2500_hz": 2506.1,
+        "3000": -134.5,
+        "3000_hz": 3006.3,
+        "440": -10.5,
+        "440_hz": 440.3
+      },
+      "memory_mb": 59.7,
+      "minute": 85.6,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 54.317626953125,
+      "levels_db": {
+        "1000": -152.1,
+        "1000_hz": 1001.8,
+        "2500": -10.5,
+        "2500_hz": 2500.1,
+        "3000": -143.7,
+        "3000_hz": 2992.8,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 65.2,
+      "minute": 90.7,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 45.35693359375,
+      "levels_db": {
+        "1000": -150.2,
+        "1000_hz": 995.8,
+        "2500": -10.5,
+        "2500_hz": 2500.3,
+        "3000": -146.4,
+        "3000_hz": 3013.1,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 60.8,
+      "minute": 95.7,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 52.14013671875,
+      "levels_db": {
+        "1000": -120.3,
+        "1000_hz": 1003.3,
+        "2500": -11.1,
+        "2500_hz": 2509.8,
+        "3000": -105.1,
+        "3000_hz": 2991.5,
+        "440": -10.5,
+        "440_hz": 440.7
+      },
+      "memory_mb": 70.5,
+      "minute": 100.7,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 46.531982421875,
+      "levels_db": {
+        "1000": -153.6,
+        "1000_hz": 999.9,
+        "2500": -10.5,
+        "2500_hz": 2500.0,
+        "3000": -147.2,
+        "3000_hz": 3001.3,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 65.3,
+      "minute": 105.8,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 11,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 57.820068359375,
+      "levels_db": {
+        "1000": -152.2,
+        "1000_hz": 996.8,
+        "2500": -10.5,
+        "2500_hz": 2500.0,
+        "3000": -146.1,
+        "3000_hz": 3009.8,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 59.5,
+      "minute": 110.8,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 48.193359375,
+      "levels_db": {
+        "1000": -150.9,
+        "1000_hz": 1002.3,
+        "2500": -10.5,
+        "2500_hz": 2500.3,
+        "3000": -145.4,
+        "3000_hz": 2991.0,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 59.9,
+      "minute": 115.9,
+      "pass": false
+    },
+    {
+      "alive": true,
+      "bursts": 12,
+      "cpu_percent": 0.0,
+      "isolation": true,
+      "latency_to_claude_ms": 45.89208984375,
+      "levels_db": {
+        "1000": -150.5,
+        "1000_hz": 1004.6,
+        "2500": -10.5,
+        "2500_hz": 2500.2,
+        "3000": -148.9,
+        "3000_hz": 2999.4,
+        "440": -10.5,
+        "440_hz": 440.0
+      },
+      "memory_mb": 68.3,
+      "minute": 120.1,
+      "pass": false
+    }
+  ]
+}
