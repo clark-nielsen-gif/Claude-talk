@@ -7,6 +7,10 @@
 //! (gaps). The controller watches the fill level of the ring buffer and nudges
 //! the resampling ratio so the fill level stays at its target.
 
+/// Largest pitch correction the proportional term may apply (1000 ppm =
+/// 1.7 cents, inaudible; 1.5 Hz on a 1.5 kHz test tone).
+const MAX_P: f64 = 1e-3;
+
 /// PI controller that turns "how full is the buffer" into a relative
 /// resampling ratio (1.0 = nominal).
 #[derive(Clone, Debug)]
@@ -47,7 +51,10 @@ impl DriftController {
             integral: 0.0,
             filtered: None,
             smoothing: (-1.0 / (2.0 * update_hz.max(1.0))).exp(),
-            max_rel: 0.005, // ±5000 ppm: far beyond any real crystal, still inaudible
+            // ±2500 ppm (4.3 cents): above any real device (virtual cables
+            // measured ~560 ppm), and inaudible on speech. Bigger jumps in
+            // the fill level are handled by dropping/re-priming instead.
+            max_rel: 0.0025,
             ratio: 1.0,
         }
     }
@@ -83,7 +90,10 @@ impl DriftController {
         // frames per input frame → ratio < 1.
         let err = f - self.target;
         let new_integral = self.integral + err * self.ki;
-        let raw = 1.0 - (err * self.kp + new_integral);
+        // A sudden step in the fill level (a program restarted) must not
+        // become an audible pitch change: the proportional part is capped.
+        let p = (err * self.kp).clamp(-MAX_P, MAX_P);
+        let raw = 1.0 - (p + new_integral);
         // anti-windup: only integrate while not saturated
         if raw > 1.0 - self.max_rel && raw < 1.0 + self.max_rel {
             self.integral = new_integral;
