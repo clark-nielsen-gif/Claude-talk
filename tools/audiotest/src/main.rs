@@ -64,57 +64,70 @@ mod serve {
             }
         };
         println!("serving on http://127.0.0.1:{port}/test.html");
-        let mut counter = 0u64;
+        let counter = std::sync::atomic::AtomicU64::new(0);
+        let counter = std::sync::Arc::new(counter);
+        let out = std::sync::Arc::new(out);
         for conn in listener.incoming().flatten() {
-            counter += 1;
-            let mut reader = BufReader::new(&conn);
-            let mut line = String::new();
-            if reader.read_line(&mut line).is_err() {
-                continue;
-            }
-            let mut len = 0usize;
-            loop {
-                let mut h = String::new();
-                if reader.read_line(&mut h).is_err() || h == "\r\n" || h.is_empty() {
-                    break;
-                }
-                if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
-                    len = v.trim().parse().unwrap_or(0);
-                }
-            }
-            let mut w = &conn;
-            if line.starts_with("POST /marks") {
-                let mut body = vec![0u8; len];
-                let _ = reader.read_exact(&mut body);
-                let marks = std::path::Path::new(&out).with_file_name("page-marks.json");
-                let _ = std::fs::write(marks, &body);
-                let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
-            } else if line.starts_with("POST /report") {
-                let mut body = vec![0u8; len];
-                let _ = reader.read_exact(&mut body);
-                let _ = std::fs::write(&out, &body);
-                println!("report received ({} bytes)", body.len());
-                let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
-            } else if line.starts_with("GET /test.html") {
-                let nonce = format!("ci{counter:08x}{:x}", std::process::id());
-                let html = PAGE.replace("__NONCE__", &nonce);
-                let csp = format!(
-                    "default-src 'none'; script-src 'nonce-{nonce}' 'unsafe-eval'; script-src-attr 'none'; style-src 'unsafe-inline'; \
-                     img-src 'self'; connect-src 'self'; media-src blob:; worker-src blob:; frame-src 'self'; base-uri 'self'"
-                );
-                let head = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Security-Policy: {csp}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    html.len()
-                );
-                let _ = w.write_all(head.as_bytes());
-                let _ = w.write_all(html.as_bytes());
-            } else {
-                let _ = w.write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                );
-            }
+            // One thread per connection: browsers open spare connections that
+            // never send anything, which must not block the real requests.
+            let counter = counter.clone();
+            let out = out.clone();
+            std::thread::spawn(move || {
+                let _ = conn.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+                let n = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                handle(conn, n, &out);
+            });
         }
         0
+    }
+
+    fn handle(conn: std::net::TcpStream, counter: u64, out: &str) {
+        let mut reader = BufReader::new(&conn);
+        let mut line = String::new();
+        if reader.read_line(&mut line).is_err() {
+            return;
+        }
+        let mut len = 0usize;
+        loop {
+            let mut h = String::new();
+            if reader.read_line(&mut h).is_err() || h == "\r\n" || h.is_empty() {
+                break;
+            }
+            if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                len = v.trim().parse().unwrap_or(0);
+            }
+        }
+        let mut w = &conn;
+        if line.starts_with("POST /marks") {
+            let mut body = vec![0u8; len];
+            let _ = reader.read_exact(&mut body);
+            let marks = std::path::Path::new(&out).with_file_name("page-marks.json");
+            let _ = std::fs::write(marks, &body);
+            let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
+        } else if line.starts_with("POST /report") {
+            let mut body = vec![0u8; len];
+            let _ = reader.read_exact(&mut body);
+            let _ = std::fs::write(&out, &body);
+            println!("report received ({} bytes)", body.len());
+            let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
+        } else if line.starts_with("GET /test.html") {
+            let nonce = format!("ci{counter:08x}{:x}", std::process::id());
+            let html = PAGE.replace("__NONCE__", &nonce);
+            let csp = format!(
+                "default-src 'none'; script-src 'nonce-{nonce}' 'unsafe-eval'; script-src-attr 'none'; style-src 'unsafe-inline'; \
+                 img-src 'self'; connect-src 'self'; media-src blob:; worker-src blob:; frame-src 'self'; base-uri 'self'"
+            );
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Security-Policy: {csp}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                html.len()
+            );
+            let _ = w.write_all(head.as_bytes());
+            let _ = w.write_all(html.as_bytes());
+        } else {
+            let _ = w.write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            );
+        }
     }
 }
 
@@ -570,8 +583,14 @@ mod imp {
             let mut phase = serde_json::Map::new();
             let mut app_proc = start_app(&app, echo);
 
-            // what Discord hears: record our virtual microphone while the page runs
-            std::thread::sleep(Duration::from_secs(8));
+            // The page reports after its tests and keeps playing Claude's
+            // voice: wait for it (a first WebView2 start can take a while).
+            let t0 = Instant::now();
+            while !page_report.exists() && t0.elapsed() < Duration::from_secs(60) {
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            std::thread::sleep(Duration::from_millis(500));
+            // what Discord hears: record our virtual microphone
             let cable = record(
                 CaptureTarget::Device(DeviceSelector::FirstMatching(
                     Flow::Capture,
@@ -602,11 +621,6 @@ mod imp {
             ok &= pass;
 
             // what Claude hears: the page reports what getUserMedia delivered
-            let t0 = Instant::now();
-            while !page_report.exists() && t0.elapsed() < Duration::from_secs(60) {
-                std::thread::sleep(Duration::from_millis(500));
-            }
-            std::thread::sleep(Duration::from_millis(300));
             let page: Value = std::fs::read(&page_report)
                 .ok()
                 .and_then(|b| serde_json::from_slice(&b).ok())

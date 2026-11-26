@@ -189,8 +189,10 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
                     std::thread::sleep(Duration::from_millis(1));
                     continue;
                 }
-                // Catch up at most 100 ms after a stall instead of flooding.
-                if due > sent + 4800 {
+                // After a stall of more than 30 ms, skip ahead instead of
+                // catching up: rendering several blocks at once would empty
+                // the route buffers, and their targets would grow for good.
+                if due > sent + 3 * BLOCK as u64 {
                     sent = due - BLOCK as u64;
                 }
                 mixer.render(&mut buf);

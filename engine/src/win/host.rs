@@ -139,6 +139,8 @@ pub struct RouteSnapshot {
     pub underrun_frames: u64,
     pub drift_ppm: f32,
     pub buffered_ms: f32,
+    /// the route's current jitter-buffer target (grows after underruns)
+    pub target_ms: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -770,6 +772,7 @@ impl AudioHost {
                 underrun_frames: r.stats.underrun_frames.load(Ordering::Relaxed),
                 drift_ppm: r.stats.drift_ppm.load(),
                 buffered_ms: r.stats.buffered_ms.load(),
+                target_ms: r.stats.target_ms.load(),
             });
         }
         snap.echo = self.aec.as_ref().map(|a| {

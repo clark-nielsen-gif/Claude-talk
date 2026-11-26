@@ -223,11 +223,12 @@ mod imp {
                     .iter()
                     .map(|r| {
                         format!(
-                            "{}>{}{} buf={:.0}ms under={} drift={:.0}",
+                            "{}>{}{} buf={:.0}/{:.0}ms under={} drift={:.0}",
                             r.source,
                             r.output,
                             if r.muted { "(muted)" } else { "" },
                             r.buffered_ms,
+                            r.target_ms,
                             r.underrun_frames,
                             r.drift_ppm
                         )
