@@ -116,21 +116,22 @@ jobs:
         shell: powershell
         run: |
           $d = [char]0x2013   # en dash; built here so PowerShell 5.1 cannot mis-decode it
-          $want = "Claude Talk $d til Discord"
+          $want = "Claude Talk $d til Discord (VB-Audio)"
           function Read-Capture([string] $file) {
             powershell -NoProfile -ExecutionPolicy Bypass -File ci/driver-proof/List-Endpoints.ps1 -OutFile $file | Out-Null
             (Get-Content $file -Raw -Encoding utf8 | ConvertFrom-Json) | ForEach-Object { $_ } | Where-Object Flow -eq 'Capture'
           }
-          # Variant 1: device description + interface name, then also the composed friendly name.
-          $m = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc $want -NewInterface 'VB-Audio' -AlsoFriendlyName
+          # Windows shows "<description> (<interface>)"; the interface keeps VB-Audio visible (licence condition).
+          $m = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc "Claude Talk $d til Discord" -NewInterface 'VB-Audio'
           $now = Read-Capture results\06a-after-rename.json
           Restart-Service Audiosrv -Force; Start-Sleep 3
           $afterRestart = Read-Capture results\06b-after-audiosrv-restart.json
           @("method=$m") + ($now | ForEach-Object { "right after rename: '$($_.FriendlyName)'" }) + ($afterRestart | ForEach-Object { "after AudioSrv restart: '$($_.FriendlyName)'" }) |
             Tee-Object results\rename-result.txt
-          $hit = $afterRestart | Where-Object { $_.FriendlyName -like "$want*" } | Select-Object -First 1
-          if (-not $hit) { throw "Virtual microphone '$want' not found after AudioSrv restart." }
-          if ($hit.FriendlyName -eq $want) { "EXACT name verified: '$want'" } else { "Name shown to apps: '$($hit.FriendlyName)'" }
+          foreach ($set in @(@{ n = 'right after rename'; v = $now }, @{ n = 'after AudioSrv restart'; v = $afterRestart })) {
+            if (-not ($set.v | Where-Object { $_.FriendlyName -eq $want })) { throw "Exact name '$want' not shown $($set.n)." }
+          }
+          "EXACT name verified, survives AudioSrv restart: '$want'"
 
       - name: Publish results
         if: always()
