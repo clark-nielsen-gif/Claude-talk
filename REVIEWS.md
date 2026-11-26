@@ -22,3 +22,20 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 - Afinstallation med en andens administratorkode (K11).
 - Ikke-transitiv selvhørings-kontrol: ingen nuværende vej rammer den, fordi loopback-indgange er udelukket.
 - Glidende overgange ved underrun og tilbagefald til ScriptProcessor: små lydpletter ved fejl, ikke ved normal drift.
+
+## Runde 2 – 2026-11-26 – ikke ren
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | major-fund | Claude-siden kunne få den rigtige mikrofon (tilladelse gives til claude.ai). Installerens reserve-vej stoler på enhver signatur og bruger miljøvariabler og certutil. Mærket skrives, før kablet findes. Den bærbare udgave kan bede om administrator. Selvtesten kan køre, mens Claude lytter. F12 kan ikke være en global genvej. |
+| Lyd | 2 blocker, 3 major, 9 minor | Ekstra kabler (CABLE-A m.fl.) kan blive valgt som mikrofon og give hyl. Jitterbufferens skrumpe-vagt virker aldrig, så bufferen ender på 12 ms og falder ud hvert 1–2 minut (to timers simulering). Ekkodæmperens reference flytter sig med bufferen. Pauser og genstarter får bufferne til at vokse. |
+| Design | major-fund | Kortenes tekster passede ikke til den rigtige tilstand. Kontrast på flere tekster. Rækkefølgen i menuen. |
+| "Min mor" | major-fund | SmartScreen-hjælpen stod for langt nede. Manglende svar på »Claude svarer ikke« og »Jeg har lukket vinduet«. Uens ord (Installér/Installer). |
+| "Bryd det" | 6 major, 9 minor | Instruktioner kunne overskrive et udkast eller havne i profilindstillinger. Vores kabel kunne blive Windows' standardhøjttaler. Ekstra kabler som mikrofon. Discord efterlades på et tavst kabel, når Claude Talk lukkes midt i et opkald. Et minimeret vindue holder mikrofonen åben. En anden Windows-brugers Discord kunne blive fanget. |
+
+**Rettet efter runde 2** (commits `5479a02`, `106c5ae`):
+- Alle blocker- og major-fund: se `DECISIONS.md` D11 og D23–D27.
+- Fra minor-fundene: udtoning ved huller, genstarter vokser ikke bufferen, låste routes oprettes slukket, genvejsfejl vises, config fra nyere version reddes, egne instruktioner fjernes fra fejlrapporten, WebView2-nedbrud, afinstallation spørger om login, hurtigere opdagelse af opkald, selvtest-vagt.
+
+**Ikke rettet, med begrundelse:** se `KNOWN_ISSUES.md` K15–K19 (VoiceMeeter, højttalere på en anden enhed end standarden, privat projekt, dræbt proces, små lydpunkter).
+
