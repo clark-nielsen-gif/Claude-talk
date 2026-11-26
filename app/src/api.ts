@@ -29,6 +29,7 @@ export interface Config {
   externalClaude?: string | null;
   instructions: Instructions;
   claudeHearsDiscord: boolean;
+  closeHintShown: boolean;
 }
 
 export interface Instructions {
@@ -99,7 +100,7 @@ const defaultConfig: Config = {
   advancedUnlocked: false,
   presets: [{ name: 'Musik' }],
   instructions: { onlyWhenCalled: scenario === 'instructions', wakeWord: 'Claude', short: scenario === 'instructions', danish: true, group: true, own: '', autoSend: true },
-  claudeHearsDiscord: true,
+  claudeHearsDiscord: true, closeHintShown: true,
   externalClaude: scenario === 'advanced-extra-cable' ? 'chrome.exe' : null,
 };
 
@@ -126,6 +127,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-muted': return { ...ok, mic: quiet };
     case 'main-output-fixed': return { ...ok, outputFixed: true };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
+    case 'onboarding-cable-missing': return { ...ok, cableOk: false };
     case 'onboarding-setup': return { ...ok, engineRunning: t < 1.2 ? false : true };
     default: return ok;
   }
@@ -133,7 +135,7 @@ function scenarioStatus(t: number): AudioStatus {
 
 const scenarioInfo: AppInfo = {
   version: '1.0.0', windowsBuild: scenario === 'error-unsupported' ? 19045 : 26100,
-  supported: scenario !== 'error-unsupported', cableInstalled: scenario !== 'error-cable-missing', testMode: false,
+  supported: scenario !== 'error-unsupported', cableInstalled: scenario !== 'error-cable-missing' && scenario !== 'onboarding-cable-missing', testMode: false,
   extraCable: scenario === 'advanced-extra-cable' ? { name: 'CABLE-A Input (VB-Audio Cable A)', output: 'CABLE-A Output (VB-Audio Cable A)' } : null,
 };
 

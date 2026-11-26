@@ -113,6 +113,7 @@ export function Advanced({ info }: { info: AppInfo }) {
         <p className="muted">{t.advanced.intro}</p>
       </header>
       <div className="panel">
+        <div className="matrix-scroll">
         <table className="matrix">
           <thead>
             <tr>
@@ -166,6 +167,7 @@ export function Advanced({ info }: { info: AppInfo }) {
             ))}
           </tbody>
         </table>
+        </div>
         <div className="matrix-actions">
           {adding
             ? <Adder kind={adding} onDone={(added) => { setAdding(null); if (added) reload(); }} />

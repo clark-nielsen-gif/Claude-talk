@@ -211,6 +211,8 @@ pub struct Config {
     /// Claude hears the others in the call (off: only you). Enforced by the
     /// routing, not by asking Claude.
     pub claude_hears_discord: bool,
+    /// "Claude Talk keeps running by the clock" was shown on first close.
+    pub close_hint_shown: bool,
 }
 
 impl Default for Config {
@@ -234,6 +236,7 @@ impl Default for Config {
             external_claude: None,
             instructions: Instructions::default(),
             claude_hears_discord: true,
+            close_hint_shown: false,
         }
     }
 }

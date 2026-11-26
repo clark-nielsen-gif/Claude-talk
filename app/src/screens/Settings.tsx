@@ -4,7 +4,7 @@ import { Switch } from '../components';
 import { useApp, useT } from '../context';
 
 /** Records a key combination like "Ctrl+Alt+D". */
-function KeyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function KeyPicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const t = useT();
   const [listening, setListening] = useState(false);
   useEffect(() => {
@@ -27,8 +27,8 @@ function KeyPicker({ value, onChange }: { value: string; onChange: (v: string) =
   }, [listening, onChange]);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-      <span className="kbd">{listening ? t.settings.pressKeys : value}</span>
-      <button className="btn quiet" onClick={() => setListening(true)}>{t.settings.change}</button>
+      <span className="kbd" aria-live="polite">{listening ? t.settings.pressKeys : value}</span>
+      <button className="btn quiet" aria-label={`${t.settings.change}: ${label}`} onClick={() => setListening(true)}>{t.settings.change}</button>
     </div>
   );
 }
@@ -73,9 +73,9 @@ export function Settings() {
 
       <h2 className="section-title">{t.settings.hotkeys}</h2>
       <div className="panel">
-        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteClaude}</span></div><KeyPicker value={config.hotkeys.muteClaudeToDiscord} onChange={(v) => hk({ muteClaudeToDiscord: v })} /></div>
-        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteMic}</span></div><KeyPicker value={config.hotkeys.muteMic} onChange={(v) => hk({ muteMic: v })} /></div>
-        <div className="row"><div className="text"><span className="label">{t.settings.hkPtt}</span></div><KeyPicker value={config.hotkeys.pushToTalkClaude} onChange={(v) => hk({ pushToTalkClaude: v })} /></div>
+        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteClaude}</span></div><KeyPicker label={t.settings.hkMuteClaude} value={config.hotkeys.muteClaudeToDiscord} onChange={(v) => hk({ muteClaudeToDiscord: v })} /></div>
+        <div className="row"><div className="text"><span className="label">{t.settings.hkMuteMic}</span></div><KeyPicker label={t.settings.hkMuteMic} value={config.hotkeys.muteMic} onChange={(v) => hk({ muteMic: v })} /></div>
+        <div className="row"><div className="text"><span className="label">{t.settings.hkPtt}</span></div><KeyPicker label={t.settings.hkPtt} value={config.hotkeys.pushToTalkClaude} onChange={(v) => hk({ pushToTalkClaude: v })} /></div>
         <div className="row">
           <div className="text"><span className="label">{t.settings.pttEnable}</span></div>
           <Switch on={config.pushToTalk} label={t.settings.pttEnable} onChange={(v) => update({ pushToTalk: v })} />

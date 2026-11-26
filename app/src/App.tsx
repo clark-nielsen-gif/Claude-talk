@@ -33,6 +33,7 @@ export function App() {
   const [status, setStatus] = useState<AudioStatus | null>(null);
   const [page, setPage] = useState<Page>(pageFromScenario(initialScenario));
   const [toastText, setToastText] = useState<string | null>(null);
+  const closeToast = useCallback(() => setToastText(null), []);
   const systemDark = useSystemDark();
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export function App() {
   if (!info || !ctx || !config) return <div className="shell"><TitleBarless /></div>;
 
   const onboarding = !config.onboardingDone;
-  const initialStep = initialScenario === 'onboarding-setup' ? 'setup' : initialScenario === 'onboarding-ready' ? 'ready' : 'welcome';
+  const initialStep = initialScenario === 'onboarding-setup' || initialScenario === 'onboarding-cable-missing' ? 'setup' : initialScenario === 'onboarding-ready' ? 'ready' : 'welcome';
 
   return (
     <AppContext.Provider value={ctx}>
@@ -94,7 +95,7 @@ export function App() {
             </main>
           </div>
         )}
-        {toastText && <Toast text={toastText} onDone={() => setToastText(null)} />}
+        {toastText && <Toast key={toastText} text={toastText} onDone={closeToast} closeLabel={t.notices.dismiss} />}
       </div>
     </AppContext.Provider>
   );

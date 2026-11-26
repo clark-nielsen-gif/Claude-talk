@@ -4,7 +4,7 @@
 import { test } from '@playwright/test';
 
 const scenarios = [
-  'onboarding-welcome', 'onboarding-setup', 'onboarding-ready',
+  'onboarding-welcome', 'onboarding-setup', 'onboarding-cable-missing', 'onboarding-ready',
   'main-ok', 'main-off', 'main-muted', 'main-output-fixed', 'main-hotkey-taken', 'main-claude-closed', 'main-claude-not-listening',
   'main-discord-closed', 'main-discord-wrong-mic', 'main-discord-restart', 'main-speakers', 'main-update',
   'error-mic-blocked', 'error-mic-missing', 'error-cable-missing', 'error-unsupported',
@@ -25,6 +25,7 @@ for (const scale of scales) {
           await page.waitForLoadState('networkidle');
           await page.evaluate(() => document.fonts.ready);
           if (s === 'onboarding-setup') await page.waitForTimeout(1500);
+          if (s === 'onboarding-cable-missing') await page.waitForTimeout(3200);
           if (s === 'main-discord-wrong-mic') await page.getByRole('button', { name: /Vis mig hvordan/ }).click();
           if (s === 'advanced-extra-cable') await page.getByRole('heading', { name: 'Claude i et andet program' }).scrollIntoViewIfNeeded();
           if (s === 'advanced-add') await page.getByRole('button', { name: 'Tilføj kilde' }).click();

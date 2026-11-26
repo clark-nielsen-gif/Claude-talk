@@ -51,6 +51,7 @@ export function Help({ info }: { info: AppInfo }) {
             ))}
           </ul>
         )}
+        {results?.some((r) => !r.passed) && <p className="muted" style={{ padding: '0 1.25rem 1rem', margin: 0 }}>{t.help.failedNext}</p>}
       </div>
 
       <h2 className="section-title">{t.help.health}</h2>

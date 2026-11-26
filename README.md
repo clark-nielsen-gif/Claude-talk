@@ -8,11 +8,11 @@
 
 Du skal bruge Windows 11 og en Claude-konto (opret den gratis på claude.ai).
 
-**1. Hent programmet.** Tryk her: [Hent Claude Talk](../../releases/latest/download/ClaudeTalk-Setup.exe). Filen lander i din Overførsler-mappe.
+**1. Hent programmet.** Tryk her: [Hent Claude Talk](https://github.com/clark-nielsen-gif/Claude-talk/releases/latest/download/ClaudeTalk-Setup.exe). Filen lander i din Overførsler-mappe. Siger din browser, at filen ikke hentes ofte, så vælg **Behold** (i Edge: de tre prikker ved filen → **Behold** → **Vis mere** → **Behold alligevel**).
 
-**2. Installer.** Dobbeltklik på filen. Siger Windows »Windows har beskyttet din pc«, så tryk på **Flere oplysninger** og derefter **Kør alligevel** (se længere nede, hvorfor). Windows spørger så én gang, om programmet må ændre din pc. Tryk **Ja**. Installationen henter selv Claude Talk-mikrofonen, så der skal være internet i et øjeblik.
+**2. Installer.** Dobbeltklik på filen. Siger Windows »Windows har beskyttet din pc«, så tryk på **Flere oplysninger** og derefter **Kør alligevel** (se længere nede, hvorfor). Windows spørger så én gang, om programmet må ændre din pc. Boksen er gul og siger »Ukendt udgiver«. Det er normalt for Claude Talk. Tryk **Ja**. Installationen henter selv Claude Talk-mikrofonen, så der skal være internet i et øjeblik.
 
-**3. Tryk på knappen.** Claude Talk åbner. Tryk **Sæt det op for mig**, og derefter **Åbn Claude**. Log ind på Claude, start et opkald i Discord, og tænd for Claudes stemme i Claude-vinduet.
+**3. Tryk på knappen.** Claude Talk åbner. Tryk **Sæt det op for mig**, og derefter **Åbn Claude**. Log ind på Claude, og start et opkald i Discord. Tryk så på stemme-knappen i Claude-vinduet: den runde knap med lydbølger i højre side af skrivefeltet nederst.
 
 | Første gang | Klar |
 |---|---|
@@ -25,8 +25,8 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 
 ## Det skal du vide
 - **Claude kører i sit eget vindue i Claude Talk.** Det er det, der gør, at Claude kan høre dig og Discord, uden at noget andet på din pc kommer med. Du logger ind én gang, og så husker vinduet det.
-- **Log ind med din e-mail.** Google tillader ikke login i programmers egne vinduer. Skriv din e-mail, så sender Claude dig en kode.
-- **Discord bruger Claude Talk-mikrofonen.** Claude Talk sætter det selv op, og din stemme går stadig igennem som før. Lad derfor Claude Talk køre (den starter med Windows og ligger nede ved uret). Lukker du Claude Talk, får Discord din almindelige mikrofon tilbage. Er du midt i et opkald, spørger Claude Talk først, om Discord skal genstartes, så de andre stadig kan høre dig.
+- **Log ind med din e-mail.** Google tillader ikke login i programmers egne vinduer. Skriv din e-mail, og tryk på knappen under feltet (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet.
+- **Discord bruger Claude Talk-mikrofonen** (i Discord hedder den »Claude Talk – til Discord«). Claude Talk sætter det selv op, og din stemme går stadig igennem som før. Lad derfor Claude Talk køre (den starter med Windows og ligger nede ved uret). Lukker du Claude Talk, får Discord din almindelige mikrofon tilbage. Er du midt i et opkald, spørger Claude Talk først, om Discord skal genstartes, så de andre stadig kan høre dig.
 - **Brug gerne høretelefoner.** Med højttalere slår Claude Talk selv ekkodæmpning til, men høretelefoner giver den bedste lyd.
 - Programmet kræver **Windows 11**.
 
@@ -38,9 +38,9 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 
 **Kan jeg bruge Claude i Chrome eller Claude-appen i stedet?** Som udgangspunkt nej: Claude Talk bruger sit eget Claude-vindue, så Claude kun hører det, den skal. Har du selv installeret et ekstra virtuelt lydkabel (VB-CABLE A, B, C, D eller Hi-Fi Cable), kan det slås til under **Avanceret**. VoiceMeeter kan ikke bruges til det.
 
-**Hvad sker der med mine samtaler og min adgangskode?** Ingenting. Du logger ind direkte på Anthropics egen side. Claude Talk læser aldrig adgangskoder, koder eller cookies.
+**Hvad sker der med mine samtaler og min adgangskode?** Claude Talk ser dem aldrig. Du logger ind direkte på Anthropics egen side. Claude Talk læser aldrig adgangskoder, koder eller cookies.
 
-**Kan Claude kun svare, når nogen siger »Claude«?** Ja. Gå til **Instruktioner**, og slå »Svar kun, når nogen siger aktiveringsordet« til. Du kan vælge et andet ord, bede Claude svare kort, tale dansk eller skrive dine egne instruktioner, f.eks. »Du er spilleder i vores rollespil«. Claude Talk sender dem til Claude, hver gang du starter en ny samtale. Vil du have, at Claude slet ikke hører de andre i opkaldet, så slå »Claude hører de andre i opkaldet« fra.
+**Kan Claude kun svare, når nogen siger »Claude«?** Ja. Gå til **Instruktioner**, og slå »Svar kun, når nogen siger et bestemt ord« til. Du kan vælge et andet ord, bede Claude svare kort, tale dansk eller skrive dine egne instruktioner, f.eks. »Du er spilleder i vores rollespil«. Claude Talk skriver dem selv til Claude som første besked, hver gang du starter en ny samtale. Vil du have, at Claude slet ikke hører de andre i opkaldet, så slå »Claude hører de andre i opkaldet« fra.
 
 **Claude svarer ikke.** Se på Claude-kortet i Claude Talk. Står der »Tryk på stemme-knappen …«, så tryk **Vis Claude-vinduet** og tryk på stemme-knappen ved tekstfeltet. Har du slået aktiveringsordet til under **Instruktioner**, svarer Claude kun, når nogen siger ordet.
 

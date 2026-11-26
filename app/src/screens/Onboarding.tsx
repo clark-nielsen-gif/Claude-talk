@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type AppInfo } from '../api';
-import { Icon } from '../components';
+import { Icon, Notice } from '../components';
 import { useApp, useT } from '../context';
+import { useInstallCable } from '../useInstallCable';
 
 type Step = 'welcome' | 'setup' | 'ready';
 
@@ -12,9 +13,11 @@ function Dots({ at }: { at: number }) {
 /** First start: at most three screens, then the overview. */
 export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInfo; initial?: Step; onDone: () => void }) {
   const t = useT();
-  const { status } = useApp();
+  const { status, config, toast } = useApp();
   const [step, setStep] = useState<Step>(initial);
   const [shown, setShown] = useState(0); // how many setup steps have been revealed
+  const [slow, setSlow] = useState(false); // setup has waited longer than it should
+  const { installing, install } = useInstallCable();
 
   // Each step is ticked off only when the real condition is true.
   const checks = [
@@ -24,6 +27,16 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
     { label: t.onboarding.stepDiscord, done: !!status?.engineRunning },
   ];
   const allDone = checks.every((c) => c.done);
+  // What can't finish by itself: shown at once when it is certain, otherwise
+  // after 12 s – always with a way forward.
+  const cableMissing = !info.cableInstalled && !!status?.engineRunning && !status.cableOk;
+  const problem = !info.supported ? 'unsupported' : cableMissing && (slow || shown >= checks.length) ? 'cable' : slow && !allDone ? 'slow' : null;
+
+  useEffect(() => {
+    if (step !== 'setup' || allDone) return;
+    const id = setTimeout(() => setSlow(true), 12_000);
+    return () => clearTimeout(id);
+  }, [step, allDone]);
 
   useEffect(() => {
     if (step !== 'setup') return;
@@ -55,7 +68,7 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
         {step === 'setup' && (
           <>
             <h1>{t.onboarding.setupTitle}</h1>
-            <p className="lead">{t.onboarding.setupBody}</p>
+            <p className="lead">{problem ? t.onboarding.setupProblemBody : t.onboarding.setupBody}</p>
             <div className="progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${progress}%` }} /></div>
             <ul className="steps">
               {checks.map((c, i) => {
@@ -69,6 +82,10 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
                 );
               })}
             </ul>
+            {problem === 'unsupported' && <Notice kind="error" title={t.errors.unsupportedTitle} body={t.errors.unsupportedBody} action={t.errors.unsupportedAction} onAction={() => api.openPlace('windowsUpdate')} />}
+            {problem === 'cable' && <Notice kind="error" title={t.errors.cableMissingTitle} body={t.onboarding.cableMissingBody} action={installing ? t.errors.cableInstalling : t.errors.cableMissingAction} onAction={installing ? undefined : install} />}
+            {problem === 'slow' && <Notice kind="warn" title={t.onboarding.slowTitle} body={t.onboarding.slowBody} />}
+            {problem && <div><button className="btn secondary" onClick={onDone}>{t.onboarding.toOverview}</button></div>}
             <Dots at={1} />
           </>
         )}
@@ -77,8 +94,9 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
             <div className="wave" aria-hidden="true">{[0.36, 0.64, 1, 0.64, 0.36].map((h, i) => <span key={i} style={{ height: `${h * 100}%` }} />)}</div>
             <h1>{t.onboarding.readyTitle}</h1>
             <p className="lead">{t.onboarding.readyBody}</p>
+            {config.instructions.autoSend && <p className="muted">{t.onboarding.readyAutoSend}</p>}
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button className="btn primary large" autoFocus onClick={async () => { await api.openClaude(); onDone(); }}>{t.onboarding.openClaude}</button>
+              <button className="btn primary large" autoFocus onClick={() => api.openClaude().then(onDone, () => toast(t.errors.claudeWindow))}>{t.onboarding.openClaude}</button>
               <button className="btn secondary large" onClick={onDone}>{t.onboarding.toOverview}</button>
             </div>
             <Dots at={2} />

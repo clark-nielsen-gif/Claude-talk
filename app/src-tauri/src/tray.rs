@@ -39,7 +39,7 @@ fn t(lang: &str, key: &str) -> &'static str {
         }
         "quit" => {
             if da {
-                "Afslut Claude Talk"
+                "Luk Claude Talk"
             } else {
                 "Quit Claude Talk"
             }

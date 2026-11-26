@@ -4,6 +4,7 @@ import { Check, Icon, Meter, Notice, Switch } from '../components';
 import { useApp, useT } from '../context';
 import { fill } from '../i18n';
 import { DiscordGuide } from './Guide';
+import { useInstallCable } from '../useInstallCable';
 
 /** True while the user has spoken within the last 1.5 s. */
 function useSpeaking(rms: number): boolean {
@@ -22,14 +23,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
   const [update, setUpdate] = useState<string | null>(null);
-  const [installing, setInstalling] = useState(false);
-  const installCable = () => {
-    setInstalling(true);
-    api.installCable()
-      .then((code) => { if (code === 2) toast(t.errors.cableNoInternet); else if (code !== 0) toast(t.errors.cableInstallFailed); })
-      .catch((e) => { if (String(e) === 'error.cableNeedsInstaller') toast(t.errors.cableNeedsInstaller); else if (String(e) !== 'cancelled') toast(t.errors.cableInstallFailed); })
-      .finally(() => setInstalling(false));
-  };
+  const { installing, install: installCable } = useInstallCable();
   useEffect(() => api.onUpdate(setUpdate), []);
   const s = status;
   const quiet = { peak: 0, rms: 0 };
@@ -55,7 +49,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
 
   // --- Discord card state
   let discordCheck: { state: 'ok' | 'wait' | 'warn'; text: string; fix?: 'mic' | 'restart' };
-  if (cableMissing) discordCheck = { state: 'warn', text: t.main.discordNoMic };
+  if (!info.supported) discordCheck = { state: 'warn', text: t.main.discordNeedsWindows11 };
+  else if (cableMissing) discordCheck = { state: 'warn', text: t.main.discordNoMic };
   else if (!s?.discordRunning) discordCheck = { state: 'wait', text: t.main.discordNotRunning };
   else if (s.discordNeedsRestart) discordCheck = { state: 'warn', text: t.guide.restartDiscordTitle, fix: 'restart' };
   else if (s.discordUsesCable === 'no') discordCheck = { state: 'warn', text: t.main.discordWrongMic, fix: 'mic' };
@@ -64,7 +59,9 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
       ? { state: 'wait', text: t.main.discordHearsOnlyYou }
       : config.claudeToDiscordMuted
         ? { state: 'wait', text: t.main.claudeMutedInDiscord }
-        : { state: 'ok', text: t.main.discordHearsClaude };
+        : !s.claudeWindowOpen || !s.claudeListening
+          ? { state: 'wait', text: t.main.discordReadyForClaude }
+          : { state: 'ok', text: t.main.discordHearsClaude };
   }
   else discordCheck = { state: 'wait', text: t.main.discordWaiting };
 
@@ -81,6 +78,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
           ? { state: 'wait', text: t.main.claudeOpenNotListening }
           : micBroken
             ? { state: 'warn', text: t.main.claudeCantHearYou }
+            : hearsYou && config.pushToTalk
+              ? { state: 'ok', text: fill(t.main.claudeHearsYouPtt, { key: config.hotkeys.pushToTalkClaude }) }
             : hearsYou && hearsDiscord
               ? { state: 'ok', text: t.main.claudeHearsYou }
               : hearsYou
@@ -88,14 +87,27 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
                 : hearsDiscord
                   ? { state: 'ok', text: t.main.claudeHearsOnlyDiscord }
                   : { state: 'wait', text: t.main.claudeHearsNobody };
-  const switchText = !on ? t.main.switchOff : cableMissing ? t.main.switchOnNotReady : t.main.switchOn;
+  // The line under the switch says the same as the cards and notices below.
+  const discordBroken = discordCheck.state === 'warn';
+  const switchText = !on ? t.main.switchOff
+    : cableMissing ? t.main.switchOnNotReady
+    : micBroken ? t.main.switchOnMicProblem
+    : discordBroken ? t.main.switchOnFixDiscord
+    : !s?.discordRunning ? t.main.switchOnNoDiscord
+    : !s.claudeWindowOpen ? t.main.switchOnClaudeClosed
+    : !s.claudeListening ? t.main.switchOnClaudeNotListening
+    : config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
+    : config.micMuted ? t.main.switchOnMicMuted
+    : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
+    : t.main.switchOn;
+  const switchWarn = on && (cableMissing || micBroken || discordBroken);
 
   return (
     <div className="page">
       <section className="hero" aria-labelledby="switch-title">
         <div className="text">
           <h1 id="switch-title">{t.main.switchTitle}</h1>
-          <p className={on && cableMissing ? 'warn-text' : 'muted'}>{switchText}</p>
+          <p className={switchWarn ? 'warn-text' : 'muted'}>{switchText}</p>
         </div>
         <Switch on={on} label={t.main.switchTitle} onChange={(v) => updateConfig({ claudeInDiscord: v })} />
       </section>
@@ -131,7 +143,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
               ? <button className="btn primary" onClick={() => api.openClaude()}>{t.main.openClaude}</button>
               : !s.claudeListening && on
                 ? <button className="btn secondary" onClick={() => api.openClaude()}>{t.main.showClaude}</button>
-                : on && <button className="iconbtn" title={t.main.muteClaudeHint} aria-pressed={config.claudeToDiscordMuted} onClick={() => updateConfig({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
+                : on && !cableMissing && <button className="iconbtn" title={t.main.muteClaudeHint} aria-pressed={config.claudeToDiscordMuted} onClick={() => updateConfig({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
                   {config.claudeToDiscordMuted ? Icon.speakerOff() : Icon.speaker()} {config.claudeToDiscordMuted ? t.main.unmuteClaude : t.main.muteClaude}
                 </button>}
           </div>

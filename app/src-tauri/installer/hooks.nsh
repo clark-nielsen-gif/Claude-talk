@@ -1,25 +1,47 @@
 ; Claude Talk NSIS hooks (Tauri 2). The installer is per-machine, so these
 ; run elevated inside the single UAC prompt of the installer.
+; Messages follow the installer's language: Danish (1030) or English.
 
 !macro NSIS_HOOK_POSTINSTALL
-  DetailPrint "Claude Talk: Discords mikrofon sættes op / setting up Discord's microphone"
+  ${If} $LANGUAGE == 1030
+    DetailPrint "Claude Talk-mikrofonen sættes op"
+  ${Else}
+    DetailPrint "Setting up the Claude Talk microphone"
+  ${EndIf}
   install_cable:
   nsExec::ExecToLog '"$INSTDIR\claude-talk.exe" --install-cable'
   Pop $0
   ${If} $0 == 2
-    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Claude Talk skal bruge internettet et øjeblik for at hente Discords mikrofon fra VB-Audio. Tjek din forbindelse, og tryk Prøv igen.$\r$\n$\r$\nClaude Talk needs the internet for a moment to download Discord's microphone from VB-Audio. Check your connection and press Retry." /SD IDCANCEL IDRETRY install_cable
+    ${If} $LANGUAGE == 1030
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Claude Talk skal bruge internettet et øjeblik for at hente Claude Talk-mikrofonen fra VB-Audio. Tjek din forbindelse, og tryk Prøv igen." /SD IDCANCEL IDRETRY install_cable
+    ${Else}
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Claude Talk needs the internet for a moment to download the Claude Talk microphone from VB-Audio. Check your connection and press Retry." /SD IDCANCEL IDRETRY install_cable
+    ${EndIf}
   ${ElseIf} $0 != 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "Discords mikrofon kunne ikke sættes op. Åbn Claude Talk – den forklarer, hvad du kan gøre.$\r$\n$\r$\nDiscord's microphone could not be set up. Open Claude Talk – it explains what to do." /SD IDOK
+    ${If} $LANGUAGE == 1030
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Claude Talk-mikrofonen kunne ikke sættes op. Åbn Claude Talk. Programmet forklarer dig, hvad du kan gøre." /SD IDOK
+    ${Else}
+      MessageBox MB_OK|MB_ICONEXCLAMATION "The Claude Talk microphone could not be set up. Open Claude Talk. It explains what you can do." /SD IDOK
+    ${EndIf}
   ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  DetailPrint "Claude Talk: lydindstillinger gendannes / restoring sound settings"
+  ${If} $LANGUAGE == 1030
+    DetailPrint "Lydindstillingerne gendannes"
+  ${Else}
+    DetailPrint "Restoring sound settings"
+  ${EndIf}
   nsExec::ExecToLog '"$INSTDIR\claude-talk.exe" --uninstall-cleanup'
   Pop $0
   ; The Claude window's login (claude.ai cookies) and the settings stay
-  ; unless the user says so; a silent uninstall (/S) keeps them.
-  MessageBox MB_YESNO|MB_ICONQUESTION "Vil du også slette dine indstillinger og logge ud af Claude i Claude Talk?$\r$\n$\r$\nDo you also want to delete your settings and sign out of Claude in Claude Talk?" /SD IDNO IDNO keep_user_data
+  ; unless the user says so; a silent uninstall (/S, also used for upgrades)
+  ; keeps them.
+  ${If} $LANGUAGE == 1030
+    MessageBox MB_YESNO|MB_ICONQUESTION "Vil du også slette dine indstillinger og logge ud af Claude i Claude Talk?$\r$\n$\r$\nDin Claude-konto og dine samtaler bliver ikke slettet." /SD IDNO IDNO keep_user_data
+  ${Else}
+    MessageBox MB_YESNO|MB_ICONQUESTION "Do you also want to delete your settings and sign out of Claude in Claude Talk?$\r$\n$\r$\nYour Claude account and conversations are not deleted." /SD IDNO IDNO keep_user_data
+  ${EndIf}
     SetShellVarContext current
     RMDir /r "$LOCALAPPDATA\Claude Talk"
     RMDir /r "$APPDATA\Claude Talk"

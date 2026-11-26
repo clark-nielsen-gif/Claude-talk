@@ -6,12 +6,12 @@
   const TEXT = {
     da: {
       title: 'Log ind med din e-mail',
-      body: 'Google tillader ikke login i programmers egne vinduer. Skriv i stedet din e-mail i feltet på Claudes side og tryk Fortsæt. Claude sender dig en kode eller et link på mail – så er du logget ind, og Claude Talk husker det.',
+      body: 'Google tillader ikke login i programmers egne vinduer. Skriv i stedet din e-mail i feltet på Claudes side, og tryk på knappen under det (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden her i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet for her. Claude Talk husker dit login.',
       ok: 'Forstået',
     },
     en: {
       title: 'Sign in with your e-mail',
-      body: "Google doesn't allow signing in inside apps' own windows. Type your e-mail address in the field on Claude's page and press Continue. Claude sends you a code or a link by e-mail – then you're signed in, and Claude Talk remembers it.",
+      body: "Google doesn't allow signing in inside apps' own windows. Type your e-mail address in the field on Claude's page and press the button below it (“Continue with email”). Claude e-mails you a code. Type the code here in the Claude window. Don't click the link in the e-mail: that signs you in in your normal browser instead of here. Claude Talk remembers your sign-in.",
       ok: 'Got it',
     },
   };
@@ -30,8 +30,8 @@
                 border: 1px solid #E8E6DC; box-shadow: 0 18px 50px rgba(31,30,29,.22); }
         h2 { margin: 0 0 10px; font: 600 22px/1.25 Georgia, "Source Serif 4", serif; letter-spacing: -.01em; }
         p { margin: 0 0 20px; color: #3D3D3A; }
-        button { background: #D97757; color: #fff; border: 0; border-radius: 10px; padding: 10px 18px; font: 600 15px system-ui, "Segoe UI", sans-serif; cursor: pointer; }
-        button:hover { background: #C6613F; } button:focus-visible { outline: 3px solid #1F1E1D; outline-offset: 2px; }
+        button { background: #B4532F; color: #fff; border: 0; border-radius: 10px; padding: 10px 18px; font: 600 15px system-ui, "Segoe UI", sans-serif; cursor: pointer; }
+        button:hover { background: #9E4626; } button:focus-visible { outline: 3px solid #1F1E1D; outline-offset: 2px; }
         @keyframes f { from { opacity: 0 } to { opacity: 1 } }
         @media (prefers-reduced-motion: reduce) { .back { animation: none } }
         @media (prefers-color-scheme: dark) { .card { background: #262624; color: #F5F4EE; border-color: #3A3936 } p { color: #C9C7BE } }

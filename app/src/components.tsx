@@ -88,7 +88,21 @@ export function Notice({ kind = 'info', title, body, action, onAction }: { kind?
   );
 }
 
-export function Toast({ text, onDone }: { text: string; onDone: () => void }) {
-  useEffect(() => { const id = setTimeout(onDone, 2600); return () => clearTimeout(id); }, [onDone]);
-  return <div className="toast" role="status">{text}</div>;
+/** A short message at the bottom. Stays long enough to read (at least 6 s,
+ *  longer for long texts), never disappears while the pointer or keyboard
+ *  focus is on it, and can be closed. */
+export function Toast({ text, onDone, closeLabel }: { text: string; onDone: () => void; closeLabel: string }) {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (held) return;
+    const ms = Math.max(6000, 2000 + 70 * text.length);
+    const id = setTimeout(onDone, ms);
+    return () => clearTimeout(id);
+  }, [onDone, text, held]);
+  return (
+    <div className="toast" role="status" onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={() => setHeld(false)}>
+      <span>{text}</span>
+      <button className="toast-close" onClick={onDone} aria-label={closeLabel}>{closeLabel}</button>
+    </div>
+  );
 }

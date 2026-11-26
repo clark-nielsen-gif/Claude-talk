@@ -22,6 +22,48 @@ use state::{AppState, Inner};
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, WindowEvent};
 
+/// The first time the window is closed: say that Claude Talk keeps running.
+fn first_close_hint(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let da = {
+        let Ok(mut c) = st.config.lock() else { return };
+        if c.close_hint_shown {
+            return;
+        }
+        c.close_hint_shown = true;
+        c.language != "en"
+    };
+    st.save_config();
+    #[cfg(windows)]
+    std::thread::spawn(move || {
+        use windows::core::HSTRING;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            MessageBoxW, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND,
+        };
+        let (title, text) = if da {
+            (
+                "Claude Talk kører videre",
+                "Claude Talk kører videre nede ved uret, så Discord stadig kan høre dig og Claude.\n\nKlik på ikonet ved uret for at åbne vinduet igen. Vil du lukke helt, så højreklik på ikonet og vælg »Luk Claude Talk«.",
+            )
+        } else {
+            (
+                "Claude Talk keeps running",
+                "Claude Talk keeps running by the clock, so Discord can still hear you and Claude.\n\nClick the icon by the clock to open the window again. To quit, right-click the icon and choose “Quit Claude Talk”.",
+            )
+        };
+        unsafe {
+            MessageBoxW(
+                None,
+                &HSTRING::from(text),
+                &HSTRING::from(title),
+                MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND,
+            )
+        };
+    });
+    #[cfg(not(windows))]
+    let _ = da;
+}
+
 /// Creates the (hidden) main window from its configuration.
 pub fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     if let Some(cfg) = app
@@ -77,27 +119,28 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
     use windows::Win32::UI::WindowsAndMessaging::{
         MessageBoxW, IDCANCEL, IDYES, MB_ICONWARNING, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNOCANCEL,
     };
+    // one line per string: no source indentation inside the dialog text
     let (title, text) = if da {
         (
             "Luk Claude Talk",
-            "Du er i et opkald i Discord, og Discord bruger Claude Talk som mikrofon.
-
-             Hvis du lukker Claude Talk nu, kan de andre ikke høre dig, før Discord              starter igen.
-
-Ja: Luk, og genstart Discord (opkaldet afbrydes kort).
-             Nej: Luk uden at genstarte Discord.
-Annuller: Bliv i opkaldet med Claude Talk.",
+            concat!(
+                "Du er i et opkald i Discord, og Discord bruger Claude Talk som mikrofon.\n\n",
+                "Lukker du Claude Talk nu, kan de andre ikke høre dig, før Discord starter igen.\n\n",
+                "Ja: Luk, og genstart Discord. Du skal selv gå ind i opkaldet igen bagefter.\n\n",
+                "Nej: Luk uden at genstarte Discord. De andre kan ikke høre dig, før du selv genstarter Discord.\n\n",
+                "Annuller: Luk ikke. Bliv i opkaldet med Claude Talk.",
+            ),
         )
     } else {
         (
             "Quit Claude Talk",
-            "You're in a Discord call, and Discord uses Claude Talk as its microphone.
-
-             If you quit Claude Talk now, nobody can hear you until Discord restarts.
-
-             Yes: Quit and restart Discord (the call drops for a moment).
-             No: Quit without restarting Discord.
-Cancel: Stay in the call with Claude Talk.",
+            concat!(
+                "You're in a Discord call, and Discord uses Claude Talk as its microphone.\n\n",
+                "If you quit Claude Talk now, nobody can hear you until Discord starts again.\n\n",
+                "Yes: Quit and restart Discord. Join the call again yourself afterwards.\n\n",
+                "No: Quit without restarting Discord. Nobody can hear you until you restart Discord yourself.\n\n",
+                "Cancel: Don't quit. Stay in the call with Claude Talk.",
+            ),
         )
     };
     let r = unsafe {
@@ -270,6 +313,7 @@ fn main() {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     let _ = window.hide();
+                    first_close_hint(window.app_handle());
                 }
             }
         })

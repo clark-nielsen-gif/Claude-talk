@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { api } from '../api';
-import { useT } from '../context';
+import { useApp, useT } from '../context';
 
 /** A neutral sketch of a voice-settings panel with the right choice marked.
  *  Deliberately generic: no third-party logos or screenshots. */
@@ -25,20 +25,32 @@ function Sketch({ label }: { label: string }) {
 
 export function DiscordGuide({ mode, onClose }: { mode: 'mic' | 'restart'; onClose: () => void }) {
   const t = useT();
+  const { toast } = useApp();
   const first = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // focus moves into the dialog, stays there, and goes back when it closes
+    const opener = document.activeElement as HTMLElement | null;
     first.current?.focus();
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
+    const keys = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Tab' || !dialog.current) return;
+      const items = Array.from(dialog.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea'));
+      if (items.length === 0) return;
+      const [a, b] = [items[0], items[items.length - 1]];
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); b.focus(); }
+      else if (!e.shiftKey && document.activeElement === b) { e.preventDefault(); a.focus(); }
+    };
+    window.addEventListener('keydown', keys);
+    return () => { window.removeEventListener('keydown', keys); opener?.focus?.(); };
   }, [onClose]);
   return (
     <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+      <div ref={dialog} className="dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title">
         {mode === 'mic' ? (
           <>
             <h2 id="guide-title">{t.guide.discordTitle}</h2>
-            <Sketch label="Inputenhed" />
+            <Sketch label={t.guide.sketchLabel} />
             <ol>{t.guide.discordSteps.map((s) => <li key={s}>{s}</li>)}</ol>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>
@@ -51,7 +63,7 @@ export function DiscordGuide({ mode, onClose }: { mode: 'mic' | 'restart'; onClo
             <p className="muted">{t.guide.restartDiscordBody}</p>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>
-              <button ref={first} className="btn primary" onClick={async () => { await api.restartDiscord(); onClose(); }}>{t.guide.restartDiscord}</button>
+              <button ref={first} className="btn primary" onClick={() => api.restartDiscord().then(onClose, () => { onClose(); toast(t.errors.discordRestart); })}>{t.guide.restartDiscord}</button>
             </div>
           </>
         )}
