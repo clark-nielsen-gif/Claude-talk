@@ -106,14 +106,14 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{micUnplugged ? fill(t.settings.micUnpluggedHint, { name: status?.micName ?? '' }) : config.routeDiscord ? t.settings.microphoneHint : status?.discordUsesCable === 'yes' ? t.settings.microphoneHintClaudeOnly : t.settings.microphoneHintRestored}</span></div>
+          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{micUnplugged ? fill(t.settings.micUnpluggedHint, { name: status?.micName ?? '' }) : config.routeDiscord ? t.settings.microphoneHint : !status?.discordRunning ? t.settings.microphoneHintNoDiscord : status.discordUsesCable === 'yes' ? t.settings.microphoneHintClaudeOnly : t.settings.microphoneHintRestored}</span></div>
           <MicPicker />
         </div>
       </div>
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.startup}</span><span className="small">{config.routeDiscord ? t.settings.startupHint : t.settings.startupHintRestored}</span></div>
+          <div className="text"><span className="label">{t.settings.startup}</span><span className="small">{config.routeDiscord || status?.discordCableChosen ? t.settings.startupHint : t.settings.startupHintRestored}</span></div>
           <Switch on={config.autostart} label={t.settings.startup} onChange={(v) => update({ autostart: v })} />
         </div>
         <div className="row">
@@ -135,8 +135,8 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.restore}</span><span className="small">{t.settings.restoreHint}</span></div>
-          <div className="confirm" aria-live="polite">
+          <div className="text"><span className="label">{t.settings.restore}</span><span className="small">{config.routeDiscord ? t.settings.restoreHint : t.settings.restoredHint}</span></div>
+          {config.routeDiscord && <div className="confirm" aria-live="polite">
             {confirmRestore && <span className="small">{t.settings.restoreAsk}</span>}
             {confirmRestore && <button className="btn quiet" onClick={() => setConfirmRestore(false)}>{t.settings.restoreNo}</button>}
             <button className={confirmRestore ? 'btn primary' : 'btn secondary'} onClick={async () => {
@@ -144,7 +144,7 @@ export function Settings() {
               setConfirmRestore(false);
               try { await api.restoreAudioSettings(); toast(t.settings.restored); } catch { toast(t.errors.generic); }
             }}>{confirmRestore ? t.settings.restoreSure : t.settings.restore}</button>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

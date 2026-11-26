@@ -464,6 +464,11 @@ impl SourceFanout {
     /// The device or program behind this source is (re)starting.
     pub fn mark_restart(&self) {
         self.stats.restarts.fetch_add(1, Ordering::Relaxed);
+        // a capture thread that died mid-push left the sequence odd: even
+        // again, or readers would only get through during pushes
+        if self.stats.push_seq.load(Ordering::Acquire) % 2 == 1 {
+            self.stats.push_seq.fetch_add(1, Ordering::Release);
+        }
     }
 
     pub fn source(&self) -> SourceId {

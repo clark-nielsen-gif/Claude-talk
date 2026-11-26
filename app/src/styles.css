@@ -288,7 +288,7 @@ select.field {
 .scrim { position: fixed; inset: 0; background: rgba(31, 30, 29, 0.38); display: grid; place-items: center; z-index: 20; animation: fade var(--t) var(--ease); }
 .dialog { max-height: calc(100% - 2rem); overflow-y: auto; background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--radius-l); box-shadow: 0 24px 60px rgba(31, 30, 29, 0.25); width: min(36rem, calc(100% - 3rem)); padding: 1.75rem; display: flex; flex-direction: column; gap: 1.125rem; }
 .dialog ol { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; color: var(--ink-2); }
-.dialog .buttons { display: flex; justify-content: flex-end; gap: 0.75rem; }
+.dialog .buttons { display: flex; justify-content: flex-end; gap: 0.75rem; position: sticky; bottom: -1.75rem; background: var(--card); padding: 0.75rem 0 1.75rem; margin: -0.75rem 0 -1.75rem; }
 .illustration { border-radius: var(--radius-m); display: block; width: 100%; max-width: 16rem; height: auto; flex: none; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 

@@ -110,6 +110,11 @@ pub fn set_config(
         if let Some(v) = patch.claude_in_discord {
             c.claude_in_discord = v;
             if v {
+                // a mute set after "Gendan" only kept the microphone from
+                // Claude; switched on, it would silence you in Discord too
+                if !c.route_discord {
+                    c.mic_muted = false;
+                }
                 c.route_discord = true; // switching Claude on re-enables Discord routing
             }
         }
@@ -384,6 +389,7 @@ pub fn restore_audio_settings(app: AppHandle, state: State<AppState>) -> Config 
         c.clone()
     };
     state.save_config();
+    crate::discord::note_gendan();
     crate::discord::restore();
     crate::audio::apply_switches(&app);
     crate::tray::refresh(&app);
@@ -402,6 +408,7 @@ pub async fn install_cable() -> Result<u32, String> {
             .await
             .map_err(|_| "error.internal".to_string())??;
         log::info!("install Discord's microphone from the app: {r:?}");
+        ct_engine::win::policy::set_cable_is_ours(crate::installer::cable_is_ours());
         r.ok_or_else(|| "cancelled".to_string())
     }
     #[cfg(not(windows))]

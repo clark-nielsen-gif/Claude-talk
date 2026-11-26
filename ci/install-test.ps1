@@ -16,7 +16,10 @@ function Endpoints {
     # separate process: the COM type in List-Endpoints must not clash
     # Right after a driver is removed, listing can fail for a moment
     # (0xE000020B): try again, and never treat a failed listing as "none".
-    for ($i = 0; $i -lt 6; $i++) {
+    # (on a runner it has taken over 12 s; after 10 s of failures the audio
+    # service is restarted once, as Windows itself does after a driver change)
+    for ($i = 0; $i -lt 20; $i++) {
+        if ($i -eq 5) { Restart-Service Audiosrv -Force -ErrorAction SilentlyContinue }
         $f = Join-Path $env:RUNNER_TEMP ("ep-" + [guid]::NewGuid() + ".json")
         powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/driver-proof/List-Endpoints.ps1" -OutFile $f | Out-Null
         # (the listing writes its file only when it worked)

@@ -120,6 +120,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 if let Ok(mut c) = state.config.lock() {
                     c.claude_in_discord = !c.claude_in_discord;
                     if c.claude_in_discord {
+                        if !c.route_discord {
+                            c.mic_muted = false; // (see set_config)
+                        }
                         c.route_discord = true; // as in the main window
                     }
                 }

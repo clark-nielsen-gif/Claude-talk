@@ -86,7 +86,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   else if (s.discordUsesCable === 'yes') {
     discordCheck = micBroken
       ? { state: 'warn', text: t.main.discordCantHearYou }
-      : config.micMuted
+      : config.micMuted && config.routeDiscord
       ? { state: 'wait', text: t.main.discordMicMuted }
       : !on
       ? { state: 'wait', text: t.main.discordHearsOnlyYou }

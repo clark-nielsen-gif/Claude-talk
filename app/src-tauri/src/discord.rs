@@ -14,306 +14,321 @@ pub const NO: u8 = 2;
 
 #[cfg(windows)]
 pub fn spawn_watcher(app: AppHandle) {
-    use ct_engine::win::host::discord_executables;
-    use ct_engine::win::{devices, policy, sessions, ComGuard};
     std::thread::Builder::new()
         .name("discord-watch".into())
         .spawn(move || {
-            let _com = ComGuard::new();
-            let exes = discord_executables();
-            let state = app.state::<AppState>().inner().clone();
-            let mut routed_since: Option<Instant> = None;
-            // Discord's processes when the routing took hold, and whether
-            // Discord has restarted since: if it still records another mic
-            // after a restart, its input is set to a specific device and a
-            // further restart would not help (the guide is shown instead).
-            let mut routed_pids: Vec<u32> = Vec::new();
-            let mut restarted_since_route = false;
-            let mut last_logged = (u8::MAX, false);
-            let mut guard_out = DefaultGuard::default();
-            let mut guard_in = DefaultGuard::default();
-            let mut tick = 0u32;
-            while !state.shutting_down.load(Ordering::Relaxed) {
-                if !tick.is_multiple_of(4) {
-                    tick += 1;
-                    let cable = policy::cable_capture_id();
-                    let mic = sessions::discord_mic(&exes, cable.as_deref());
-                    let recording = mic != sessions::DiscordMic::Unknown;
-                    if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
-                        crate::audio::refresh_mic(&app);
-                    }
-                    std::thread::sleep(Duration::from_millis(500));
-                    continue;
+            // a panic here would silently stop the routing and both guards:
+            // log it and start the loop again
+            loop {
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| watch(&app)));
+                if r.is_ok() {
+                    break;
                 }
-                tick += 1;
-                guard_default_output(&state, &mut guard_out);
-                guard_default_input(&state, &mut guard_in);
-                let enabled = state.config.lock().map(|c| c.route_discord).unwrap_or(true);
-                let mut pids = policy::pids_of(&exes);
-                pids.sort_unstable();
-                let running = !pids.is_empty();
-                // Not routing (after "Gendan"): Discord keeps the user's
-                // microphone – also after it was closed when "Gendan" was
-                // pressed, or updated itself (a new version has no setting)
-                if !enabled && running && tick % 5 == 1 {
-                    let on_cable = policy::discord_routed_to_cable(&exes) == Some(true);
-                    let now = policy::discord_input_now(&exes).unwrap_or_default();
-                    let last_ours =
-                        policy::last_given_back().is_some_and(|l| l.eq_ignore_ascii_case(&now));
-                    let roots = discord_roots(&exes);
-                    let as_wanted = policy::discord_input_as_wanted(&exes);
-                    // an empty value: a new Discord (updated, restarted) has
-                    // none yet – filled until it takes, once per Discord start;
-                    // a user who clears it after that is not overridden
-                    let fresh_empty =
-                        now.is_empty() && !filled_for(&roots) && as_wanted == Some(false);
-                    // the value Claude Talk wrote last, no longer the one to
-                    // give (the user chose another microphone in Claude Talk
-                    // meanwhile); an older one the user picked again in
-                    // Windows is theirs
-                    let stale_ours =
-                        as_wanted == Some(false) && (last_ours || policy::is_forgotten(&now));
-                    if on_cable || fresh_empty || stale_ours {
-                        let n = restore();
-                        log::info!("Discord's own microphone given back now that it runs ({n})");
-                    } else if !now.is_empty()
-                        && !last_ours
-                        && !policy::is_forgotten(&now)
-                        && policy::discord_own_input().as_deref() != Some(&now)
-                        && is_a_real_microphone(&now)
-                    {
-                        // the user picked Discord's input in Windows: theirs
-                        log::info!(
-                            "Discord's input was changed in Windows; kept as the user's own"
-                        );
-                        policy::set_discord_own_input(Some(now.clone()));
-                        if let Ok(mut c) = state.config.lock() {
-                            c.discord_own_input = Some(now);
-                        }
-                        state.save_config();
-                    }
-                }
-                if enabled && running {
-                    match policy::discord_routed_to_cable(&exes) {
-                        // (not while Claude Talk quits: shutdown has just
-                        // given Discord its own microphone back)
-                        Some(false)
-                            if !state.shutting_down.load(Ordering::Relaxed)
-                                && !GAVE_UP.load(Ordering::Relaxed) =>
-                        {
-                            match policy::route_discord_to_cable(&exes) {
-                                // Claude Talk began quitting meanwhile: undo
-                                Ok(n) if n > 0 && state.shutting_down.load(Ordering::Relaxed) => {
-                                    restore();
-                                }
-                                Ok(n) if n > 0 => {
-                                    log::info!(
-                                        "Discord's microphone set to Claude Talk ({n} processes)"
-                                    );
-                                    // keep the user's own per-app choice to give back
-                                    let own = policy::discord_own_input();
-                                    let changed = state
-                                        .config
-                                        .lock()
-                                        .map(|mut c| {
-                                            let changed = c.discord_own_input != own;
-                                            c.discord_own_input = own.clone();
-                                            changed
-                                        })
-                                        .unwrap_or(false);
-                                    if changed {
-                                        state.save_config();
-                                    }
-                                    // the microphone set for Discord in Windows
-                                    // is the user's voice too (D28)
-                                    if let Some(id) = own.as_deref().and_then(endpoint_of) {
-                                        adopt_discords_microphone(&app, &state, &id);
-                                    }
-                                    routed_since = Some(Instant::now());
-                                    routed_pids = discord_roots(&exes);
-                                    restarted_since_route = false;
-                                }
-                                Ok(_) => {}
-                                Err(e) => log::warn!("could not set Discord's microphone: {e}"),
-                            }
-                        }
-                        Some(true) => {
-                            routed_since.get_or_insert_with(Instant::now);
-                            // Discord's main process: helper processes come
-                            // and go without Discord restarting
-                            let roots = discord_roots(&exes);
-                            if routed_pids.is_empty() {
-                                routed_pids = roots;
-                            } else if routed_pids != roots {
-                                routed_pids = roots;
-                                restarted_since_route = true;
-                                routed_since = Some(Instant::now());
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                if !running {
-                    routed_since = None;
-                }
-                if !enabled {
-                    routed_pids.clear();
-                    restarted_since_route = false;
-                }
-                let cable = policy::cable_capture_id();
-                state
-                    .cable_capture_ok
-                    .store(cable.is_some(), Ordering::Relaxed);
-                let mic = sessions::discord_mic(&exes, cable.as_deref());
-                let uses = match &mic {
-                    sessions::DiscordMic::Cable => YES,
-                    sessions::DiscordMic::Other(_) => NO,
-                    sessions::DiscordMic::Unknown => UNKNOWN,
-                };
-                if uses == YES {
-                    // it worked: a later problem may need a restart again
-                    restarted_since_route = false;
-                }
-                // Not routing, Windows' value for Discord is not the cable,
-                // yet Discord records it: Discord itself is set to "Claude
-                // Talk – til Discord" (or still runs from before, K12). Once
-                // Claude Talk is gone, nobody would hear the user.
-                let on_cable_anyway = !enabled
-                    && uses == YES
-                    && policy::discord_routed_to_cable(&exes) == Some(false);
-                // the same Discord as when its microphone was given back: it
-                // still records what it opened before (K12) – a restart
-                // fixes that; a Discord started since then chose the cable
-                let same_discord = {
-                    let r = RESTORED_FOR.lock().unwrap_or_else(|p| p.into_inner());
-                    !r.is_empty() && *r == discord_roots(&exes)
-                };
-                state
-                    .discord_cable_chosen
-                    .store(on_cable_anyway && !same_discord, Ordering::Relaxed);
-                state
-                    .discord_still_on_cable
-                    .store(on_cable_anyway && same_discord, Ordering::Relaxed);
-                if let sessions::DiscordMic::Other(endpoint) = &mic {
-                    if enabled {
-                        adopt_discords_microphone(&app, &state, endpoint);
-                    }
-                }
-                state.discord_uses_cable.store(uses, Ordering::Relaxed);
-                state
-                    .discord_recording
-                    .store(mic != sessions::DiscordMic::Unknown, Ordering::Relaxed);
-                crate::audio::refresh_mic(&app);
-                follow_default_microphone(&state);
-                // Windows says "cable" but Discord still records elsewhere for
-                // a while: Discord picked a specific device or needs a restart.
-                // If its device setting is "Default" (it records Windows'
-                // default microphone), a restart fixes it. A microphone picked
-                // in Discord itself stays after a restart: show the guide.
-                let on_default = match &mic {
-                    sessions::DiscordMic::Other(endpoint) => {
-                        let e = endpoint.to_lowercase();
-                        devices::default_ids(devices::Flow::Capture)
-                            .iter()
-                            .flatten()
-                            .any(|d| d.to_lowercase() == e)
-                            || policy::discord_own_input()
-                                .is_some_and(|own| own.to_lowercase().contains(&e))
-                            // what Claude Talk gave Discord itself (D28)
-                            || policy::discord_given_back()
-                                .iter()
-                                .any(|g| g.to_lowercase().contains(&e))
-                    }
-                    _ => false,
-                };
-                let restart = uses == NO
-                    && on_default
-                    && routed_since.is_some_and(|t| t.elapsed() > Duration::from_secs(6))
-                    && enabled
-                    && !restarted_since_route;
-                state
-                    .discord_needs_restart
-                    .store(restart, Ordering::Relaxed);
-                // Discord plays on its own device (chosen in Discord), the
-                // Claude window on Windows' default: the user would hear
-                // Claude somewhere else, or not at all (a muted monitor)
-                let default_out =
-                    devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
-                        .ok()
-                        .map(|(_, e)| e);
-                let discord_out = sessions::sessions(devices::Flow::Render)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .find(|s| {
-                        s.active
-                            && exes.iter().any(|x| x.eq_ignore_ascii_case(&s.exe))
-                            && !ct_engine::win::host::is_own_device(&s.endpoint_name)
-                    });
-                let mismatch = match (&discord_out, &default_out) {
-                    (Some(d), Some(def)) if !d.endpoint_id.eq_ignore_ascii_case(&def.id) => Some((
-                        d.endpoint_id.clone(),
-                        d.endpoint_name.clone(),
-                        def.name.clone(),
-                    )),
-                    _ => None,
-                };
-                if let Ok(mut m) = state.output_mismatch.lock() {
-                    *m = mismatch;
-                }
-                let speakers =
-                    devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
-                        .map(|(_, e)| {
-                            e.form_factor.is_open_air()
-                                && !ct_engine::win::host::is_own_device(&e.name)
-                        })
-                        .unwrap_or(false);
-                // speakers added as an output in Advanced: Discord or Claude
-                // played there reaches the microphone just the same
-                let added: Vec<String> = state
-                    .config
-                    .lock()
-                    .map(|c| {
-                        c.mixer
-                            .outputs
-                            .iter()
-                            .map(|o| o.device_id.clone())
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let added_speakers = !added.is_empty()
-                    && devices::list(devices::Flow::Render)
-                        .map(|l| {
-                            l.iter()
-                                .any(|e| added.contains(&e.id) && e.form_factor.is_open_air())
-                        })
-                        .unwrap_or(false);
-                if state.added_speakers.swap(added_speakers, Ordering::Relaxed) != added_speakers {
-                    log::info!("speakers among the added outputs: {added_speakers}");
-                    crate::audio::apply_switches(&app);
-                }
-                if state.speakers.swap(speakers, Ordering::Relaxed) != speakers {
-                    log::info!(
-                        "default output is now {}",
-                        if speakers {
-                            "speakers"
-                        } else {
-                            "headphones/headset"
-                        }
-                    );
-                    crate::audio::apply_switches(&app);
-                }
-                if (uses, restart) != last_logged {
-                    log::info!(
-                        "Discord microphone: {:?}{}",
-                        mic,
-                        if restart { " (restart suggested)" } else { "" }
-                    );
-                    last_logged = (uses, restart);
-                }
-                std::thread::sleep(Duration::from_millis(500));
+                log::error!("the Discord watcher stopped after a panic; starting it again");
+                std::thread::sleep(Duration::from_secs(2));
             }
         })
         .expect("spawn discord watcher");
+}
+
+#[cfg(windows)]
+fn watch(app: &AppHandle) {
+    use ct_engine::win::host::discord_executables;
+    use ct_engine::win::{devices, policy, sessions, ComGuard};
+    let _com = ComGuard::new();
+    let exes = discord_executables();
+    let state = app.state::<AppState>().inner().clone();
+    let mut routed_since: Option<Instant> = None;
+    // Discord's processes when the routing took hold, and whether
+    // Discord has restarted since: if it still records another mic
+    // after a restart, its input is set to a specific device and a
+    // further restart would not help (the guide is shown instead).
+    let mut routed_pids: Vec<u32> = Vec::new();
+    let mut restarted_since_route = false;
+    let mut last_logged = (u8::MAX, false);
+    let mut guard_out = DefaultGuard::load(devices::Flow::Render);
+    let mut guard_in = DefaultGuard::load(devices::Flow::Capture);
+    let mut tick = 0u32;
+    while !state.shutting_down.load(Ordering::Relaxed) {
+        if !tick.is_multiple_of(4) {
+            tick += 1;
+            let cable = policy::cable_capture_id();
+            let mic = sessions::discord_mic(&exes, cable.as_deref());
+            let recording = mic != sessions::DiscordMic::Unknown;
+            if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
+                crate::audio::refresh_mic(app);
+            }
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        }
+        tick += 1;
+        guard_default_output(&state, &mut guard_out);
+        guard_default_input(&state, &mut guard_in);
+        let enabled = state.config.lock().map(|c| c.route_discord).unwrap_or(true);
+        let mut pids = policy::pids_of(&exes);
+        pids.sort_unstable();
+        let running = !pids.is_empty();
+        // Not routing (after "Gendan"): Discord keeps the user's
+        // microphone – also after it was closed when "Gendan" was
+        // pressed, or updated itself (a new version has no setting)
+        if !enabled && running && tick % 5 == 1 {
+            let on_cable = policy::discord_routed_to_cable(&exes) == Some(true);
+            let now = policy::discord_input_now(&exes).unwrap_or_default();
+            let last_ours = policy::last_given_back().is_some_and(|l| l.eq_ignore_ascii_case(&now));
+            let roots = discord_roots(&exes);
+            let as_wanted = policy::discord_input_as_wanted(&exes);
+            // an empty value: a new Discord (updated, restarted) has
+            // none yet – filled until it takes, once per Discord start;
+            // a user who clears it after that is not overridden
+            let fresh_empty = now.is_empty() && !filled_for(&roots) && as_wanted == Some(false);
+            // the value Claude Talk wrote last, no longer the one to
+            // give (the user chose another microphone in Claude Talk
+            // meanwhile); an older one the user picked again in
+            // Windows is theirs
+            let stale_ours = as_wanted == Some(false) && (last_ours || policy::is_forgotten(&now));
+            if on_cable || fresh_empty || stale_ours {
+                let n = restore();
+                log::info!("Discord's own microphone given back now that it runs ({n})");
+            } else if !now.is_empty()
+                && !last_ours
+                && !policy::is_forgotten(&now)
+                && policy::discord_own_input().as_deref() != Some(&now)
+                && is_a_real_microphone(&now)
+            {
+                // the user picked Discord's input in Windows: theirs
+                log::info!("Discord's input was changed in Windows; kept as the user's own");
+                policy::set_discord_own_input(Some(now.clone()));
+                if let Ok(mut c) = state.config.lock() {
+                    c.discord_own_input = Some(now);
+                }
+                state.save_config();
+            }
+        }
+        if enabled && running {
+            match policy::discord_routed_to_cable(&exes) {
+                // (not while Claude Talk quits: shutdown has just
+                // given Discord its own microphone back)
+                Some(false)
+                    if !state.shutting_down.load(Ordering::Relaxed)
+                        && !GAVE_UP.load(Ordering::Relaxed) =>
+                {
+                    match policy::route_discord_to_cable(&exes) {
+                        // Claude Talk began quitting, gave up after a
+                        // panic or was set back with "Gendan"
+                        // meanwhile: undo
+                        Ok(n)
+                            if n > 0
+                                && (state.shutting_down.load(Ordering::Relaxed)
+                                    || GAVE_UP.load(Ordering::Relaxed)
+                                    || !state
+                                        .config
+                                        .lock()
+                                        .map(|c| c.route_discord)
+                                        .unwrap_or(true)) =>
+                        {
+                            restore();
+                        }
+                        Ok(n) if n > 0 => {
+                            log::info!("Discord's microphone set to Claude Talk ({n} processes)");
+                            // keep the user's own per-app choice to give back
+                            let own = policy::discord_own_input();
+                            let changed = state
+                                .config
+                                .lock()
+                                .map(|mut c| {
+                                    let changed = c.discord_own_input != own;
+                                    c.discord_own_input = own.clone();
+                                    changed
+                                })
+                                .unwrap_or(false);
+                            if changed {
+                                state.save_config();
+                            }
+                            // the microphone set for Discord in Windows
+                            // is the user's voice too (D28)
+                            if let Some(id) = own.as_deref().and_then(endpoint_of) {
+                                adopt_discords_microphone(app, &state, &id);
+                            }
+                            routed_since = Some(Instant::now());
+                            routed_pids = discord_roots(&exes);
+                            restarted_since_route = false;
+                        }
+                        Ok(_) => {}
+                        Err(e) => log::warn!("could not set Discord's microphone: {e}"),
+                    }
+                }
+                Some(true) => {
+                    routed_since.get_or_insert_with(Instant::now);
+                    // Discord's main process: helper processes come
+                    // and go without Discord restarting
+                    let roots = discord_roots(&exes);
+                    if routed_pids.is_empty() {
+                        routed_pids = roots;
+                    } else if routed_pids != roots {
+                        routed_pids = roots;
+                        restarted_since_route = true;
+                        routed_since = Some(Instant::now());
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !running {
+            routed_since = None;
+        }
+        if !enabled {
+            routed_pids.clear();
+            restarted_since_route = false;
+        }
+        let cable = policy::cable_capture_id();
+        state
+            .cable_capture_ok
+            .store(cable.is_some(), Ordering::Relaxed);
+        let mic = sessions::discord_mic(&exes, cable.as_deref());
+        let uses = match &mic {
+            sessions::DiscordMic::Cable => YES,
+            sessions::DiscordMic::Other(_) => NO,
+            sessions::DiscordMic::Unknown => UNKNOWN,
+        };
+        if uses == YES {
+            // it worked: a later problem may need a restart again
+            restarted_since_route = false;
+        }
+        // Not routing, Windows' value for Discord is not the cable,
+        // yet Discord records it: Discord itself is set to "Claude
+        // Talk – til Discord" (or still runs from before, K12). Once
+        // Claude Talk is gone, nobody would hear the user.
+        let on_cable_anyway =
+            !enabled && uses == YES && policy::discord_routed_to_cable(&exes) == Some(false);
+        // the same Discord as when its microphone was given back: it
+        // still records what it opened before (K12) – a restart
+        // fixes that; a Discord started since then chose the cable
+        let same_discord = {
+            let r = RESTORED_FOR.lock().unwrap_or_else(|p| p.into_inner());
+            !r.is_empty() && *r == discord_roots(&exes)
+        };
+        state
+            .discord_cable_chosen
+            .store(on_cable_anyway && !same_discord, Ordering::Relaxed);
+        state
+            .discord_still_on_cable
+            .store(on_cable_anyway && same_discord, Ordering::Relaxed);
+        if let sessions::DiscordMic::Other(endpoint) = &mic {
+            if enabled {
+                adopt_discords_microphone(app, &state, endpoint);
+            }
+        }
+        state.discord_uses_cable.store(uses, Ordering::Relaxed);
+        state
+            .discord_recording
+            .store(mic != sessions::DiscordMic::Unknown, Ordering::Relaxed);
+        crate::audio::refresh_mic(app);
+        follow_default_microphone(&state);
+        // Windows says "cable" but Discord still records elsewhere for
+        // a while: Discord picked a specific device or needs a restart.
+        // If its device setting is "Default" (it records Windows'
+        // default microphone), a restart fixes it. A microphone picked
+        // in Discord itself stays after a restart: show the guide.
+        let on_default = match &mic {
+            sessions::DiscordMic::Other(endpoint) => {
+                let e = endpoint.to_lowercase();
+                devices::default_ids(devices::Flow::Capture)
+                    .iter()
+                    .flatten()
+                    .any(|d| d.to_lowercase() == e)
+                    || policy::discord_own_input()
+                        .is_some_and(|own| own.to_lowercase().contains(&e))
+                    // what Claude Talk gave Discord itself (D28)
+                    || policy::discord_given_back()
+                        .iter()
+                        .any(|g| g.to_lowercase().contains(&e))
+            }
+            _ => false,
+        };
+        let restart = uses == NO
+            && on_default
+            && routed_since.is_some_and(|t| t.elapsed() > Duration::from_secs(6))
+            && enabled
+            && !restarted_since_route;
+        state
+            .discord_needs_restart
+            .store(restart, Ordering::Relaxed);
+        // Discord plays on its own device (chosen in Discord), the
+        // Claude window on Windows' default: the user would hear
+        // Claude somewhere else, or not at all (a muted monitor)
+        let default_out =
+            devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
+                .ok()
+                .map(|(_, e)| e);
+        let discord_out = sessions::sessions(devices::Flow::Render)
+            .unwrap_or_default()
+            .into_iter()
+            .find(|s| {
+                s.active
+                    && exes.iter().any(|x| x.eq_ignore_ascii_case(&s.exe))
+                    && !ct_engine::win::host::is_own_device(&s.endpoint_name)
+            });
+        let mismatch = match (&discord_out, &default_out) {
+            (Some(d), Some(def)) if !d.endpoint_id.eq_ignore_ascii_case(&def.id) => Some((
+                d.endpoint_id.clone(),
+                d.endpoint_name.clone(),
+                def.name.clone(),
+            )),
+            _ => None,
+        };
+        if let Ok(mut m) = state.output_mismatch.lock() {
+            *m = mismatch;
+        }
+        let speakers = devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
+            .map(|(_, e)| {
+                e.form_factor.is_open_air() && !ct_engine::win::host::is_own_device(&e.name)
+            })
+            .unwrap_or(false);
+        // speakers added as an output in Advanced: Discord or Claude
+        // played there reaches the microphone just the same
+        let added: Vec<String> = state
+            .config
+            .lock()
+            .map(|c| {
+                c.mixer
+                    .outputs
+                    .iter()
+                    .map(|o| o.device_id.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let added_speakers = !added.is_empty()
+            && devices::list(devices::Flow::Render)
+                .map(|l| {
+                    l.iter()
+                        .any(|e| added.contains(&e.id) && e.form_factor.is_open_air())
+                })
+                .unwrap_or(false);
+        if state.added_speakers.swap(added_speakers, Ordering::Relaxed) != added_speakers {
+            log::info!("speakers among the added outputs: {added_speakers}");
+            crate::audio::apply_switches(app);
+        }
+        if state.speakers.swap(speakers, Ordering::Relaxed) != speakers {
+            log::info!(
+                "default output is now {}",
+                if speakers {
+                    "speakers"
+                } else {
+                    "headphones/headset"
+                }
+            );
+            crate::audio::apply_switches(app);
+        }
+        if (uses, restart) != last_logged {
+            log::info!(
+                "Discord microphone: {:?}{}",
+                mic,
+                if restart { " (restart suggested)" } else { "" }
+            );
+            last_logged = (uses, restart);
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
 }
 
 /// Windows must never play into our cable (or, in Chrome/app mode, into the
@@ -337,13 +352,101 @@ fn guard_default_input(state: &crate::state::Inner, guard: &mut DefaultGuard) {
 }
 
 /// Per role: the user's last real default device, and – after Claude Talk
-/// had to pick another one because that device was gone – the device it
-/// picked and the one to go back to when it returns.
+/// had to pick another one because the cable had become the default – the
+/// device it picked (the stand-in) and what to go back to: the user's device
+/// when it returns, or, if Claude Talk never knew it (the cable was already
+/// the default at start), a device that appears later. Kept in a file, so a
+/// restart in between (overnight, an update) doesn't make the stand-in stick.
 #[cfg(windows)]
 #[derive(Default)]
 pub struct DefaultGuard {
     last_good: [Option<String>; 3],
-    stand_in: [Option<(String, String)>; 3],
+    stand_in: [Option<StandIn>; 3],
+}
+
+#[cfg(windows)]
+#[derive(Clone, PartialEq)]
+struct StandIn {
+    id: String,
+    wanted: Option<String>,
+    /// devices there when the stand-in was picked
+    present_then: Vec<String>,
+}
+
+#[cfg(windows)]
+fn stand_in_file() -> std::path::PathBuf {
+    crate::paths::app_dir().join("default-stand-ins.txt")
+}
+
+#[cfg(windows)]
+fn flow_tag(flow: ct_engine::win::devices::Flow) -> &'static str {
+    if flow == ct_engine::win::devices::Flow::Render {
+        "render"
+    } else {
+        "capture"
+    }
+}
+
+#[cfg(windows)]
+impl DefaultGuard {
+    fn load(flow: ct_engine::win::devices::Flow) -> Self {
+        let mut g = Self::default();
+        let text = std::fs::read_to_string(stand_in_file()).unwrap_or_default();
+        for line in text.lines() {
+            let f: Vec<&str> = line.trim().split('\t').collect();
+            if f.len() != 5 || f[0] != flow_tag(flow) {
+                continue;
+            }
+            let Ok(role) = f[1].parse::<usize>() else {
+                continue;
+            };
+            if role > 2 || f[2].is_empty() {
+                continue;
+            }
+            g.stand_in[role] = Some(StandIn {
+                id: f[2].to_string(),
+                wanted: (!f[3].is_empty()).then(|| f[3].to_string()),
+                present_then: f[4]
+                    .split(',')
+                    .filter(|x| !x.is_empty())
+                    .map(String::from)
+                    .collect(),
+            });
+        }
+        g
+    }
+
+    /// Rewrites this flow's lines, keeping the other flow's.
+    fn save(&self, flow: ct_engine::win::devices::Flow) {
+        if NO_FILES.load(Ordering::Relaxed) {
+            return;
+        }
+        static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _one = WRITING.lock().unwrap_or_else(|p| p.into_inner());
+        let file = stand_in_file();
+        let tag = flow_tag(flow);
+        let mut lines: Vec<String> = std::fs::read_to_string(&file)
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with(&format!("{tag}\t")))
+            .map(String::from)
+            .collect();
+        for (role, si) in self.stand_in.iter().enumerate() {
+            if let Some(si) = si {
+                lines.push(format!(
+                    "{tag}\t{role}\t{}\t{}\t{}",
+                    si.id,
+                    si.wanted.clone().unwrap_or_default(),
+                    si.present_then.join(",")
+                ));
+            }
+        }
+        let _ = std::fs::create_dir_all(crate::paths::app_dir());
+        let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
+        if std::fs::write(&tmp, lines.join("\n")).is_ok() {
+            let _ = std::fs::rename(&tmp, &file);
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -359,8 +462,8 @@ fn guard_default(
         .map(|c| (c.external_claude.is_some(), c.route_discord))
         .unwrap_or((false, true));
     // A VB-CABLE the user had before Claude Talk is theirs to use as a
-    // default device (a common streaming setup); only while Discord records
-    // it does the output matter (everything played would go to the call).
+    // default device (a common streaming setup); only while Claude Talk
+    // sends Discord through it does the output matter (D31).
     if !policy::cable_is_ours() && !(flow == devices::Flow::Render && routing) {
         return;
     }
@@ -379,11 +482,18 @@ fn guard_default(
                 .any(|e| e.id == id && host::is_own_device(&e.name))
     };
     let present = |id: &str| devs.iter().any(|e| e.id == id);
-    let virtual_name = |n: &str| {
-        let n = n.to_lowercase();
-        ["virtual", "cable", "voicemeeter"]
-            .iter()
-            .any(|p| n.contains(p))
+    // a device that can stand in: no virtual device, and for recording no
+    // loopback input ("Stereo Mix" would send the computer's sound)
+    let fit = |e: &devices::Endpoint| {
+        let n = e.name.to_lowercase();
+        !bad(&e.id)
+            && !["virtual", "cable", "voicemeeter"]
+                .iter()
+                .any(|p| n.contains(p))
+            && (flow == devices::Flow::Render
+                || !devices::NOT_A_MICROPHONE
+                    .iter()
+                    .any(|p| n.contains(&p.to_lowercase())))
     };
     let set = |id: &str, role: usize| match policy::set_default_endpoint_role(id, role) {
         Ok(()) => {
@@ -396,16 +506,27 @@ fn guard_default(
         }
     };
     let ids = devices::default_ids(flow);
+    let before = guard.stand_in.clone();
     for (role, id) in ids.iter().enumerate() {
         let Some(id) = id else { continue };
         if !bad(id) {
             match guard.stand_in[role].clone() {
                 // still the stand-in Claude Talk picked: back to the user's
-                // device as soon as it is there again
-                Some((stand_in, wanted)) if *id == stand_in => {
-                    if present(&wanted) && !bad(&wanted) && set(&wanted, role) {
-                        guard.stand_in[role] = None;
-                        guard.last_good[role] = Some(wanted);
+                // device as soon as it is there again (or, if Claude Talk
+                // never knew it, to a device plugged in since)
+                Some(si) if *id == si.id => {
+                    let back = match &si.wanted {
+                        Some(w) => Some(w.clone()).filter(|w| present(w) && !bad(w)),
+                        None => devs
+                            .iter()
+                            .find(|e| fit(e) && !si.present_then.contains(&e.id))
+                            .map(|e| e.id.clone()),
+                    };
+                    if let Some(b) = back {
+                        if set(&b, role) {
+                            guard.stand_in[role] = None;
+                            guard.last_good[role] = Some(b);
+                        }
                     }
                 }
                 // the user (or Windows) chose something else meanwhile
@@ -416,20 +537,25 @@ fn guard_default(
             }
             continue;
         }
-        let wanted = guard.last_good[role].clone().filter(|g| !bad(g));
-        let back = wanted.clone().filter(|g| present(g)).or_else(|| {
-            devs.iter()
-                .find(|e| !bad(&e.id) && !virtual_name(&e.name))
-                .map(|e| e.id.clone())
-        });
+        let wanted = guard.last_good[role]
+            .clone()
+            .or_else(|| guard.stand_in[role].as_ref().and_then(|s| s.wanted.clone()))
+            .filter(|g| !bad(g));
+        let back = wanted
+            .clone()
+            .filter(|g| present(g))
+            .or_else(|| devs.iter().find(|e| fit(e)).map(|e| e.id.clone()));
         let Some(back) = back else { continue };
         if set(&back, role) {
             log::warn!("default {flow:?} (role {role}) was our cable; set back");
-            // a stand-in for a device that is gone (unplugged headset):
-            // remember to go back to it
-            guard.stand_in[role] = match wanted {
-                Some(w) if w != back => Some((back, w)),
-                _ => None,
+            guard.stand_in[role] = if wanted.as_deref() == Some(back.as_str()) {
+                None
+            } else {
+                Some(StandIn {
+                    id: back,
+                    wanted,
+                    present_then: devs.iter().map(|e| e.id.clone()).collect(),
+                })
             };
             if flow == devices::Flow::Render {
                 if let Ok(mut n) = state.output_fixed_at.lock() {
@@ -437,6 +563,9 @@ fn guard_default(
                 }
             }
         }
+    }
+    if guard.stand_in != before {
+        guard.save(flow);
     }
 }
 
@@ -537,6 +666,24 @@ pub fn spawn_watcher(_app: AppHandle) {}
 
 /// Restores Discord's own microphone (button, and the uninstaller via
 /// `--restore-audio`). Returns how many settings were cleared.
+/// "Gendan": a Discord recording the cable right now keeps doing so until it
+/// starts again (K12) – remember which one, so it isn't taken for a Discord
+/// set to the cable itself (K37).
+#[cfg(windows)]
+pub fn note_gendan() {
+    let exes = ct_engine::win::host::discord_executables();
+    let cable = ct_engine::win::policy::cable_capture_id();
+    let on_cable = matches!(
+        ct_engine::win::sessions::discord_mic(&exes, cable.as_deref()),
+        ct_engine::win::sessions::DiscordMic::Cable
+    );
+    *RESTORED_FOR.lock().unwrap_or_else(|p| p.into_inner()) = if on_cable {
+        discord_roots(&exes)
+    } else {
+        Vec::new()
+    };
+}
+
 #[cfg(windows)]
 pub fn restore() -> usize {
     let _com = ct_engine::win::ComGuard::new();
@@ -555,15 +702,6 @@ pub fn restore() -> usize {
     ct_engine::win::policy::set_cable_is_ours(crate::installer::cable_is_ours());
     let before = ct_engine::win::policy::discord_given_back();
     let exes = ct_engine::win::host::discord_executables();
-    // a Discord recording the cable right now keeps doing so until it
-    // starts again (K12): remember which one
-    let cable = ct_engine::win::policy::cable_capture_id();
-    if matches!(
-        ct_engine::win::sessions::discord_mic(&exes, cable.as_deref()),
-        ct_engine::win::sessions::DiscordMic::Cable
-    ) {
-        *RESTORED_FOR.lock().unwrap_or_else(|p| p.into_inner()) = discord_roots(&exes);
-    }
     let n = ct_engine::win::policy::restore_discord(&exes);
     // remember what Claude Talk itself gave Discord (never the user's own
     // setting); not from the elevated uninstaller (D27)
@@ -637,8 +775,8 @@ fn tell_restart_discord(da: bool) {
     }
 }
 
-/// The Discord (its main processes) that was recording the cable when its
-/// microphone was given back.
+/// The Discord (its main processes) that was recording the cable when
+/// "Gendan" was pressed (empty: none was).
 static RESTORED_FOR: std::sync::Mutex<Vec<u32>> = std::sync::Mutex::new(Vec::new());
 
 /// The Discord start (its main processes) that has its microphone: an empty
@@ -674,10 +812,18 @@ fn is_a_real_microphone(path: &str) -> bool {
 #[cfg(windows)]
 static GAVE_UP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Set in the running app (see `mark_running`).
+#[cfg(windows)]
+static RUNNING_APP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// The program is going down after a panic: give Discord its microphone back
 /// as on quit, with the helper and RunOnce when Discord is closed.
 #[cfg(windows)]
 pub fn give_up_after_panic() {
+    // only the running app: not the elevated install/uninstall modes (D27)
+    if !RUNNING_APP.load(Ordering::Relaxed) {
+        return;
+    }
     GAVE_UP.store(true, Ordering::Relaxed);
     restore();
     if ct_engine::win::policy::pids_of(&ct_engine::win::host::discord_executables()).is_empty() {
@@ -696,14 +842,18 @@ pub fn load_given_back() {
     let lines: Vec<String> = std::fs::read_to_string(crate::paths::given_back_file())
         .unwrap_or_default()
         .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .map(|s| s.trim_start_matches('\u{feff}').trim().to_string())
+        .filter(|s| !s.is_empty() && s != "-")
         .collect();
     let (forgotten, given): (Vec<String>, Vec<String>) =
         lines.into_iter().partition(|l| l.starts_with('-'));
     ct_engine::win::policy::set_discord_given_back(given);
     ct_engine::win::policy::set_forgotten(
-        forgotten.into_iter().map(|l| l[1..].to_string()).collect(),
+        forgotten
+            .iter()
+            .filter_map(|l| l.strip_prefix('-').map(|v| v.trim().to_string()))
+            .filter(|v| !v.is_empty())
+            .collect(),
     );
 }
 
@@ -712,12 +862,16 @@ pub fn restore() -> usize {
     0
 }
 
+#[cfg(not(windows))]
+pub fn note_gendan() {}
+
 const MAIN_MUTEX: &str = "Local\\ClaudeTalkMain";
 
 /// Marks this process as the running Claude Talk (the restore helper below
 /// steps aside while it exists). Kept for the life of the program.
 #[cfg(windows)]
 pub fn mark_running() {
+    RUNNING_APP.store(true, Ordering::Relaxed);
     use windows::core::HSTRING;
     use windows::Win32::System::Threading::CreateMutexW;
     // the handle is never closed: Windows closes it when the program ends
