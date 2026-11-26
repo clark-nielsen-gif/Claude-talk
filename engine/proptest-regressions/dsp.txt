@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 4af15e4e589e894714ac0caceba71655474b1092e0bf157893f3c8c86d30fb2d # shrinks to amp = 6.5805926, freqs = [20.0], noise = 0.89609766, seed = 13536
 cc 8cf6d838b0540b8db094857c9fbff45ebd0c8f9120283c69c04ae7f5b8178103 # shrinks to amp = 6.5056276, freqs = [8184.0684], noise = 0.8325744, seed = 7145340973302279231
+cc c7bca78fa326653741a5426d6d2d48c51814cb1e1bc13b6de73c103d614d15b2 # shrinks to amp = 5.717661, freqs = [5129.85, 10940.516], noise = 0.76444185, seed = 4046877656497466712

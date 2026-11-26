@@ -566,6 +566,7 @@ mod tests {
             peak = out.iter().fold(peak, |m, v| m.max(v.abs()));
         }
         assert!(peak <= db_to_lin(-1.0) * 1.0001, "peak {peak}");
+        assert!(peak >= db_to_lin(-2.0), "limiter too aggressive: {peak}");
         assert!(o.stats.limiter_reduction.load() < 0.5);
     }
 }

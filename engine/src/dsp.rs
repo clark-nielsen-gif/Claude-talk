@@ -179,13 +179,19 @@ impl MeterValues {
 
 /// Look-ahead true-peak limiter.
 ///
-/// * The true peak is estimated with 4× polyphase oversampling, so peaks
+/// * The true peak is estimated with 8× polyphase oversampling, so peaks
 ///   between samples are caught (what a DAC or a later resampler would make).
 /// * The gain needed for each sample is spread over a sliding-minimum window
 ///   and smoothed with a box filter of the look-ahead length. That guarantees
 ///   the gain reaches its value *before* the peak leaves the delay line, so
 ///   the ceiling is never exceeded and the gain never jumps (no clicks).
 /// * Release is exponential.
+/// * Because the gain differs slightly from sample to sample, the waveform
+///   reconstructed *between* samples can overshoot what the per-sample
+///   estimate predicts (by ~0.1–0.2 dB under extreme limiting, measured by
+///   the property tests against an independent reference meter). The
+///   limiter therefore holds samples and estimated inter-sample peaks
+///   `INTERNAL_HEADROOM_DB` below the requested true-peak ceiling.
 pub struct TruePeakLimiter {
     channels: usize,
     ceiling: f32,
@@ -214,11 +220,13 @@ pub struct TruePeakLimiter {
 }
 
 const TAPS: usize = 24;
-const PHASES: usize = 4;
+/// Extra headroom below the requested true-peak ceiling (see type docs).
+pub const INTERNAL_HEADROOM_DB: f32 = 0.3;
+const PHASES: usize = 8;
 
-/// Polyphase coefficients for 4× interpolation between the two centre taps
+/// Polyphase coefficients for 8× interpolation between the two centre taps
 /// of a TAPS-sample history (taps TAPS/2-1 and TAPS/2). Phase p interpolates at fraction
-/// p/4 after tap 7. Windowed sinc (Blackman), each phase normalised to unity
+/// p/8 after the first centre tap. Windowed sinc (Blackman), each phase normalised to unity
 /// DC gain.
 fn polyphase() -> [[f32; TAPS]; PHASES - 1] {
     let mut c = [[0f32; TAPS]; PHASES - 1];
@@ -253,7 +261,7 @@ impl TruePeakLimiter {
         let delay_frames = lookahead + TAPS / 2;
         TruePeakLimiter {
             channels,
-            ceiling: db_to_lin(ceiling_db),
+            ceiling: db_to_lin(ceiling_db - INTERNAL_HEADROOM_DB),
             lookahead,
             release_coeff: (-1.0 / (sample_rate * release_ms / 1000.0)).exp(),
             delay: vec![0.0; delay_frames * channels],
@@ -373,29 +381,60 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    /// Reference true-peak meter: 16× oversampling with a long windowed sinc,
-    /// independent of the limiter's own estimator.
-    fn reference_true_peak(x: &[f32]) -> f32 {
+    fn bessel_i0(x: f64) -> f64 {
+        let (mut sum, mut term) = (1.0, 1.0);
+        for k in 1..50 {
+            term *= (x / 2.0) * (x / 2.0) / (k as f64 * k as f64);
+            sum += term;
+        }
+        sum
+    }
+
+    /// Reference true-peak meter, independent of the limiter's estimator:
+    /// 16× oversampling with a 194-tap Kaiser (β = 7) windowed sinc,
+    /// normalised per point, evaluated only where the full filter support
+    /// exists. Accurate to 0.01 dB up to 18 kHz on pure tones (verified when
+    /// it was written; see `reference_meter_is_accurate`).
+    pub(super) fn reference_true_peak(x: &[f32]) -> f32 {
         let os = 16;
-        let half = 32i64;
-        let mut peak = x.iter().fold(0f32, |m, v| m.max(v.abs()));
-        for i in 0..x.len() as i64 {
-            for k in 1..os {
-                let t = i as f64 + k as f64 / os as f64;
-                let mut acc = 0f64;
-                for j in (i - half)..=(i + half) {
-                    if j < 0 || j >= x.len() as i64 {
-                        continue;
-                    }
-                    let d = t - j as f64;
-                    let sinc = (std::f64::consts::PI * d).sin() / (std::f64::consts::PI * d);
-                    let w = 0.5 + 0.5 * (std::f64::consts::PI * d / (half as f64 + 1.0)).cos();
-                    acc += x[j as usize] as f64 * sinc * w;
-                }
-                peak = peak.max(acc.abs() as f32);
+        let half = 96usize;
+        if x.len() <= 2 * half + 2 {
+            return x.iter().fold(0f32, |m, v| m.max(v.abs()));
+        }
+        let mut peak = x[half..x.len() - half].iter().fold(0f32, |m, v| m.max(v.abs())) as f64;
+        let beta = 7.0;
+        let norm = bessel_i0(beta);
+        let mut coeffs = vec![0f64; 2 * half + 2];
+        for k in 1..os {
+            let frac = k as f64 / os as f64;
+            let mut sum = 0.0;
+            for (m, c) in coeffs.iter_mut().enumerate() {
+                let d = frac + half as f64 - m as f64;
+                let r = (d / (half as f64 + 1.0)).clamp(-1.0, 1.0);
+                let w = bessel_i0(beta * (1.0 - r * r).sqrt()) / norm;
+                let pd = std::f64::consts::PI * d;
+                let sinc = if d.abs() < 1e-12 { 1.0 } else { pd.sin() / pd };
+                *c = sinc * w;
+                sum += *c;
+            }
+            for c in coeffs.iter_mut() {
+                *c /= sum;
+            }
+            for i in half..x.len() - half - 1 {
+                let acc: f64 = coeffs.iter().enumerate().map(|(m, c)| x[i - half + m] as f64 * c).sum();
+                peak = peak.max(acc.abs());
             }
         }
-        peak
+        peak as f32
+    }
+
+    #[test]
+    fn reference_meter_is_accurate() {
+        for f in [1000.0f64, 8184.0, 12728.0, 16000.0, 18000.0] {
+            let x: Vec<f32> = (0..800).map(|i| (0.5 * (2.0 * std::f64::consts::PI * f * i as f64 / 48000.0 + 0.3).sin()) as f32).collect();
+            let err = lin_to_db(reference_true_peak(&x) / 0.5);
+            assert!(err.abs() < 0.02, "{f} Hz: {err} dB");
+        }
     }
 
     #[test]
@@ -437,7 +476,7 @@ mod tests {
         let mut out = input.clone();
         l.process(&mut out);
         let tp = reference_true_peak(&out[200..]);
-        assert!(lin_to_db(tp) <= -1.0 + 0.3, "true peak {} dB", lin_to_db(tp));
+        assert!(lin_to_db(tp) <= -1.0 + 0.02, "true peak {} dB", lin_to_db(tp));
     }
 
     proptest! {
@@ -466,17 +505,18 @@ mod tests {
             let mut l = TruePeakLimiter::new(1, 48000.0, -1.0, 1.5, 80.0);
             let mut out = input.clone();
             l.process(&mut out);
-            // sample peak: hard guarantee
+            // sample peak: hard guarantee (ceiling minus internal headroom)
             let sp = out.iter().fold(0f32, |m, v| m.max(v.abs()));
-            prop_assert!(sp <= db_to_lin(-1.0) * 1.0001, "sample peak {}", sp);
+            prop_assert!(sp <= db_to_lin(-1.0 - INTERNAL_HEADROOM_DB) * 1.0001, "sample peak {}", sp);
             // also with full-band white noise, the sample-peak guarantee holds
             let mut wn: Vec<f32> = (0..n).map(|_| amp * next()).collect();
             let mut l2 = TruePeakLimiter::new(1, 48000.0, -1.0, 1.5, 80.0);
             l2.process(&mut wn);
-            prop_assert!(wn.iter().all(|v| v.abs() <= db_to_lin(-1.0) * 1.0001));
-            // true peak: within the 4× estimator's tolerance
+            prop_assert!(wn.iter().all(|v| v.abs() <= db_to_lin(-1.0 - INTERNAL_HEADROOM_DB) * 1.0001));
+            // true peak (independent 16× reference meter) at or below the
+            // ceiling; 0.1 dB allowance for the reference meter itself
             let tp = reference_true_peak(&out);
-            prop_assert!(lin_to_db(tp) <= -1.0 + 0.5, "true peak {} dB", lin_to_db(tp));
+            prop_assert!(lin_to_db(tp) <= -1.0 + 0.02, "true peak {} dB", lin_to_db(tp));
             prop_assert!(out.iter().all(|v| v.is_finite()));
         }
 
