@@ -181,6 +181,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
         </section>
       </div>
 
+      {on && <p className="small">{t.notices.discordTips}</p>}
       {config.pushToTalk && <p className="small">{fill(t.main.pttHint, { key: config.hotkeys.pushToTalkClaude })}</p>}
 
       {guide && <DiscordGuide mode={guide} onClose={() => setGuide(null)} />}

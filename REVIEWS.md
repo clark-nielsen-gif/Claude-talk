@@ -63,3 +63,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 
 **Rettet efter runde 4:** alle blocker- og major-fund undtagen to, som kun kan løses uden for koden og er beskrevet i `KNOWN_ISSUES.md`: projektet skal gøres offentligt, før hentelinket virker for andre (K17), og programmet skal signeres for Smart App Control (K26). Opgraderingen er rettet efter Tauris installer-skabelon, men ikke kørt i CI (K27).
 
+## Runde 5 – 2026-11-26 – ikke ren
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 4 minor | Gendan-hjælperen så den lukkende Claude Talk som »kører stadig« og stoppede med det samme; under en installer kunne den låse programfilen. |
+| Lyd | (ingen rapport endnu ved denne optegnelse) | |
+| Design | 1 major, 11 minor | Under 900 px lå problemkortet langt nede under det grønne »Dig«-kort. |
+| "Min mor" | 2 major, 15 minor | Claude-vinduet kunne være højere end skærmen (stemme-knappen under proceslinjen). Login-hjælpen kom kun én gang, og programmet pegede på en stemme-knap, mens hun stadig var på login-siden. |
+| "Bryd det" | 2 major, 6 minor | Samme hjælper-fejl. Discords »Tryk for at tale« giver kun Claude, mens tasten holdes, mens Claude Talk viser grønt. |
+
+**Rettet efter runde 5:** hjælperen venter på, at Claude Talk er helt lukket, og startes kun ved brugerens egen lukning; installeren stopper en efterladt hjælper. Siden melder login-tilstand, og kortene siger »log ind«. Claude-vinduet passer til skærmen. Smalle vinduer viser problemkortet først. Discord-genstart tjekker Discords starter først. »Tryk for at tale« og forsinkelsen er beskrevet ærligt (K28, K29).
+

@@ -83,3 +83,15 @@ Claude Talk er ikke signeret endnu (`SIGNING.md`). Windows viser derfor »Ukendt
 ## K27 – Opgradering er ikke testet automatisk
 En nyere `ClaudeTalk-Setup.exe` oven på en ældre afinstallerer først den gamle. Afinstallationens oprydning (kablet fjernes, spørgsmålet om login) springes over, når den køres af en installer (den kører så fra programmappen), men det er kun kontrolleret mod Tauris installer-skabelon, ikke kørt i CI, fordi der endnu kun findes én version.
 
+## K28 – Discords »Tryk for at tale« og selv-mute
+Discord sender kun lyd fra sin mikrofon, mens man holder »Tryk for at tale«-tasten, og intet, når man har slået sig selv fra. Claude Talk-mikrofonen er Discords mikrofon, så det gælder også Claude. Claude Talk kan ikke se Discords indstillinger (de ligger sammen med Discords login), så oversigten viser i stedet et fast tip om at bruge »Stemmeaktivering«.
+
+## K29 – Forsinkelse fra mikrofonen til Discord
+Målt i det rigtige program på Windows-runnere (`app-e2e`): i alt ca. 100 ms fra mikrofonen til Discords mikrofon uden ekkodæmpning og ca. 130 ms med. Målt alene (`audio-e2e`, `latency_engine_pipeline`) er Claude Talks egen del 20 ms, men i hele programmet måles den til ca. 60 ms (95 ms med ekkodæmpning); resten tilskrives VB-CABLE. De to målemetoder deler tiden forskelligt mellem Claude Talk og VB-CABLE, og årsagen er ikke fundet. Målet på 40 ms for Claude Talks egen del er derfor ikke dokumenteret opfyldt i hele programmet. `app-e2e` fejler ærligt på det punkt.
+
+## K30 – Avancerede kilder og kontakterne
+En kilde, man selv tilføjer under **Avanceret** (en ekstra mikrofon eller et program), følger ikke den store kontakt, mikrofon-slukning, tryk-for-at-tale eller »Claude hører kun mig«, og den får ikke ekkodæmpning. Det er lavet som en mixer: man bestemmer selv dens routes. Låsene mod ekko og sløjfer gælder stadig.
+
+## K31 – Installation uden for Program Files og pc'er med kun ét USB-headset
+Vælger man en anden installationsmappe end Program Files, kan knappen »Installer Claude Talk-mikrofonen« i programmet ikke bruges (kør installeren igen i stedet). Har pc'en kun ét USB-headset som højttaler, og tages det ud midt i et opkald, kan Windows vælge »Claude Talk – intern« som højttaler. Claude Talk har så ingen anden enhed at sætte tilbage, før headsettet sættes i igen.
+

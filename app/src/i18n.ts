@@ -137,6 +137,7 @@ const da = {
     updateAction: 'Opdater nu',
     krispTitle: 'Bliver Claudes stemme svag i Discord?',
     krispBody: 'Slå Discords støjfjernelse fra under Stemme og video, så kommer Claudes stemme tydeligt igennem.',
+    discordTips: 'Godt at vide om Discord: Brug »Stemmeaktivering«, ikke »Tryk for at tale« – ellers hører de andre kun Claude, mens du holder tasten nede. Og slår du din mikrofon fra i Discord, hører de heller ikke Claude.',
   },
 
   errors: {
@@ -411,6 +412,7 @@ const en: Dict = {
     updateAction: 'Update now',
     krispTitle: 'Is Claude’s voice faint in Discord?',
     krispBody: 'Turn off Discord’s noise suppression under Voice & Video, and Claude’s voice comes through clearly.',
+    discordTips: 'Good to know about Discord: use “Voice Activity”, not “Push to Talk” – otherwise people only hear Claude while you hold the key. And if you mute yourself in Discord, they can’t hear Claude either.',
   },
   errors: {
     generic: 'That didn’t work. Try again, or save an error report under Help.',

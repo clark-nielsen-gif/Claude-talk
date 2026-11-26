@@ -36,6 +36,8 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
     - [ ] Instruktionerne står som første besked i samtalen og er sendt af sig selv
     - [ ] Claude svarer ikke, når I snakker sammen uden at sige »Claude«, men svarer, når nogen siger »Claude«
     - [ ] Med »Claude hører de andre i opkaldet« slået fra reagerer Claude ikke på din vens spørgsmål
+13b. **Discords »Tryk for at tale«.** Slå det til i Discord, og lad Claude tale uden at holde tasten.
+    - [ ] Din ven hører ikke Claude (som forventet). Oversigten viser tippet om »Stemmeaktivering«. Slå »Stemmeaktivering« til igen.
 14. **Lang samtale.** Lad opkaldet køre i 30 minutter.
     - [ ] Ingen klik, udfald eller voksende forsinkelse
 15. **Forkert højttaler.** Vælg »Claude Talk – intern« som højttaler i lydmenuen ved uret.

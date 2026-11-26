@@ -184,11 +184,12 @@ fn shutdown_inner(app: &AppHandle, user_quit: bool) {
         // microphone back (the next start points it at Claude Talk again).
         discord::restore();
         // Discord closed: its choice can only be put back once it runs again
-        let routed = st.config.lock().map(|c| c.route_discord).unwrap_or(true);
         let discord_running =
             !ct_engine::win::policy::pids_of(&ct_engine::win::host::discord_executables())
                 .is_empty();
-        if user_quit && routed && !discord_running {
+        // (also after "Gendan": the audio service may still remember the
+        // cable for Discord until Discord runs again)
+        if user_quit && !discord_running {
             discord::spawn_restore_helper();
         }
     }

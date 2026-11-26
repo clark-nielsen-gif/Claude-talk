@@ -30,6 +30,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 - **Claude kører i sit eget vindue i Claude Talk.** Det er det, der gør, at Claude kan høre dig og Discord, uden at noget andet på din pc kommer med. Du logger ind én gang, og så husker vinduet det.
 - **Log ind med din e-mail.** Google tillader ikke login i programmers egne vinduer. Skriv din e-mail, og tryk på knappen under feltet (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet.
 - **Discord bruger Claude Talk-mikrofonen**, når Discords inputenhed står på »Standard« (det gør den normalt). Claude Talk sætter det selv op, og din stemme går stadig igennem som før. Lad derfor Claude Talk køre (den starter med Windows og ligger nede ved uret). Lukker du Claude Talk, får Discord din almindelige mikrofon tilbage. Er du midt i et opkald, spørger Claude Talk først, om Discord skal genstartes, så de andre stadig kan høre dig.
+- **Brug »Stemmeaktivering« i Discord**, ikke »Tryk for at tale«. Med »Tryk for at tale« hører de andre kun Claude, mens du holder tasten nede. Slår du din mikrofon fra i Discord, hører de heller ikke Claude.
 - **Brug gerne høretelefoner.** Med højttalere slår Claude Talk selv ekkodæmpning til, men høretelefoner giver den bedste lyd.
 - Programmet kræver **Windows 11**.
 

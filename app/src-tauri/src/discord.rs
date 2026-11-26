@@ -370,6 +370,14 @@ pub fn restart() -> Result<(), String> {
     else {
         return Err("error.discordNotRunning".into());
     };
+    // Discord's own launcher must be there before Discord is closed: without
+    // it, Discord could not be started again and the user would be left
+    // outside the call with no Discord at all
+    let updater = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .map(|l| l.join(folder).join("Update.exe"))
+        .filter(|p| p.exists())
+        .ok_or("error.discordRestart")?;
     for pid in policy::pids_of(&[exe.to_string()]) {
         unsafe {
             if let Ok(h) = OpenProcess(PROCESS_TERMINATE, false, pid) {
@@ -379,10 +387,6 @@ pub fn restart() -> Result<(), String> {
         }
     }
     std::thread::sleep(Duration::from_millis(1200));
-    let local = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .ok_or("error.internal")?;
-    let updater = local.join(folder).join("Update.exe");
     std::process::Command::new(updater)
         .args(["--processStart", start])
         .spawn()
