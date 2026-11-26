@@ -24,6 +24,8 @@ impl Generator {
         let thread = std::thread::Builder::new()
             .name("generator".into())
             .spawn(move || {
+                #[cfg(windows)]
+                crate::win::high_res_timer();
                 let start = Instant::now();
                 let mut sent: u64 = 0;
                 let mut buf = vec![0f32; 4800 * ENGINE_CHANNELS];

@@ -9,7 +9,8 @@ use crate::graph::{
     ids, Output, OutputId, Party, Rejection, Route, RoutingGraph, Source, SourceId,
 };
 use crate::mixer::{
-    connect, disconnect, FanoutHandle, GainParams, MixerHandle, OutputMixer, SourceFanout, TapStats,
+    connect, connect_raw, disconnect, FanoutHandle, GainParams, MixerHandle, OutputMixer,
+    SourceFanout, TapStats,
 };
 use crate::{ENGINE_CHANNELS, ENGINE_RATE};
 use std::collections::{BTreeMap, BTreeSet};
@@ -163,13 +164,15 @@ pub struct AudioHost {
 /// Internal ids of the echo-reduction stage (never in the routing graph).
 const AEC_MIC_IN: OutputId = 9001;
 const AEC_REF_IN: OutputId = 9002;
+/// Reference buffer for echo reduction: short, so the reference reaches the
+/// canceller before the echo does (speaker + microphone latency is longer).
+const AEC_REF_BUFFER_MS: f64 = 10.0;
 
 /// Echo reduction between the raw microphone and the outputs. The
 /// microphone's routes are moved from the raw capture to the processed
 /// stream while it is active.
 struct AecStage {
     processed: FanoutHandle,
-    mic_in: MixerHandle,
     ref_in: MixerHandle,
     stop: Arc<std::sync::atomic::AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -311,6 +314,20 @@ impl AudioHost {
     }
 
     pub fn add_source(&mut self, spec: Source, kind: SourceKind) -> Result<(), Rejection> {
+        let id = spec.id;
+        // echo reduction holds the old streams of these: rebuild it around the new one
+        let aec_again = matches!(id, ids::MIC | ids::CLAUDE | ids::DISCORD) && self.aec.is_some();
+        if aec_again {
+            self.set_echo_reduction(false);
+        }
+        let r = self.add_source_inner(spec, kind);
+        if aec_again {
+            self.set_echo_reduction(true);
+        }
+        r
+    }
+
+    fn add_source_inner(&mut self, spec: Source, kind: SourceKind) -> Result<(), Rejection> {
         let id = spec.id;
         self.graph.add_source(spec)?;
         if let Some(old) = self.sources.remove(&id) {
@@ -463,7 +480,7 @@ impl AudioHost {
             }
         } else if let Some(mut stage) = self.aec.take() {
             if let Some(mic) = self.sources.get_mut(&ids::MIC) {
-                disconnect(&mut mic.handle, &mut stage.mic_in);
+                mic.handle.remove_output(AEC_MIC_IN);
             }
             for s in [ids::CLAUDE, ids::DISCORD] {
                 if let Some(src) = self.sources.get_mut(&s) {
@@ -479,24 +496,23 @@ impl AudioHost {
 
     fn start_aec(&mut self) -> Result<AecStage, String> {
         use crate::aec::{EchoReducer, FRAME};
-        let (mut mic_mix, mut mic_in) = OutputMixer::new(AEC_MIC_IN, 1, FRAME);
+        // The microphone is read raw, on its own clock (no extra jitter
+        // buffer); the reference (Claude + Discord) is pulled once per
+        // microphone frame with a short buffer, so it stays ahead of any
+        // echo the microphone picks up.
+        let Some(mic) = self.sources.get_mut(&ids::MIC) else {
+            return Err("no microphone".into());
+        };
+        let mut raw = connect_raw(&mut mic.handle, AEC_MIC_IN);
         let (mut ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
         let (mut fanout, processed) = SourceFanout::new(ids::MIC, ENGINE_RATE);
-        if let Some(mic) = self.sources.get_mut(&ids::MIC) {
-            connect(
-                &mut mic.handle,
-                &mut mic_in,
-                GainParams::new(0.0, false),
-                ROUTE_BUFFER_MS,
-            );
-        }
         for s in [ids::CLAUDE, ids::DISCORD] {
             if let Some(src) = self.sources.get_mut(&s) {
                 connect(
                     &mut src.handle,
                     &mut ref_in,
                     GainParams::new(0.0, false),
-                    ROUTE_BUFFER_MS,
+                    AEC_REF_BUFFER_MS,
                 );
             }
         }
@@ -505,7 +521,7 @@ impl AudioHost {
         let thread = std::thread::Builder::new()
             .name("echo-reduction".into())
             .spawn(move || {
-                unsafe { windows::Win32::Media::timeBeginPeriod(1) };
+                super::high_res_timer();
                 // created here: the AEC3 graph is bound to its thread
                 let mut reducer = match EchoReducer::new() {
                     Ok(r) => Some(r),
@@ -516,34 +532,42 @@ impl AudioHost {
                         None
                     }
                 };
-                let start = std::time::Instant::now();
-                let mut done: u64 = 0;
+                let ch = ENGINE_CHANNELS;
                 let mut m = vec![0f32; FRAME];
                 let mut r = vec![0f32; FRAME];
                 while !stop2.load(Ordering::Relaxed) {
-                    let due = (start.elapsed().as_secs_f64() * ENGINE_RATE as f64) as u64;
-                    if due < done + FRAME as u64 {
+                    // a stall left a backlog: drop it instead of playing late
+                    let backlog = raw.slots() / ch;
+                    if backlog > 6 * FRAME {
+                        let drop_frames = backlog - FRAME;
+                        if let Ok(c) = raw.read_chunk(drop_frames * ch) {
+                            c.commit_all();
+                        }
+                    }
+                    if raw.slots() < FRAME * ch {
                         std::thread::sleep(std::time::Duration::from_millis(1));
                         continue;
                     }
-                    if due > done + 10 * FRAME as u64 {
-                        done = due - FRAME as u64; // resync after a stall
+                    if let Ok(c) = raw.read_chunk(FRAME * ch) {
+                        let (a, b) = c.as_slices();
+                        for (k, v) in m.iter_mut().enumerate() {
+                            let i = k * ch;
+                            let at = |j: usize| if j < a.len() { a[j] } else { b[j - a.len()] };
+                            *v = 0.5 * (at(i) + at(i + 1));
+                        }
+                        c.commit_all();
                     }
-                    mic_mix.render(&mut m);
                     ref_mix.render(&mut r);
                     match reducer.as_mut() {
                         Some(red) => fanout.push(Some(red.process(&r, &m)), 1, FRAME),
                         None => fanout.push(Some(&m), 1, FRAME),
                     }
-                    done += FRAME as u64;
                 }
-                unsafe { windows::Win32::Media::timeEndPeriod(1) };
             })
             .map_err(|e| e.to_string())?;
         log::info!("echo reduction on");
         Ok(AecStage {
             processed,
-            mic_in,
             ref_in,
             stop,
             thread: Some(thread),
@@ -630,7 +654,6 @@ impl AudioHost {
     pub fn maintain(&mut self) {
         if let Some(a) = self.aec.as_mut() {
             a.processed.collect_garbage();
-            a.mic_in.collect_garbage();
             a.ref_in.collect_garbage();
         }
         for s in self.sources.values_mut() {

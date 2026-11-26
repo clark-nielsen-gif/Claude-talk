@@ -81,3 +81,17 @@ Mikrofonkilden springer altid Claude Talks egne virtuelle enheder over, også hv
 - **claude.ai:** En testside med streng nonce-CSP efterligner en stemme-webapp (getUserMedia med typiske constraints, enumerateDevices, permissions, Web Audio, MediaRecorder og WebRTC-loopback). Den kører i det rigtige Claude-vindue i en CI-build med featuren `ci-testpage`. Den feature findes ikke i release-builds.
 - **Mikrofon i e2e-testen:** Runnerne har ingen mikrofon, der kan afspille en kendt tone (testdriverens mikrofon er stum, målt i CI). I e2e-testen er "mikrofonen" derfor et testprograms lyd (process loopback). Optagelse fra en rigtig optageenhed er bevist separat i `audio-e2e` ved at optage VB-CABLE.
 - **Testudgang:** De falske programmer spiller ud på en ekstra virtuel enhed (VirtualDrivers-driveren). Den kan kun installeres, fordi runnerne har test-signing slået til, og den bruges kun som CI-fixture.
+
+## D14 – Ekkodæmpning uden ekstra forsinkelse
+Ekkodæmperen (AEC3) læser mikrofonen direkte fra optageringen på mikrofonens eget ur, altså uden ekstra jitterbuffer. Referencen (Claude + Discord) hentes én gang pr. mikrofonblok med en kort buffer på 10 ms, så den altid når frem før ekkoet (højttaler- og mikrofonlatens er længere). Ekkodæmpningen lægger dermed kun én blok på 10 ms til mikrofonens vej. Den første version havde to jitterbuffere og kostede ca. 20 ms mere.
+
+## D15 – Sådan måles latens
+- **Mikrofon → Discord:** Den falske mikrofon spiller korte toneblink (2500 Hz). Testværktøjet optager samtidig programmets lyd (process loopback) og Discords virtuelle mikrofon på ét fælles ur. Hver optagelse korrigeres for testværktøjets egen buffer. Forsinkelsen er medianen af forskellene mellem blinkenes start. Begge sider bruger samme båndpasfilter, så filterets forsinkelse går ud.
+- **Discord → Claude:** Den falske Discord blinker ved 1000 Hz. Testværktøjet finder blinkenes vægur-tid i sin optagelse, og testsiden i Claude-vinduet registrerer ankomsttiden (`performance.timeOrigin + performance.now()`) med samme båndpasfilter. Siden måler med en lille buffer og tidsstempler efter lyden er kommet frem, så målingen kan kun overvurdere forsinkelsen.
+- Begge veje måles i både høretelefon- og højttalertilstand (ekkodæmpning fra og til). Grænsen er 40 ms.
+
+## D16 – Toneniveau måles med ±0,5 % søgning
+Drift-reguleringen må med vilje rette op til ±0,25 % (ca. 4 cent, uhørligt). Testprogrammerne laver desuden deres toner efter vægur, men afspiller dem på en virtuel CI-enhed med sit eget ur. Det flytter tonen yderligere (målt op til ca. 0,2 %). En 2500 Hz-tone kan derfor ligge 5–6 Hz ved siden af. Niveaumålingerne (CI og selvtesten i programmet) søger derfor ±0,5 % rundt om tonen, dog mindst 3 Hz. Rapporterne viser også, hvor tonen blev fundet. Tonehøjdens stabilitet i selve motoren testes separat i `drift.rs`/`resample.rs`.
+
+## D17 – 1 ms timeropløsning
+Alle tråde, der tager tid efter uret (stilhed for ventende kilder, testtoner, ekkodæmpning og Claude-broen), kalder `timeBeginPeriod(1)` én gang pr. proces. Ellers kan en kort pause på Windows vare 15,6 ms, og lyden kommer i ryk.

@@ -249,6 +249,7 @@ fn supervise(
         .spawn(move || {
             let _com = ComGuard::new();
             let _mmcss = Mmcss::enter();
+            super::high_res_timer(); // the silence feed while waiting is clock-paced
             let mut backoff = Duration::from_millis(100);
             let mut first_wait = true;
             loop {

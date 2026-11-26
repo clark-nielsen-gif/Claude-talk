@@ -190,6 +190,23 @@ pub fn restore_audio_settings(state: State<AppState>) {
     crate::discord::restore();
 }
 
+/// Installs Discord's microphone from the app (one Windows prompt).
+/// Returns the installer's exit code (0 ok, 2 no internet, …); "cancelled"
+/// if the user declined the prompt.
+#[tauri::command]
+pub async fn install_cable() -> Result<u32, String> {
+    #[cfg(windows)]
+    {
+        let r = tauri::async_runtime::spawn_blocking(crate::installer::install_cable_elevated)
+            .await
+            .map_err(|_| "error.internal".to_string())??;
+        log::info!("install Discord's microphone from the app: {r:?}");
+        r.ok_or_else(|| "cancelled".to_string())
+    }
+    #[cfg(not(windows))]
+    Err("unsupported".into())
+}
+
 #[tauri::command]
 pub async fn restart_discord() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(crate::discord::restart)
@@ -211,6 +228,8 @@ pub struct MatrixCell {
 pub struct Labeled {
     pub id: u32,
     pub label: String,
+    /// Added by the user in the mixer (can be removed).
+    pub removable: bool,
 }
 
 #[derive(Serialize)]
@@ -248,6 +267,7 @@ pub fn get_matrix(state: State<AppState>) -> Matrix {
             .map(|s| Labeled {
                 id: s.id,
                 label: s.label.clone(),
+                removable: crate::mixer::is_added_source(s.id),
             })
             .collect();
         let outputs: Vec<Labeled> = graph
@@ -255,6 +275,7 @@ pub fn get_matrix(state: State<AppState>) -> Matrix {
             .map(|o| Labeled {
                 id: o.id,
                 label: o.label.clone(),
+                removable: crate::mixer::is_added_output(o.id),
             })
             .collect();
         let mut cells = Vec::new();
@@ -327,6 +348,7 @@ pub fn set_route(
         }
         drop(g);
         crate::audio::apply_switches(&app);
+        crate::mixer::route_changed(&state);
         Ok(())
     }
     #[cfg(not(windows))]

@@ -22,6 +22,14 @@ export function Home({ info }: { info: AppInfo }) {
   const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
   const [update, setUpdate] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const installCable = () => {
+    setInstalling(true);
+    api.installCable()
+      .then((code) => { if (code === 2) toast(t.errors.cableNoInternet); else if (code !== 0) toast(t.errors.cableInstallFailed); })
+      .catch((e) => { if (String(e) !== 'cancelled') toast(t.errors.cableInstallFailed); })
+      .finally(() => setInstalling(false));
+  };
   useEffect(() => api.onUpdate(setUpdate), []);
   const s = status;
   const quiet = { peak: 0, rms: 0 };
@@ -32,7 +40,7 @@ export function Home({ info }: { info: AppInfo }) {
   if (!info.supported) {
     errors.push(<Notice key="u" kind="error" title={t.errors.unsupportedTitle} body={t.errors.unsupportedBody} action={t.errors.unsupportedAction} onAction={() => api.openPlace('windowsUpdate')} />);
   } else if (s && !s.cableOk && !info.cableInstalled) {
-    errors.push(<Notice key="c" kind="error" title={t.errors.cableMissingTitle} body={t.errors.cableMissingBody} action={t.errors.cableMissingAction} onAction={() => api.openPlace('download')} />);
+    errors.push(<Notice key="c" kind="error" title={t.errors.cableMissingTitle} body={t.errors.cableMissingBody} action={installing ? t.errors.cableInstalling : t.errors.cableMissingAction} onAction={installing ? undefined : installCable} />);
   }
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);

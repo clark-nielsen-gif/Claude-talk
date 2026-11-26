@@ -509,6 +509,19 @@ pub fn connect(
     stats
 }
 
+/// A plain ring from a source, without resampling or jitter buffer: for a
+/// consumer that runs on the source's own clock (echo reduction reads the
+/// microphone this way). Delivers interleaved stereo at the source's rate.
+/// Called on the control thread (allocates).
+pub fn connect_raw(source: &mut FanoutHandle, id: OutputId) -> rtrb::Consumer<f32> {
+    let cap = (source.rate as usize / 2).max(MAX_BLOCK) * ENGINE_CHANNELS;
+    let (prod, cons) = rtrb::RingBuffer::<f32>::new(cap);
+    let _ = source
+        .commands
+        .push(FanoutCommand::AddOutput(id, Box::new(prod)));
+    cons
+}
+
 /// Disconnects a route on both sides.
 pub fn disconnect(source: &mut FanoutHandle, output: &mut MixerHandle) {
     output.remove_source(source.source);
@@ -518,6 +531,27 @@ pub fn disconnect(source: &mut FanoutHandle, output: &mut MixerHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raw_consumer_gets_the_source_unchanged() {
+        let (mut fan, mut h) = SourceFanout::new(1, ENGINE_RATE);
+        let mut raw = connect_raw(&mut h, 77);
+        let input: Vec<f32> = (0..480).map(|i| i as f32 / 480.0).collect();
+        fan.push(Some(&input), 1, 480);
+        assert_eq!(raw.slots(), 480 * ENGINE_CHANNELS);
+        let c = raw.read_chunk(raw.slots()).unwrap();
+        let (a, b) = c.as_slices();
+        let got: Vec<f32> = a.iter().chain(b).copied().collect();
+        for k in (0..480).step_by(97) {
+            assert!(
+                (got[2 * k] - input[k]).abs() < 1e-6 && (got[2 * k + 1] - input[k]).abs() < 1e-6
+            );
+        }
+        c.commit_all();
+        h.remove_output(77);
+        fan.push(Some(&input), 1, 480);
+        assert_eq!(raw.slots(), 0);
+    }
 
     fn tone(freq: f64, rate: f64, frames: usize, phase: &mut f64, ch: usize) -> Vec<f32> {
         let mut v = Vec::with_capacity(frames * ch);

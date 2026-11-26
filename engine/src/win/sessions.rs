@@ -6,7 +6,7 @@ use super::devices::{self, Flow};
 use super::process;
 use windows::core::Interface;
 use windows::Win32::Media::Audio::{
-    eCapture, AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2,
+    eCapture, eRender, AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2,
     IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
@@ -22,6 +22,12 @@ pub struct CaptureSession {
 
 /// All recording sessions on all active capture endpoints.
 pub fn capture_sessions() -> windows::core::Result<Vec<CaptureSession>> {
+    sessions(Flow::Capture)
+}
+
+/// All audio sessions on all active endpoints of one direction (playback
+/// sessions: which programs are making sound).
+pub fn sessions(flow: Flow) -> windows::core::Result<Vec<CaptureSession>> {
     let procs = process::snapshot();
     let exe_of = |pid: u32| {
         procs
@@ -30,7 +36,7 @@ pub fn capture_sessions() -> windows::core::Result<Vec<CaptureSession>> {
             .map(|p| p.exe.clone())
             .unwrap_or_default()
     };
-    let names: std::collections::HashMap<String, String> = devices::list(Flow::Capture)
+    let names: std::collections::HashMap<String, String> = devices::list(flow)
         .unwrap_or_default()
         .into_iter()
         .map(|e| (e.id, e.name))
@@ -38,7 +44,11 @@ pub fn capture_sessions() -> windows::core::Result<Vec<CaptureSession>> {
     let mut out = Vec::new();
     unsafe {
         let e: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let coll = e.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)?;
+        let data_flow = match flow {
+            Flow::Capture => eCapture,
+            Flow::Render => eRender,
+        };
+        let coll = e.EnumAudioEndpoints(data_flow, DEVICE_STATE_ACTIVE)?;
         for i in 0..coll.GetCount()? {
             let dev = coll.Item(i)?;
             let id = super::devices::device_id(&dev);

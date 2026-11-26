@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! ct-audiotest devices
-//! ct-audiotest tone --freq 1000 [--device "Speakers"] [--seconds 30] [--amp 0.3]
+//! ct-audiotest tone --freq 1000 [--device "Speakers"] [--seconds 30] [--amp 0.3] [--burst-ms 20 --period-ms 600]
 //! ct-audiotest smoke --cable-in "Claude Talk" --cable-out "Claude Talk" --sink "Virtual Audio" --out report.json
 //! ```
 //! `tone` is used as the fake "Claude", "Discord", microphone and background
@@ -21,11 +21,13 @@ fn main() {
 
 #[cfg(windows)]
 fn main() {
+    ct_engine::win::high_res_timer();
     let args: Vec<String> = std::env::args().collect();
     let code = match args.get(1).map(String::as_str) {
         Some("serve-testpage") => serve::run(&args[2..]),
         Some("devices") => imp::devices(),
         Some("tone") => imp::tone(&args[2..]),
+        Some("listen") => imp::listen(&args[2..]),
         Some("smoke") => imp::smoke(&args[2..]),
         Some("e2e") => imp::e2e(&args[2..]),
         _ => {
@@ -80,7 +82,13 @@ mod serve {
                 }
             }
             let mut w = &conn;
-            if line.starts_with("POST /report") {
+            if line.starts_with("POST /marks") {
+                let mut body = vec![0u8; len];
+                let _ = reader.read_exact(&mut body);
+                let marks = std::path::Path::new(&out).with_file_name("page-marks.json");
+                let _ = std::fs::write(marks, &body);
+                let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
+            } else if line.starts_with("POST /report") {
                 let mut body = vec![0u8; len];
                 let _ = reader.read_exact(&mut body);
                 let _ = std::fs::write(&out, &body);
@@ -111,7 +119,9 @@ mod serve {
 
 #[cfg(windows)]
 mod imp {
-    use ct_engine::analysis::{mono, tone_db_near, Sine};
+    use ct_engine::analysis::{
+        burst_onsets, match_delays, median, mono, tone_peak_near, tone_tolerance, Sine,
+    };
     use ct_engine::graph::{OutputId, SourceId};
     use ct_engine::mixer::{connect, GainParams, OutputMixer, SourceFanout};
     use ct_engine::win::devices::{self, DeviceSelector, Flow};
@@ -226,6 +236,17 @@ mod imp {
     }
 
     fn play(freq: f64, amp: f32, device: DeviceSelector) -> Player {
+        play_pattern(freq, amp, device, None)
+    }
+
+    /// `bursts`: (burst length, period) in ms – short tone bursts for
+    /// latency measurement instead of a steady tone.
+    fn play_pattern(
+        freq: f64,
+        amp: f32,
+        device: DeviceSelector,
+        bursts: Option<(f64, f64)>,
+    ) -> Player {
         const SRC: SourceId = 1;
         const OUT: OutputId = 1;
         let (fan, mut fan_h) = SourceFanout::new(SRC, ENGINE_RATE);
@@ -233,7 +254,23 @@ mod imp {
         let tap = connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
         let stop = Arc::new(AtomicBool::new(false));
         let mut sine = Sine::new(freq, ENGINE_RATE as f64, amp);
-        let gen = clocked_source(fan, move |b| sine.fill(b, ENGINE_CHANNELS), stop.clone());
+        let mut pos: u64 = 0;
+        let gen = clocked_source(
+            fan,
+            move |b| {
+                sine.fill(b, ENGINE_CHANNELS);
+                if let Some((len_ms, period_ms)) = bursts {
+                    let (len, period) = ((len_ms * 48.0) as u64, (period_ms * 48.0) as u64);
+                    for f in b.chunks_exact_mut(ENGINE_CHANNELS) {
+                        if pos % period >= len {
+                            f.fill(0.0);
+                        }
+                        pos += 1;
+                    }
+                }
+            },
+            stop.clone(),
+        );
         let render = spawn_render("tone", device, mix);
         Player {
             stop,
@@ -260,12 +297,40 @@ mod imp {
             Some(name) => DeviceSelector::NameContains(Flow::Render, name.to_string()),
             None => DeviceSelector::Default(Flow::Render),
         };
-        let p = play(freq, amp, dev);
+        let bursts = match (
+            arg(args, "--burst-ms").and_then(|v| v.parse().ok()),
+            arg(args, "--period-ms").and_then(|v| v.parse().ok()),
+        ) {
+            (Some(l), Some(p)) => Some((l, p)),
+            _ => None,
+        };
+        let p = play_pattern(freq, amp, dev, bursts);
         let t0 = Instant::now();
         while t0.elapsed().as_secs_f64() < secs {
             std::thread::sleep(Duration::from_millis(200));
         }
         drop(p);
+        0
+    }
+
+    /// Records from the default microphone the way Discord and Chrome do
+    /// (whatever Windows gives this program as its default), after an
+    /// optional delay. Used as the fake programs of the routing test.
+    pub fn listen(args: &[String]) -> i32 {
+        let _com = ComGuard::new();
+        let delay: f64 = arg(args, "--delay")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.0);
+        let secs: f64 = arg(args, "--seconds")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(15.0);
+        std::thread::sleep(Duration::from_secs_f64(delay));
+        let r = record(
+            CaptureTarget::Device(DeviceSelector::Default(Flow::Capture)),
+            secs,
+            |_| {},
+        );
+        println!("recorded from '{}' ({:?})", r.device, r.state);
         0
     }
 
@@ -329,10 +394,10 @@ mod imp {
         let tail = &m[m.len() - n..];
         let mut v = serde_json::Map::new();
         for f in freqs {
-            v.insert(
-                format!("{f}"),
-                json!((tone_db_near(tail, *f, 2.0, ENGINE_RATE as f64) * 10.0).round() / 10.0),
-            );
+            // level, and where the tone actually was (clock differences move it)
+            let (db, found) = tone_peak_near(tail, *f, tone_tolerance(*f), ENGINE_RATE as f64);
+            v.insert(format!("{f}"), json!((db * 10.0).round() / 10.0));
+            v.insert(format!("{f}_hz"), json!((found * 10.0).round() / 10.0));
         }
         Value::Object(v)
     }
@@ -354,6 +419,73 @@ mod imp {
             ])
             .spawn()
             .expect("start tone process")
+    }
+
+    fn spawn_burst_process(
+        exe: &std::path::Path,
+        freq: f64,
+        device: &str,
+        period_ms: u32,
+    ) -> std::process::Child {
+        std::process::Command::new(exe)
+            .args([
+                "tone",
+                "--freq",
+                &freq.to_string(),
+                "--device",
+                device,
+                "--seconds",
+                "120",
+                "--amp",
+                "0.5",
+                "--burst-ms",
+                "25",
+                "--period-ms",
+                &period_ms.to_string(),
+            ])
+            .spawn()
+            .expect("start burst process")
+    }
+
+    /// Records several capture targets on one clock. Returns the wall-clock
+    /// time (ms since 1970) of sample 0 and, per target, mono samples plus
+    /// the average buffering of the recorder's own tap (ms).
+    fn record_multi(targets: Vec<CaptureTarget>, secs: f64) -> (f64, Vec<(Vec<f32>, f64)>) {
+        let mut parts = Vec::new();
+        for (k, t) in targets.into_iter().enumerate() {
+            let (fan, mut fan_h) = SourceFanout::new(1, ENGINE_RATE);
+            let (mix, mut mix_h) = OutputMixer::new(2 + k as OutputId, ENGINE_CHANNELS, 480);
+            let tap = connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
+            let cap = spawn_capture("rec", t, fan);
+            parts.push((mix, tap, cap, fan_h, mix_h, Vec::<f32>::new(), 0f64));
+        }
+        std::thread::sleep(Duration::from_millis(1500)); // streams start, taps prime
+        let start = Instant::now();
+        let epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
+        let mut buf = vec![0f32; 480 * ENGINE_CHANNELS];
+        let mut pulled: u64 = 0;
+        let mut pulls = 0u64;
+        while start.elapsed().as_secs_f64() < secs {
+            let due = (start.elapsed().as_secs_f64() * ENGINE_RATE as f64) as u64;
+            while pulled + 480 <= due {
+                for p in parts.iter_mut() {
+                    p.0.render(&mut buf);
+                    p.5.extend_from_slice(&buf);
+                    p.6 += p.1.buffered_ms.load() as f64;
+                }
+                pulled += 480;
+                pulls += 1;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let out = parts
+            .into_iter()
+            .map(|p| (mono(&p.5, ENGINE_CHANNELS), p.6 / pulls.max(1) as f64))
+            .collect();
+        (epoch, out)
     }
 
     /// Full end-to-end test of the app with the Claude window on the CI voice
@@ -385,11 +517,8 @@ mod imp {
         let dir = std::env::temp_dir().join("ct-e2e");
         let _ = std::fs::create_dir_all(&dir);
         let mut kids = Vec::new();
-        for (name, freq) in [
-            ("Discord.exe", 1000.0),
-            ("fakemic.exe", 2500.0),
-            ("background.exe", 3000.0),
-        ] {
+        let names = ["Discord.exe", "fakemic.exe", "background.exe"];
+        for (name, freq) in names.into_iter().zip([1000.0, 2500.0, 3000.0]) {
             let p = dir.join(name);
             let _ = std::fs::copy(&me, &p);
             kids.push(spawn_tone_process(&p, freq, &sink));
@@ -469,10 +598,95 @@ mod imp {
             );
             phase.insert("to_claude".into(), json!({"pass": pass, "page": page}));
             ok &= pass;
+
+            // Latency with tone bursts: the fake microphone (2500 Hz) and
+            // Discord (1000 Hz) switch to short bursts.
+            for (i, (freq, period)) in [(1000.0, 700u32), (2500.0, 600u32)].into_iter().enumerate()
+            {
+                let _ = kids[i].kill();
+                let _ = kids[i].wait();
+                kids[i] = spawn_burst_process(&dir.join(names[i]), freq, &sink, period);
+            }
+            std::thread::sleep(Duration::from_secs(4)); // the app finds the restarted programs
+            let marks_file = page_report.with_file_name("page-marks.json");
+            let _ = std::fs::remove_file(&marks_file);
+            let (epoch, recs) = record_multi(
+                vec![
+                    CaptureTarget::Process(ProcessTarget::ExeNames(vec!["fakemic.exe".into()])),
+                    CaptureTarget::Device(DeviceSelector::FirstMatching(
+                        Flow::Capture,
+                        vec!["claude talk – til discord".into(), "claude talk".into()],
+                    )),
+                    CaptureTarget::Process(ProcessTarget::ExeNames(vec!["discord.exe".into()])),
+                ],
+                8.0,
+            );
+            std::thread::sleep(Duration::from_millis(1500)); // the page posts its marks
+            let ms = |idx: Vec<usize>| {
+                idx.into_iter()
+                    .map(|i| i as f64 / 48.0)
+                    .collect::<Vec<f64>>()
+            };
+            let rate = ENGINE_RATE as f64;
+            // Microphone → Discord: both recordings on one clock, each
+            // corrected by its own recorder buffering.
+            let (mic_rec, mic_buf) = &recs[0];
+            let (cable_rec, cable_buf) = &recs[1];
+            let a: Vec<f64> = ms(burst_onsets(mic_rec, 2500.0, rate, 0.3, 2400))
+                .into_iter()
+                .map(|t| t - mic_buf)
+                .collect();
+            let b: Vec<f64> = ms(burst_onsets(cable_rec, 2500.0, rate, 0.3, 2400))
+                .into_iter()
+                .map(|t| t - cable_buf)
+                .collect();
+            let to_discord = match_delays(&a, &b, 300.0);
+            // Discord → Claude: wall-clock time the burst entered the
+            // recorder (a sample is pulled one 10 ms block after its slot and
+            // waited `dc_buf` in the tap), minus one more 10 ms capture
+            // period so the estimate errs on the slow side; against the
+            // page's arrival times. The two 10 ms terms cancel.
+            let (dc_rec, dc_buf) = &recs[2];
+            let sent: Vec<f64> = ms(burst_onsets(dc_rec, 1000.0, rate, 0.3, 2400))
+                .into_iter()
+                .map(|t| epoch + t - dc_buf)
+                .collect();
+            let marks: Vec<f64> = std::fs::read(&marks_file)
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or_default();
+            let marks: Vec<f64> = marks
+                .into_iter()
+                .filter(|&m| m >= epoch && m <= epoch + 9000.0)
+                .collect();
+            let to_claude = match_delays(&sent, &marks, 300.0);
+            let (md, mc) = (median(&to_discord), median(&to_claude));
+            let pass = to_discord.len() >= 5
+                && to_claude.len() >= 5
+                && md.is_some_and(|v| v < 40.0)
+                && mc.is_some_and(|v| v < 40.0);
+            println!("[{}] echo {echo}: latency to Discord {md:?} ms ({} bursts), to Claude {mc:?} ms ({} bursts)", if pass { "PASS" } else { "FAIL" }, to_discord.len(), to_claude.len());
+            phase.insert(
+                "latency".into(),
+                json!({"pass": pass, "to_discord_ms": md, "to_claude_ms": mc, "to_discord_all": to_discord, "to_claude_all": to_claude,
+                       "bursts": {"mic": a.len(), "cable": b.len(), "discord": sent.len(), "page": marks.len()}, "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf]}),
+            );
+            ok &= pass;
+            // back to steady tones for the next mode
+            for (i, freq) in [1000.0, 2500.0].into_iter().enumerate() {
+                let _ = kids[i].kill();
+                let _ = kids[i].wait();
+                kids[i] = spawn_tone_process(&dir.join(names[i]), freq, &sink);
+            }
+
+            // the app and its WebView2 processes (they hold the Claude window's profile)
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &app_proc.id().to_string(), "/T", "/F"])
+                .output();
             let _ = app_proc.kill();
             let _ = app_proc.wait();
             report.insert(format!("echo_{echo}"), Value::Object(phase));
-            std::thread::sleep(Duration::from_secs(2)); // WebView2 releases its profile
+            std::thread::sleep(Duration::from_secs(3));
         }
 
         // tidy up
@@ -674,6 +888,95 @@ mod imp {
             );
             drop(player);
             report.insert("info_sink_mic_echo".into(), json!({"levels_db": levels(&r, 1.5, &[2500.0]), "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}));
+        }
+
+        // F. per-app routing: only Discord records from our cable; the
+        // setting survives a Discord restart and can be undone.
+        {
+            use ct_engine::win::{policy, sessions};
+            let dir = std::env::temp_dir().join("ct-route");
+            let _ = std::fs::create_dir_all(&dir);
+            for n in ["Discord.exe", "chrome.exe"] {
+                let _ = std::fs::copy(&exe, dir.join(n));
+            }
+            let listen = |name: &str, delay: &str| {
+                std::process::Command::new(dir.join(name))
+                    .args(["listen", "--delay", delay, "--seconds", "15"])
+                    .spawn()
+                    .expect("start listener")
+            };
+            let discord = vec!["discord.exe".to_string()];
+            let cable = policy::cable_capture_id();
+            let where_ = |exe: &str| -> Vec<String> {
+                sessions::capture_sessions()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|s| s.active && s.exe.eq_ignore_ascii_case(exe))
+                    .map(|s| s.endpoint_name)
+                    .collect()
+            };
+            let stop = |mut c: std::process::Child| {
+                let _ = c.kill();
+                let _ = c.wait();
+            };
+            // 1. Discord and Chrome start; Claude Talk routes Discord before it opens the microphone
+            let d = listen("Discord.exe", "3");
+            let c = listen("chrome.exe", "3");
+            std::thread::sleep(Duration::from_millis(800));
+            let routed = policy::route_discord_to_cable(&discord);
+            std::thread::sleep(Duration::from_secs(6));
+            let d_mic = sessions::discord_mic(&discord, cable.as_deref());
+            let d_where = where_("discord.exe");
+            let c_where = where_("chrome.exe");
+            let flag = policy::discord_routed_to_cable(&discord);
+            stop(d);
+            stop(c);
+            let chrome_ok = !c_where.is_empty()
+                && !c_where
+                    .iter()
+                    .any(|n| n.to_lowercase().contains("claude talk"));
+            check(
+                "per_app_routing",
+                matches!(routed, Ok(n) if n > 0)
+                    && d_mic == sessions::DiscordMic::Cable
+                    && chrome_ok
+                    && flag == Some(true),
+                json!({"routed": format!("{routed:?}"), "discord_mic": format!("{d_mic:?}"), "discord_records_from": d_where, "chrome_records_from": c_where, "stored": flag}),
+                &mut report,
+            );
+            // 2. Windows remembers it for the program: a new Discord process is routed too
+            let d = listen("Discord.exe", "0");
+            std::thread::sleep(Duration::from_secs(4));
+            let again = sessions::discord_mic(&discord, cable.as_deref());
+            let again_where = where_("discord.exe");
+            // 3. "Restore normal sound settings" gives Discord its normal microphone back
+            let restored_n = policy::restore_discord(&discord);
+            stop(d);
+            let d = listen("Discord.exe", "0");
+            std::thread::sleep(Duration::from_secs(4));
+            let after = sessions::discord_mic(&discord, cable.as_deref());
+            let after_where = where_("discord.exe");
+            stop(d);
+            // 4. and also after Discord has been closed (registry entries)
+            let d = listen("Discord.exe", "0");
+            std::thread::sleep(Duration::from_millis(800));
+            let _ = policy::route_discord_to_cable(&discord);
+            stop(d);
+            let removed_offline = policy::restore_discord(&discord);
+            let d = listen("Discord.exe", "0");
+            std::thread::sleep(Duration::from_secs(4));
+            let offline_after = sessions::discord_mic(&discord, cable.as_deref());
+            stop(d);
+            check(
+                "per_app_restore",
+                again == sessions::DiscordMic::Cable
+                    && after == sessions::DiscordMic::Other
+                    && offline_after == sessions::DiscordMic::Other,
+                json!({"new_process": format!("{again:?}"), "new_process_records_from": again_where, "restored_entries": restored_n,
+                       "after_restore": format!("{after:?}"), "after_restore_records_from": after_where,
+                       "removed_while_closed": removed_offline, "after_offline_restore": format!("{offline_after:?}")}),
+                &mut report,
+            );
         }
 
         report.insert("pass".into(), json!(ok));

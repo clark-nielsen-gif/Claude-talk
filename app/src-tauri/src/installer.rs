@@ -299,3 +299,45 @@ fn restore_defaults(before: &Defaults) {
         }
     }
 }
+
+/// Runs `--install-cable` elevated from the app ("Installer Discords
+/// mikrofon"): one Windows prompt. Returns the exit code, or `None` if the
+/// user said no to the prompt.
+pub fn install_cable_elevated() -> Result<Option<u32>, String> {
+    use windows::core::{HSTRING, PCWSTR};
+    use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+    use windows::Win32::UI::Shell::{
+        ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let file = HSTRING::from(exe.as_os_str());
+    let verb = HSTRING::from("runas");
+    let params = HSTRING::from("--install-cable");
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        nShow: SW_HIDE.0,
+        ..Default::default()
+    };
+    unsafe {
+        if ShellExecuteExW(&mut info).is_err() {
+            // ERROR_CANCELLED: the user said no to the Windows prompt
+            return Ok(None);
+        }
+        if info.hProcess.is_invalid() {
+            return Err("no process".into());
+        }
+        let waited = WaitForSingleObject(info.hProcess, INFINITE);
+        let mut code = 5u32;
+        if waited == WAIT_OBJECT_0 {
+            let _ = GetExitCodeProcess(info.hProcess, &mut code);
+        }
+        let _ = CloseHandle(info.hProcess);
+        Ok(Some(code))
+    }
+}

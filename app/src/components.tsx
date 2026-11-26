@@ -83,7 +83,7 @@ export function Notice({ kind = 'info', title, body, action, onAction }: { kind?
   return (
     <div className={`notice ${kind === 'info' ? '' : kind}`} role={kind === 'error' ? 'alert' : 'status'}>
       <div className="text"><h3>{title}</h3><p>{body}</p></div>
-      {action && <button className="btn secondary" onClick={onAction}>{action}</button>}
+      {action && <button className="btn secondary" onClick={onAction} disabled={!onAction}>{action}</button>}
     </div>
   );
 }

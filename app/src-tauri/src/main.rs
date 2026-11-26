@@ -10,6 +10,7 @@ mod discord;
 mod hotkeys;
 mod installer;
 mod logging;
+mod mixer;
 mod paths;
 mod report;
 mod selftest;
@@ -86,6 +87,15 @@ fn main() {
             commands::show_main,
             commands::restore_audio_settings,
             commands::restart_discord,
+            commands::install_cable,
+            mixer::mixer_choices,
+            mixer::add_mixer_source,
+            mixer::remove_mixer_source,
+            mixer::add_mixer_output,
+            mixer::remove_mixer_output,
+            mixer::save_preset,
+            mixer::load_preset,
+            mixer::delete_preset,
             commands::get_matrix,
             commands::set_route,
             commands::set_unlocked,

@@ -65,11 +65,11 @@ jobs:
           Copy-Item $setup.FullName dist-release/ClaudeTalk-Setup.exe
           $sig = Get-ChildItem target/release/bundle/nsis -Filter *-setup.exe.sig -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($sig) { Copy-Item $sig.FullName dist-release/ClaudeTalk-Setup.exe.sig }
-          # portable: the program alone (Discord's microphone still needs the
-          # installer once, or "Installer Discords mikrofon" in the app)
+          # portable: the program alone (Discord's microphone is installed by
+          # the installer, or from the app's "Installer Discords mikrofon")
           New-Item -ItemType Directory portable | Out-Null
           Copy-Item target/release/claude-talk.exe 'portable/Claude Talk.exe'
-          Copy-Item README.md portable/LÆS MIG.md
+          Copy-Item README.md 'portable/README.md'
           Compress-Archive portable/* dist-release/ClaudeTalk-portable.zip
       - name: Code signing (SignPath, if configured)
         id: signpath

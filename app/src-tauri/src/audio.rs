@@ -71,6 +71,13 @@ mod imp {
         if let Some(mixer) = host.take_pulled(ids::TO_CLAUDE) {
             crate::claude_window::spawn_bridge(app.clone(), mixer);
         }
+        // the user's advanced mixer (added sources/outputs, routing)
+        let saved = state
+            .config
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        crate::mixer::imp::apply(&mut host, &saved.mixer, saved.advanced_unlocked);
         *state.audio.lock().unwrap_or_else(|p| p.into_inner()) = Some(host);
         apply_switches(app);
         let app2 = app.clone();

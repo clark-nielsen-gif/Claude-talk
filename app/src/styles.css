@@ -219,6 +219,25 @@ button, select, input { font: inherit; color: inherit; }
 .cell input[type='range'] { flex: 1; min-width: 3rem; accent-color: var(--clay); }
 .cell .gain { min-width: 2.75rem; text-align: right; }
 .cell.locked { line-height: 1.35; }
+.headname { display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%; }
+.headname .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remove {
+  flex: none; display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border: 0; border-radius: 999px;
+  background: transparent; color: var(--ink-3); cursor: pointer; transition: background var(--t), color var(--t);
+}
+.remove:hover { background: var(--sunk); color: var(--ink); }
+.matrix-actions { display: flex; flex-wrap: wrap; gap: 0.625rem; padding: 0.875rem 1rem; border-top: 1px solid var(--line); }
+.adder { display: flex; flex-wrap: wrap; align-items: center; gap: 0.625rem; width: 100%; }
+.adder select, .adder input[type='text'] {
+  min-height: 2.5rem; padding: 0.4375rem 0.75rem; border: 1px solid var(--line-strong); border-radius: var(--radius-s);
+  background: var(--card); color: var(--ink); min-width: 0;
+}
+.adder select { flex: 2 1 14rem; }
+.adder input[type='text'] { flex: 1 1 10rem; }
+.adder .hint { flex-basis: 100%; margin: 0; }
+.row.presets { flex-wrap: wrap; gap: 0.5rem; padding-top: 0; border-top: 0; }
+.row + .row.presets { border-top: 0; }
+.preset { display: inline-flex; align-items: center; gap: 0.125rem; }
 
 /* ---- onboarding ------------------------------------------------------------ */
 .onboard { height: 100%; display: grid; place-items: center; padding: 2rem; }

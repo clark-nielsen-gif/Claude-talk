@@ -25,7 +25,11 @@ export interface Config {
   echo: EchoMode;
   hotkeys: Hotkeys;
   advancedUnlocked: boolean;
+  presets?: { name: string }[];
 }
+
+export interface Choice { value: string; label: string }
+export interface MixerChoices { inputs: Choice[]; programs: Choice[]; outputs: Choice[] }
 
 export interface Level { peak: number; rms: number }
 
@@ -58,7 +62,8 @@ export interface AppInfo {
 
 export interface Route { source: number; output: number; gainDb: number; muted: boolean }
 export interface MatrixCell { source: number; output: number; state: 'on' | 'off' | 'locked' | 'loop'; gainDb: number; who?: string }
-export interface Matrix { sources: { id: number; label: string }[]; outputs: { id: number; label: string }[]; cells: MatrixCell[] }
+export interface Labeled { id: number; label: string; removable: boolean }
+export interface Matrix { sources: Labeled[]; outputs: Labeled[]; cells: MatrixCell[] }
 export interface SelfTestResult { route: string; passed: boolean }
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -73,6 +78,7 @@ const defaultConfig: Config = {
   micMuted: scenario === 'main-muted', claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
   hotkeys: { muteClaudeToDiscord: 'Ctrl+Alt+D', muteMic: 'Ctrl+Alt+M', pushToTalkClaude: 'Ctrl+Alt+Space' },
   advancedUnlocked: false,
+  presets: [{ name: 'Musik' }],
 };
 
 function scenarioStatus(t: number): AudioStatus {
@@ -133,6 +139,11 @@ export const api = {
   async restoreAudioSettings(): Promise<void> {
     if (inTauri) await invoke('restore_audio_settings');
   },
+  /** Installs Discord's microphone (one Windows prompt). Resolves to the
+   *  installer's exit code; rejects with 'cancelled' if the prompt is declined. */
+  async installCable(): Promise<number> {
+    return inTauri ? invoke<number>('install_cable') : 0;
+  },
   async restartDiscord(): Promise<void> {
     if (inTauri) await invoke('restart_discord');
   },
@@ -146,12 +157,46 @@ export const api = {
   },
   async matrix(): Promise<Matrix> {
     if (inTauri) return invoke<Matrix>('get_matrix');
-    const sources = [{ id: 1, label: 'Mikrofon' }, { id: 2, label: 'Claude' }, { id: 3, label: 'Discord' }];
-    const outputs = [{ id: 101, label: 'Til Discord' }, { id: 102, label: 'Til Claude' }, { id: 103, label: 'Lyt med' }];
-    const on = (s: number, o: number): MatrixCell => ({ source: s, output: o, state: 'on', gainDb: 0 });
+    const L = (id: number, label: string, removable = false): Labeled => ({ id, label, removable });
+    const sources = [L(1, 'Mikrofon'), L(2, 'Claude'), L(3, 'Discord'), L(200, 'Spotify', true)];
+    const outputs = [L(101, 'Til Discord'), L(102, 'Til Claude'), L(300, 'Headset', true)];
+    const on = (s: number, o: number, gainDb = 0): MatrixCell => ({ source: s, output: o, state: 'on', gainDb });
     const off = (s: number, o: number): MatrixCell => ({ source: s, output: o, state: 'off', gainDb: 0 });
     const locked = (s: number, o: number, who: string): MatrixCell => ({ source: s, output: o, state: 'locked', gainDb: 0, who });
-    return { sources, outputs, cells: [on(1, 101), on(2, 101), locked(3, 101, 'Discord'), on(1, 102), locked(2, 102, 'Claude'), on(3, 102), off(1, 103), off(2, 103), off(3, 103)] };
+    return {
+      sources, outputs,
+      cells: [on(1, 101), on(2, 101), locked(3, 101, 'Discord'), on(1, 102), locked(2, 102, 'Claude'), on(3, 102),
+        locked(1, 300, 'Du'), off(2, 300), off(3, 300), on(200, 101, -12), off(200, 102), off(200, 300)],
+    };
+  },
+  async mixerChoices(): Promise<MixerChoices> {
+    if (inTauri) return invoke<MixerChoices>('mixer_choices');
+    return {
+      inputs: [{ value: 'in1', label: 'Mikrofon (USB Audio)' }, { value: 'in2', label: 'Line In (Realtek)' }],
+      programs: [{ value: 'spotify.exe', label: 'Spotify' }, { value: 'vlc.exe', label: 'Vlc' }],
+      outputs: [{ value: 'out1', label: 'Headset (Jabra Evolve2)' }, { value: 'out2', label: 'Højttalere (Realtek)' }],
+    };
+  },
+  async addMixerSource(kind: 'input' | 'program', value: string, label: string): Promise<number> {
+    return inTauri ? invoke<number>('add_mixer_source', { kind, value, label }) : 201;
+  },
+  async removeMixerSource(id: number): Promise<void> {
+    if (inTauri) await invoke('remove_mixer_source', { id });
+  },
+  async addMixerOutput(deviceId: string, label: string): Promise<number> {
+    return inTauri ? invoke<number>('add_mixer_output', { deviceId, label }) : 301;
+  },
+  async removeMixerOutput(id: number): Promise<void> {
+    if (inTauri) await invoke('remove_mixer_output', { id });
+  },
+  async savePreset(name: string): Promise<void> {
+    if (inTauri) await invoke('save_preset', { name });
+  },
+  async loadPreset(name: string): Promise<void> {
+    if (inTauri) await invoke('load_preset', { name });
+  },
+  async deletePreset(name: string): Promise<void> {
+    if (inTauri) await invoke('delete_preset', { name });
   },
   async setRoute(source: number, output: number, enabled: boolean, gainDb: number): Promise<void> {
     if (inTauri) await invoke('set_route', { source, output, enabled, gainDb });

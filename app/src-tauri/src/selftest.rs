@@ -19,7 +19,7 @@ pub struct RouteResult {
 #[cfg(windows)]
 pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
     use crate::state::AppState;
-    use ct_engine::analysis::{mono, tone_db_near, Sine};
+    use ct_engine::analysis::{mono, tone_db_near, tone_tolerance, Sine};
     use ct_engine::graph::{ids, Party, Route, Source};
     use ct_engine::mixer::{connect, GainParams, OutputMixer, SourceFanout};
     use ct_engine::win::devices::{DeviceSelector, Flow};
@@ -119,8 +119,8 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
         } else {
             (&to_claude, &to_discord)
         };
-        let level = tone_db_near(here, f, 2.0, rate);
-        let leak = tone_db_near(there, f, 2.0, rate);
+        let level = tone_db_near(here, f, tone_tolerance(f), rate);
+        let leak = tone_db_near(there, f, tone_tolerance(f), rate);
         let passed = level > -30.0 && leak < level - 60.0;
         out.push(RouteResult {
             route: name.into(),

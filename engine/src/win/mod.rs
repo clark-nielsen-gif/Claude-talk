@@ -54,6 +54,16 @@ pub fn windows_build() -> u32 {
     info.dwBuildNumber
 }
 
+/// Asks Windows for 1 ms timer resolution for this process (otherwise a
+/// short sleep can last 15.6 ms and clock-paced threads deliver in bursts).
+/// Idempotent; kept for the life of the process.
+pub fn high_res_timer() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        windows::Win32::Media::timeBeginPeriod(1);
+    });
+}
+
 /// Process loopback that includes a whole process tree needs build 20348+
 /// (Windows 11 or Windows Server 2022).
 pub fn supports_process_loopback() -> bool {

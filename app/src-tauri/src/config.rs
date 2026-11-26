@@ -40,6 +40,59 @@ pub enum EchoMode {
     Off,
 }
 
+/// What an added mixer source records.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum MixerSourceKind {
+    /// A microphone or other input device (endpoint id).
+    #[serde(rename_all = "camelCase")]
+    Input { device_id: String },
+    /// One program's sound (process loopback by executable name).
+    Program { exe: String },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MixerSource {
+    pub id: u32,
+    pub label: String,
+    #[serde(flatten)]
+    pub kind: MixerSourceKind,
+}
+
+/// An added output: a playback device the user listens to.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MixerOutput {
+    pub id: u32,
+    pub label: String,
+    pub device_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MixerRoute {
+    pub source: u32,
+    pub output: u32,
+    pub gain_db: f32,
+}
+
+/// The advanced mixer. `routes: None` means "the standard routing".
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Mixer {
+    pub sources: Vec<MixerSource>,
+    pub outputs: Vec<MixerOutput>,
+    pub routes: Option<Vec<MixerRoute>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Preset {
+    pub name: String,
+    pub mixer: Mixer,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Config {
@@ -59,6 +112,9 @@ pub struct Config {
     /// Keep Discord's microphone pointed at Claude Talk (off after
     /// "Restore normal sound settings" until Claude is switched on again).
     pub route_discord: bool,
+    /// Advanced mixer: added sources/outputs and the routing.
+    pub mixer: Mixer,
+    pub presets: Vec<Preset>,
 }
 
 impl Default for Config {
@@ -77,6 +133,8 @@ impl Default for Config {
             hotkeys: Hotkeys::default(),
             advanced_unlocked: false,
             route_discord: true,
+            mixer: Mixer::default(),
+            presets: Vec::new(),
         }
     }
 }
@@ -130,6 +188,56 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mixer_settings_roundtrip() {
+        let c = Config {
+            mixer: Mixer {
+                sources: vec![
+                    MixerSource {
+                        id: 200,
+                        label: "Spotify".into(),
+                        kind: MixerSourceKind::Program {
+                            exe: "spotify.exe".into(),
+                        },
+                    },
+                    MixerSource {
+                        id: 201,
+                        label: "USB".into(),
+                        kind: MixerSourceKind::Input {
+                            device_id: "{0.0.1}.{x}".into(),
+                        },
+                    },
+                ],
+                outputs: vec![MixerOutput {
+                    id: 300,
+                    label: "Headset".into(),
+                    device_id: "{0.0.0}.{y}".into(),
+                }],
+                routes: Some(vec![MixerRoute {
+                    source: 200,
+                    output: 102,
+                    gain_db: -6.0,
+                }]),
+            },
+            presets: vec![Preset {
+                name: "Musik".into(),
+                mixer: Mixer::default(),
+            }],
+            ..Default::default()
+        };
+        let text = serde_json::to_string(&c).unwrap();
+        assert!(
+            text.contains(r#""type":"program","exe":"spotify.exe""#),
+            "{text}"
+        );
+        assert!(text.contains(r#""type":"input","deviceId""#), "{text}");
+        let back: Config = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, c);
+        // files from before the mixer existed still load
+        let old: Config = serde_json::from_str(r#"{"version":1,"language":"en"}"#).unwrap();
+        assert_eq!(old.mixer, Mixer::default());
+    }
     #[test]
     fn roundtrip_and_damaged_file() {
         let dir = std::env::temp_dir().join(format!("ct-cfg-{}", std::process::id()));
