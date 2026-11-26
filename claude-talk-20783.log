@@ -1,0 +1,9 @@
+1795724077.691 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795724077.711 INFO  claude_talk::audio::imp: audio engine started
+1795724077.712 INFO  claude_talk::updates: updates: not configured in this build
+1795724077.712 INFO  claude_talk::autostart: autostart on
+1795724077.943 INFO  claude_talk::discord: Discord microphone: Unknown
+1795724077.963 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForDevice (device '', pid 0, hr 0x80070490)
+1795724077.963 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795724077.975 INFO  claude_talk::audio::imp: source 3 'Discord' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795724078.225 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Paused (device '', pid 0, hr 0x80070490)
