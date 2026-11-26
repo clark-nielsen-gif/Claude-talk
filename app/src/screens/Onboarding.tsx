@@ -3,6 +3,7 @@ import { api, type AppInfo } from '../api';
 import { Icon, Notice } from '../components';
 import { useApp, useT } from '../context';
 import { useInstallCable } from '../useInstallCable';
+import { useCableBroken } from '../useCableBroken';
 
 type Step = 'welcome' | 'setup' | 'ready';
 
@@ -34,13 +35,15 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
   // after 12 s – always with a way forward.
   const cableMissing = !info.cableInstalled && !!status?.engineRunning && !status.cableOk;
   const micState = status?.micState;
+  const cableBroken = useCableBroken(status, info);
   const problem = !info.supported ? 'unsupported'
     : cableMissing && (slow || shown >= checks.length) ? 'cable'
+    : cableBroken ? 'cableBroken'
     : micState === 'blocked' && shown >= 2 ? 'micBlocked'
     : micState === 'missing' && (slow || shown >= checks.length) ? 'micMissing'
     : slow && !allDone ? 'slow' : null;
   // the step that failed shows a warning, not a spinner
-  const failed = problem === 'cable' ? 0 : problem === 'micBlocked' || problem === 'micMissing' ? 1 : -1;
+  const failed = problem === 'cable' || problem === 'cableBroken' ? 0 : problem === 'micBlocked' || problem === 'micMissing' ? 1 : -1;
 
   useEffect(() => {
     if (step !== 'setup' || allDone) return;
@@ -98,6 +101,7 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
             </ul>
             {problem === 'unsupported' && <Notice kind="error" title={t.errors.unsupportedTitle} body={t.errors.unsupportedBody} action={t.errors.unsupportedAction} onAction={() => api.openPlace('windowsUpdate')} />}
             {problem === 'cable' && <Notice kind="error" title={t.errors.cableMissingTitle} body={t.onboarding.cableMissingBody} action={installing ? t.errors.cableInstalling : t.errors.cableMissingAction} onAction={installing ? undefined : install} />}
+            {problem === 'cableBroken' && <Notice kind="error" title={t.errors.cableBrokenTitle} body={t.errors.cableBrokenBody} action={t.errors.cableBrokenAction} onAction={() => api.openPlace('soundSettings')} />}
             {problem === 'micBlocked' && <Notice kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />}
             {problem === 'micMissing' && <Notice kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />}
             {problem === 'slow' && <Notice kind="warn" title={t.onboarding.slowTitle} body={t.onboarding.slowBody} />}

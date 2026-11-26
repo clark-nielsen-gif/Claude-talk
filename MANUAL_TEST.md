@@ -11,7 +11,7 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
    - [ ] Logget ind med koden fra mailen. (Hvis du trykker »Continue with Google«, vises vejledningen igen i stedet.)
 4. **Luk og åbn Claude-vinduet igen.**
    - [ ] Du er stadig logget ind
-5. **Start Discord-opkaldet.** I Claude Talk står der »Klar – venter på Claude« i Discord-feltet, og »De andre i Discord hører Claude ✓«, når Claudes stemme er tændt (trin 6). Hvis der står »Discord bruger en anden mikrofon«, så tryk »Vis mig hvordan«, og følg de tre trin. Fluebenet kommer af sig selv. Står Discord på »Standard« og var startet før Claude Talk, står der i stedet »Discord skal lige genstartes«; har du valgt en bestemt mikrofon i Discord, kommer den besked ikke (kun vejledningen).
+5. **Start Discord-opkaldet.** I Claude Talk står der »Klar – venter på Claude« i Discord-feltet, og »De andre i Discord hører Claude ✓«, når Claudes stemme er tændt (trin 6). Hvis der står »Discord bruger en anden mikrofon«, så tryk »Vis mig hvordan«, og følg de tre trin. Fluebenet kommer af sig selv. Står Discord på »Standard« og var startet før Claude Talk, står der i stedet »Discord skal lige genstartes«; har du valgt en bestemt mikrofon i Discord, kommer den besked ikke (kun vejledningen) – medmindre den mikrofon også er Windows' standardmikrofon (se 17b).
    - [ ] Grønt flueben uden at åbne Windows' lydindstillinger
 6. **Tænd for Claudes stemme** i Claude-vinduet (stemme-knappen ved tekstfeltet). Claude-kortet viser »Claude hører dig og Discord ✓«.
    - [ ] Flueben
@@ -53,6 +53,7 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
     - [ ] Der står ikke »Discord skal lige genstartes« (en genstart ville ikke hjælpe)
     - [ ] Under Indstillinger → Din mikrofon kan du vælge en anden og gå tilbage til »Windows' standard«
     - [ ] Efter »Gendan« og efter »Luk Claude Talk« optager Discord igen fra den mikrofon, du valgte i Discord (selv om Discord nu står på »Standard«)
+    - [ ] Efter »Gendan«: tænd »Claude i Discord« midt i et opkald. Feltet Discord viser »Discord skal lige genstartes« (ikke en vejledning, der ikke kan lykkes), og efter genstarten hører din ven Claude
 18. **Afinstaller** via Windows' »Installerede apps«.
     - [ ] Alle tekster i afinstallationen er på dansk. Sæt flueben ved »Slet også indstillinger og Claude-login«.
     - [ ] Claude Talk, »Claude Talk – til Discord«-mikrofonen og autostart er væk. Discord bruger din almindelige mikrofon. Åbner du Claude Talk igen efter en ny installation, skal du logge ind på Claude igen.

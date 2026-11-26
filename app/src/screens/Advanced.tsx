@@ -72,13 +72,19 @@ const builtIn: Record<number, { da: string; en: string }> = {
   101: { da: 'Til Discord', en: 'To Discord' },
   102: { da: 'Til Claude', en: 'To Claude' },
   103: { da: 'Lyt med', en: 'Listen in' },
+  190: { da: 'Til Claude (kabel)', en: 'To Claude (cable)' },
 };
 
 /** Sources × outputs, a volume per cell. Echo cells are locked, loops refused. */
 export function Advanced({ info }: { info: AppInfo }) {
   const t = useT();
   const { config, update, toast, lang } = useApp();
-  const name = (item: Labeled) => (item.removable ? item.label : builtIn[item.id]?.[lang] ?? item.label);
+  const name = (item: Labeled) => {
+    if (item.removable) return item.label;
+    // Claude in another program: "Claude-appen", "Claude i Chrome", "Claude i Edge"
+    if (item.id === 191 && lang === 'en') return item.label === 'Claude-appen' ? 'The Claude app' : item.label.replace(' i ', ' in ');
+    return builtIn[item.id]?.[lang] ?? item.label;
+  };
   // every change: an error is shown, and the table shows what really is
   const act = (f: () => Promise<unknown>) => async () => {
     try { await f(); } catch { toast(t.errors.generic); } finally { reload(); }

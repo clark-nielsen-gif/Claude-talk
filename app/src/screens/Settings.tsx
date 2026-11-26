@@ -66,7 +66,9 @@ function MicPicker() {
 
 export function Settings() {
   const t = useT();
-  const { config, update, toast } = useApp();
+  const { config, update, toast, status } = useApp();
+  // the chosen microphone isn't there: Windows' default is used meanwhile
+  const micUnplugged = !!config.microphone && !!config.microphoneName && !!status?.micName && status.micName !== config.microphoneName;
   const [listening, setListening] = useState<string | null>(null);
   const [confirmRestore, setConfirmRestore] = useState(false);
   useEffect(() => {
@@ -104,7 +106,7 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{config.routeDiscord ? t.settings.microphoneHint : t.settings.microphoneHintRestored}</span></div>
+          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{micUnplugged ? fill(t.settings.micUnpluggedHint, { name: status?.micName ?? '' }) : config.routeDiscord ? t.settings.microphoneHint : t.settings.microphoneHintRestored}</span></div>
           <MicPicker />
         </div>
       </div>

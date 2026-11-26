@@ -231,6 +231,7 @@ pub fn uninstall_cleanup() -> i32 {
     // streams don't hold the cable and the Claude window's files while they
     // are removed (this cleanup gives Discord its microphone back itself)
     stop_other_instances();
+    crate::discord::NO_FILES.store(true, std::sync::atomic::Ordering::Relaxed);
     crate::discord::restore();
     // the program is going away: no helper at the next sign-in
     crate::autostart::restore_at_next_sign_in(false);

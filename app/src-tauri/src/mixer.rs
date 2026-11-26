@@ -105,14 +105,17 @@ pub mod imp {
         v
     }
 
-    pub fn add_source(host: &mut AudioHost, s: &MixerSource) -> Result<(), String> {
+    /// `new`: added by the user just now (the device must be there to be
+    /// checked). A saved source was checked when it was added; it waits for
+    /// its device like any other stream.
+    pub fn add_source(host: &mut AudioHost, s: &MixerSource, new: bool) -> Result<(), String> {
         if let MixerSourceKind::Program { exe } = &s.kind {
             let e = exe.to_lowercase();
             if own_exe().contains(&e) || e == "msedgewebview2.exe" {
                 return Err("error.ownProgram".into());
             }
         }
-        if let MixerSourceKind::Input { device_id } = &s.kind {
+        if let (MixerSourceKind::Input { device_id }, true) = (&s.kind, new) {
             // never one of Claude Talk's own devices (a loop the graph can't see)
             // (a device that isn't there now can't be checked: refused)
             let name = ct_engine::win::devices::resolve(&DeviceSelector::Id(device_id.clone()))
@@ -192,7 +195,7 @@ pub mod imp {
     pub fn apply(host: &mut AudioHost, m: &Mixer, unlocked: bool) {
         host.set_self_hearing_unlocked(unlocked);
         for s in &m.sources {
-            if let Err(e) = add_source(host, s) {
+            if let Err(e) = add_source(host, s, false) {
                 log::warn!("mixer: source '{}' not added ({e})", s.label);
             }
         }
@@ -213,7 +216,7 @@ pub mod imp {
             host.remove_output(o.id);
         }
         for s in &to.sources {
-            if let Err(e) = add_source(host, s) {
+            if let Err(e) = add_source(host, s, false) {
                 log::warn!("mixer: source '{}' not added ({e})", s.label);
             }
         }
@@ -465,7 +468,7 @@ fn add_mixer_source_blocking(
     {
         let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
         let host = g.as_mut().ok_or("error.internal")?;
-        imp::add_source(host, &src)?;
+        imp::add_source(host, &src, true)?;
     }
     log::info!("mixer: added source {id} '{}'", src.label);
     state

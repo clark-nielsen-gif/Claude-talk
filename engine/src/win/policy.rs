@@ -175,19 +175,55 @@ pub fn discord_own_input() -> Option<String> {
         .clone()
 }
 
-/// The value Claude Talk itself gave Discord on restore (the user's
-/// microphone, D28). Read back later, it is not the user's own setting.
-static DISCORD_GIVEN_BACK: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Every value Claude Talk itself has given Discord on restore (the user's
+/// microphone, D28). Read back later, none of them is the user's own
+/// setting.
+static DISCORD_GIVEN_BACK: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
-pub fn set_discord_given_back(path: Option<String>) {
-    *DISCORD_GIVEN_BACK.lock().unwrap_or_else(|p| p.into_inner()) = path;
+pub fn set_discord_given_back(paths: Vec<String>) {
+    *DISCORD_GIVEN_BACK.lock().unwrap_or_else(|p| p.into_inner()) = paths;
 }
 
-pub fn discord_given_back() -> Option<String> {
+pub fn discord_given_back() -> Vec<String> {
     DISCORD_GIVEN_BACK
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .clone()
+}
+
+fn note_given_back(path: &str) {
+    let mut g = DISCORD_GIVEN_BACK.lock().unwrap_or_else(|p| p.into_inner());
+    if !g.iter().any(|v| v.eq_ignore_ascii_case(path)) {
+        g.push(path.to_string());
+    }
+}
+
+/// What Discord's input should be while Claude Talk doesn't route it: the
+/// user's own per-app setting if there was one; otherwise the microphone
+/// Claude Talk uses as "you" (taken over from Discord, D28), unless that is
+/// Windows' default for every role anyway (then nothing: no hidden setting
+/// that would outlive a later change of the default). None: no setting.
+pub fn wanted_discord_input() -> Option<String> {
+    discord_own_input().or_else(|| {
+        let defaults = devices::default_ids(Flow::Capture);
+        devices::preferred_microphone()
+            .filter(|id| {
+                !defaults
+                    .iter()
+                    .all(|d| d.as_deref().is_some_and(|d| d.eq_ignore_ascii_case(id)))
+            })
+            .map(|id| interface_path(&id))
+    })
+}
+
+/// Whether Discord's stored input is what it should be while Claude Talk
+/// doesn't route it (None: Discord isn't running).
+pub fn discord_input_as_wanted(exes: &[String]) -> Option<bool> {
+    let f = factory().ok()?;
+    let first = *pids_of(exes).first()?;
+    let now = f.get(first, eConsole).ok()?;
+    let wanted = wanted_discord_input().unwrap_or_default();
+    Some(now.eq_ignore_ascii_case(&wanted))
 }
 
 /// The cable was installed by Claude Talk (only Claude Talk points programs
@@ -215,7 +251,9 @@ pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
             // (empty: nothing set now – keep what was saved: the entry may
             // have been removed while Discord was closed, before it could be
             // put back)
-            let given = discord_given_back().is_some_and(|g| g.eq_ignore_ascii_case(&d));
+            let given = discord_given_back()
+                .iter()
+                .any(|g| g.eq_ignore_ascii_case(&d));
             if !d.is_empty() && !given && !d.to_lowercase().contains(&id.to_lowercase()) {
                 set_discord_own_input(Some(d));
             }
@@ -255,32 +293,22 @@ pub fn discord_routed_to_cable(exes: &[String]) -> Option<bool> {
 pub fn restore_discord(exes: &[String]) -> usize {
     let mut n = 0;
     if let Ok(f) = factory() {
-        // The user's own choice for Discord if there was one. Otherwise the
-        // microphone Claude Talk recorded as "you" (taken over from Discord,
-        // D28): with Discord on "Default", nothing would give it back the
-        // headset the user had picked there. Else none (Windows' default).
-        // (not when that is Windows' default microphone anyway: no hidden
-        // setting that would outlive a later change of the default)
+        // (see `wanted_discord_input`: with Discord on "Default", nothing
+        // else would give it back the headset the user had picked there)
         let own = discord_own_input();
-        let mine = if own.is_none() {
-            let defaults = devices::default_ids(Flow::Capture);
-            devices::preferred_microphone()
-                .filter(|id| {
-                    !defaults
-                        .iter()
-                        .flatten()
-                        .any(|d| d.eq_ignore_ascii_case(id))
-                })
-                .map(|id| interface_path(&id))
-        } else {
-            None
-        };
-        set_discord_given_back(mine.clone());
-        let back = HSTRING::from(own.or(mine).unwrap_or_default());
+        let wanted = wanted_discord_input();
+        let back = HSTRING::from(wanted.clone().unwrap_or_default());
         for pid in pids_of(exes) {
             for role in ROLES {
                 if f.set(pid, role, &back).is_ok() {
                     n += 1;
+                    // remembered once really written (and never as the
+                    // user's own setting)
+                    if own.is_none() {
+                        if let Some(w) = &wanted {
+                            note_given_back(w);
+                        }
+                    }
                 }
             }
         }

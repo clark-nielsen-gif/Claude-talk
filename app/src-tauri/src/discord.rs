@@ -50,10 +50,17 @@ pub fn spawn_watcher(app: AppHandle) {
                 let mut pids = policy::pids_of(&exes);
                 pids.sort_unstable();
                 let running = !pids.is_empty();
-                if !enabled && running && policy::discord_routed_to_cable(&exes) == Some(true) {
-                    // "Restore normal sound settings" was pressed while Discord was closed
-                    let n = policy::restore_discord(&exes);
-                    log::info!("Discord's own microphone restored now that it runs ({n})");
+                // Not routing (after "Gendan"): Discord keeps the user's
+                // microphone – also after it was closed when "Gendan" was
+                // pressed, or updated itself (a new version has no setting)
+                if !enabled
+                    && running
+                    && tick % 5 == 1
+                    && (policy::discord_routed_to_cable(&exes) == Some(true)
+                        || policy::discord_input_as_wanted(&exes) == Some(false))
+                {
+                    let n = restore();
+                    log::info!("Discord's own microphone given back now that it runs ({n})");
                 }
                 if enabled && running {
                     match policy::discord_routed_to_cable(&exes) {
@@ -154,6 +161,10 @@ pub fn spawn_watcher(app: AppHandle) {
                             .any(|d| d.to_lowercase() == e)
                             || policy::discord_own_input()
                                 .is_some_and(|own| own.to_lowercase().contains(&e))
+                            // what Claude Talk gave Discord itself (D28)
+                            || policy::discord_given_back()
+                                .iter()
+                                .any(|g| g.to_lowercase().contains(&e))
                     }
                     _ => false,
                 };
@@ -393,30 +404,36 @@ pub fn restore() -> usize {
     if ct_engine::win::devices::preferred_microphone().is_none() {
         ct_engine::win::devices::set_preferred_microphone(cfg.microphone.clone());
     }
-    load_given_back();
+    if ct_engine::win::policy::discord_given_back().is_empty() {
+        load_given_back();
+    }
     ct_engine::win::policy::set_cable_is_ours(crate::installer::cable_is_ours());
+    let before = ct_engine::win::policy::discord_given_back();
     let n = ct_engine::win::policy::restore_discord(&ct_engine::win::host::discord_executables());
-    // remember what Claude Talk itself gave Discord (not the user's setting)
-    let file = crate::paths::given_back_file();
-    match ct_engine::win::policy::discord_given_back() {
-        Some(v) => {
-            let _ = std::fs::write(&file, v);
-        }
-        None => {
-            let _ = std::fs::remove_file(&file);
-        }
+    // remember what Claude Talk itself gave Discord (never the user's own
+    // setting); not from the elevated uninstaller (D27)
+    let after = ct_engine::win::policy::discord_given_back();
+    if after != before && !NO_FILES.load(Ordering::Relaxed) {
+        let _ = std::fs::create_dir_all(crate::paths::app_dir());
+        let _ = std::fs::write(crate::paths::given_back_file(), after.join("\n"));
     }
     log::info!("restored Discord's microphone ({n} settings cleared)");
     n
 }
 
-/// What Claude Talk last gave Discord itself (see `paths::given_back_file`).
+/// Set by the elevated uninstall cleanup: it writes nothing into the user's
+/// folders.
+pub static NO_FILES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What Claude Talk has given Discord itself (see `paths::given_back_file`).
 #[cfg(windows)]
 pub fn load_given_back() {
-    let v = std::fs::read_to_string(crate::paths::given_back_file())
-        .ok()
+    let v: Vec<String> = std::fs::read_to_string(crate::paths::given_back_file())
+        .unwrap_or_default()
+        .lines()
         .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .collect();
     ct_engine::win::policy::set_discord_given_back(v);
 }
 
@@ -467,6 +484,9 @@ pub fn restore_when_discord_starts() -> i32 {
     use ct_engine::win::host::discord_executables;
     use ct_engine::win::{policy, ComGuard};
     let _com = ComGuard::new();
+    // Windows removes a RunOnce value before it runs it: arm it again, so a
+    // session that ends before Discord runs still has a helper next time
+    crate::autostart::restore_at_next_sign_in(true);
     // first wait until the Claude Talk that started us has really ended
     // (until then its "running" mark is still there)
     if let Some(parent) = std::env::args()
@@ -502,7 +522,12 @@ pub fn restore_when_discord_starts() -> i32 {
                 let n = restore();
                 log::info!("restore helper: Discord's own microphone back ({n})");
             }
-            crate::autostart::restore_at_next_sign_in(false);
+            // done only when Discord really has it; else again next sign-in
+            let done = policy::discord_routed_to_cable(&exes) == Some(false)
+                && policy::discord_input_as_wanted(&exes) != Some(false);
+            if done {
+                crate::autostart::restore_at_next_sign_in(false);
+            }
             return 0;
         }
         std::thread::sleep(Duration::from_secs(2));

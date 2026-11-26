@@ -22,7 +22,9 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
     || (!status.cableOk && !info.cableInstalled) || cableBroken
     || status.micState === 'blocked' || status.micState === 'missing'
     || status.discordNeedsRestart
-    || (status.discordUsesCable === 'no' && config.routeDiscord));
+    || (status.discordUsesCable === 'no' && config.routeDiscord)
+    // speakers without echo reduction: the overview warns about echo
+    || (status.speakers && !status.echoActive));
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<SelfTestResult[] | null>(null);
   // Plain verdict: dropouts in the last ~10 seconds, or a long delay.
