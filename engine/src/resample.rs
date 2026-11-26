@@ -46,8 +46,11 @@ pub struct AdaptiveResampler {
     blocks_per_second: f64,
     /// least room left after a pull since the last adaptation (frames)
     min_slack: usize,
-    /// never shrink below the target that last ran dry
+    /// never shrink below the target that last ran dry (for 10 minutes)
     floor: usize,
+    blocks_since_dry: u64,
+    /// least room left after a pull during those minutes
+    long_slack: usize,
     /// fixed delay (echo reference): no growth, no re-prime, gaps are silence
     fixed: bool,
     /// the source restarted: the next underrun is that gap, not jitter
@@ -61,6 +64,8 @@ pub struct AdaptiveResampler {
     /// pulls since the debt arose: unpaid after a few, the input was lost
     /// rather than late, and the route re-primes to its target instead
     owed_pulls: u32,
+    /// seconds since the source last delivered (set before each pull)
+    input_age_s: f64,
     /// the last frame played (a gap at a block boundary fades from it)
     last: [f32; 8],
 }
@@ -109,12 +114,15 @@ impl AdaptiveResampler {
             blocks_per_second,
             min_slack: usize::MAX,
             floor: 0,
+            blocks_since_dry: 0,
+            long_slack: usize::MAX,
             fixed: false,
             source_epoch: 0,
             restart_grace: false,
             fade_in: 0,
             owed: 0.0,
             owed_pulls: 0,
+            input_age_s: 0.0,
             last: [0.0; 8],
         }
     }
@@ -127,6 +135,14 @@ impl AdaptiveResampler {
     /// Keeps the delay constant (echo reference): no growth, no re-prime.
     pub fn set_fixed(&mut self) {
         self.fixed = true;
+    }
+
+    /// How long ago the source last delivered. A fixed route steers on the
+    /// delay (fill + this age) instead of the fill alone: the fill jumps by a
+    /// packet whenever the source's and the output's clock phases cross,
+    /// the delay does not.
+    pub fn set_input_age(&mut self, seconds: f64) {
+        self.input_age_s = seconds.clamp(0.0, 0.1);
     }
 
     /// Called before each pull with the source's restart counter.
@@ -148,6 +164,8 @@ impl AdaptiveResampler {
         // room (5 ms at a time, up to 40 ms) instead of crackling forever.
         self.target_frames = (self.target_frames + self.step).min(self.max_target);
         self.floor = self.floor.max(self.target_frames);
+        self.blocks_since_dry = 0;
+        self.long_slack = usize::MAX;
         self.drift.set_target(self.target_frames as f64);
         self.blocks_since_underrun = 0;
         self.min_slack = usize::MAX;
@@ -159,6 +177,22 @@ impl AdaptiveResampler {
         // 4 ms left after every pull), and never below the level that last
         // ran dry: the source's bursts need it.
         self.blocks_since_underrun += 1;
+        // the floor itself relaxes after 10 quiet minutes: a burst long
+        // ago must not cost latency for the rest of the session
+        // – only if the buffer kept a whole growth step to spare all the
+        // time, so the shrink cannot be what makes it run dry
+        self.blocks_since_dry += 1;
+        if self.blocks_since_dry as f64 > 600.0 * self.blocks_per_second {
+            let spare = self.in_rate as usize * 4 / 1000 + CHUNK;
+            if self.floor > 0
+                && self.long_slack != usize::MAX
+                && self.long_slack > self.step + spare
+            {
+                self.floor = self.floor.saturating_sub(self.step);
+            }
+            self.blocks_since_dry = 0;
+            self.long_slack = usize::MAX;
+        }
         if self.blocks_since_underrun as f64 > 15.0 * self.blocks_per_second {
             let spare = self.in_rate as usize * 4 / 1000 + CHUNK;
             if self.target_frames > self.min_target.max(self.floor)
@@ -255,11 +289,21 @@ impl AdaptiveResampler {
         self.min_slack = self
             .min_slack
             .min(available.saturating_sub(block_in.ceil() as usize));
+        self.long_slack = self
+            .long_slack
+            .min(available.saturating_sub(block_in.ceil() as usize));
         if !self.fixed {
             self.adapt_when_stable();
         }
         // One controller update per pull (per output block).
-        let rel = self.drift.update(available as f64);
+        let level = if self.fixed {
+            // delay in input frames, less half a block (the average age), so
+            // the target means the same fill as for other routes
+            available as f64 + self.input_age_s * self.in_rate as f64 - block_in / 2.0
+        } else {
+            available as f64
+        };
+        let rel = self.drift.update(level);
         let _ = self.inner.set_resample_ratio(self.nominal * rel, true);
 
         let mut written = 0;
@@ -631,6 +675,43 @@ mod tests {
                 "lost {lost} (late {late}): {fill_ms} ms buffered"
             );
         }
+    }
+
+    /// Growth after a burst is not for the rest of the session: with steady
+    /// delivery the buffer comes back down (round-5 audio review).
+    #[test]
+    fn buffer_comes_back_down_after_bursts() {
+        let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
+        let mut r = AdaptiveResampler::new(1, 48000, 48000, 20.0, 100.0);
+        let mut out = vec![0.0f32; 480];
+        let mut grown = 0.0f32;
+        for block in 0..(40 * 60 * 100usize) {
+            // two 40 ms stalls early on, then perfectly steady
+            let stalled = (1000..1004).contains(&block) || (3000..3004).contains(&block);
+            if !stalled {
+                let n = if block == 1004 || block == 3004 {
+                    480 * 5
+                } else {
+                    480
+                };
+                let _ = prod
+                    .write_chunk_uninit(n)
+                    .map(|c| c.fill_from_iter(std::iter::repeat(0.25f32)));
+            }
+            r.pull(&mut cons, &mut out);
+            if block == 4000 {
+                grown = r.target_ms();
+            }
+        }
+        assert!(
+            grown >= 25.0,
+            "the stalls should have grown the buffer ({grown} ms)"
+        );
+        assert!(
+            r.target_ms() < grown,
+            "still {} ms after 40 steady minutes",
+            r.target_ms()
+        );
     }
 
     #[test]

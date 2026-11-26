@@ -68,7 +68,7 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | Rolle | Resultat | Vigtigste fund |
 |---|---|---|
 | Kode | 1 major, 4 minor | Gendan-hjælperen så den lukkende Claude Talk som »kører stadig« og stoppede med det samme; under en installer kunne den låse programfilen. |
-| Lyd | (ingen rapport endnu ved denne optegnelse) | |
+| Lyd | 1 major, 4 minor | Ekkodæmperens reference fulgte fyldningen, ikke forsinkelsen: når mikrofonens og højttalerens ure er forskellige, faldt ekkodæmpningen i perioder til 1–18 dB. Jitterbufferen skrumpede aldrig efter vækst; mikrofonpauser fik den til at vokse. |
 | Design | 1 major, 11 minor | Under 900 px lå problemkortet langt nede under det grønne »Dig«-kort. |
 | "Min mor" | 2 major, 15 minor | Claude-vinduet kunne være højere end skærmen (stemme-knappen under proceslinjen). Login-hjælpen kom kun én gang, og programmet pegede på en stemme-knap, mens hun stadig var på login-siden. |
 | "Bryd det" | 2 major, 6 minor | Samme hjælper-fejl. Discords »Tryk for at tale« giver kun Claude, mens tasten holdes, mens Claude Talk viser grønt. |

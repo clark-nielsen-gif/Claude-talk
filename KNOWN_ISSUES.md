@@ -58,6 +58,8 @@ Lukker man Claude Talk normalt, spørger den først og giver Discord sin egen mi
 - Hver mixer regner med 10 ms-blokke til drift-regulering og efterslæbsgrænser. Enheder med andre perioder fungerer, men reguleringen er tunet til 10 ms.
 - Broen til Claude-vinduet begrænser antallet af ventende pakker, ikke deres alder i Chromiums kø. Målt forsinkelse til Claude står i `PROGRESS.md`.
 - Når en tilføjet kilde fjernes i **Avanceret**, stopper dens lyd uden udtoning (et lille klik er muligt).
+- Når ekkodæmpningen slås til eller fra (fx når man skifter mellem høretelefoner og højttalere), kan der komme et lille klik og et hul på ca. 20 ms i mikrofonen.
+- Hvis Claude Talks hovedtråd hænger i mere end ca. 40 ms, springes en bid af lyden til Claude over (et lille klik).
 
 ## K20 – Windows på ARM (Snapdragon)
 Installeren bruger VB-Audios ARM64-driver, hvis pakken har en. Har den ikke, siger installeren og programmet tydeligt, at Claude Talk-mikrofonen ikke findes til pc'en endnu (kode 6). Det er ikke testet på en ARM-pc.

@@ -385,7 +385,13 @@ pub fn spawn_capture(
             // real-time silence while waiting (one lock per 10 ms, not on a
             // running audio path)
             if new_stretch || idle_start.is_none() {
-                idle_start = Some(Instant::now());
+                // continue the timeline from the last real (or silent)
+                // packet, not from now: the moments in between would
+                // otherwise be a gap that grows the routes' buffers
+                let last = shared.lock().map(|f| f.last_push_ns()).unwrap_or(0);
+                let since = crate::mixer::clock_ns().saturating_sub(last);
+                let back = if last == 0 { 0 } else { since.min(100_000_000) };
+                idle_start = Some(Instant::now() - Duration::from_nanos(back));
                 silence_sent = 0;
             }
             let start = idle_start.expect("set above");

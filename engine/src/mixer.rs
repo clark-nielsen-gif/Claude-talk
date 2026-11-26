@@ -85,6 +85,20 @@ pub struct SourceStats {
     /// Counts (re)starts of the device or program behind the source; the
     /// gap around a restart is not jitter and must not grow route buffers.
     pub restarts: AtomicU32,
+    /// When the source last delivered (ns on `clock_ns`): with the fill it
+    /// gives the true delay of a route, steady across packet phases.
+    pub last_push_ns: AtomicU64,
+}
+
+/// Monotonic nanoseconds since the first call (QueryPerformanceCounter on
+/// Windows; no allocation, safe on audio threads).
+pub fn clock_ns() -> u64 {
+    use std::sync::OnceLock;
+    static EPOCH: OnceLock<std::time::Instant> = OnceLock::new();
+    EPOCH
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_nanos() as u64
 }
 
 pub struct SourceTap {
@@ -123,6 +137,7 @@ pub struct OutputMixer {
     commands: rtrb::Consumer<MixerCommand>,
     garbage: rtrb::Producer<Box<SourceTap>>,
     blocks_per_second: f64,
+    now_ns: u64,
 }
 
 /// Control-thread side of an output mixer.
@@ -165,6 +180,7 @@ impl OutputMixer {
             commands: cmd_rx,
             garbage: gb_tx,
             blocks_per_second: bps,
+            now_ns: 0,
         };
         let handle = MixerHandle {
             output,
@@ -242,6 +258,12 @@ impl OutputMixer {
 
     /// Renders `out` (interleaved, `channels` as given to `new`).
     pub fn render(&mut self, out: &mut [f32]) {
+        self.render_at(out, clock_ns());
+    }
+
+    /// `render` at an explicit time (simulations).
+    pub fn render_at(&mut self, out: &mut [f32], now_ns: u64) {
+        self.now_ns = now_ns;
         self.apply_commands();
         let ch_out = self.channels.max(1);
         let total = out.len() / ch_out;
@@ -284,6 +306,9 @@ impl OutputMixer {
             let scratch = &mut self.scratch[..n];
             tap.resampler
                 .note_source_epoch(tap.source_stats.restarts.load(Ordering::Relaxed));
+            let last = tap.source_stats.last_push_ns.load(Ordering::Relaxed);
+            let age_s = self.now_ns.saturating_sub(last) as f64 * 1e-9;
+            tap.resampler.set_input_age(age_s);
             let st = tap.resampler.pull(&mut tap.ring, scratch);
             if st.underrun_frames > 0 {
                 tap.stats
@@ -408,6 +433,11 @@ impl SourceFanout {
         )
     }
 
+    /// When this source last delivered (ns on `clock_ns`, 0 = never).
+    pub fn last_push_ns(&self) -> u64 {
+        self.stats.last_push_ns.load(Ordering::Relaxed)
+    }
+
     /// The device or program behind this source is (re)starting.
     pub fn mark_restart(&self) {
         self.stats.restarts.fetch_add(1, Ordering::Relaxed);
@@ -463,6 +493,17 @@ impl SourceFanout {
     /// Pushes captured audio (interleaved, `in_channels`) to every output.
     /// `None` means the device reported silence for `frames` frames.
     pub fn push(&mut self, input: Option<&[f32]>, in_channels: usize, frames: usize) {
+        self.push_at(input, in_channels, frames, clock_ns());
+    }
+
+    /// `push` with an explicit time (simulations).
+    pub fn push_at(
+        &mut self,
+        input: Option<&[f32]>,
+        in_channels: usize,
+        frames: usize,
+        now_ns: u64,
+    ) {
         self.apply_commands();
         let mut done = 0;
         while done < frames {
@@ -518,6 +559,7 @@ impl SourceFanout {
         self.stats
             .captured_frames
             .fetch_add(frames as u64, Ordering::Relaxed);
+        self.stats.last_push_ns.store(now_ns, Ordering::Relaxed);
     }
 }
 
