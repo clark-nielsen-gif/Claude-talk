@@ -1,0 +1,120 @@
+﻿{
+    "endpoints_before":  null,
+    "install_finishes":  {
+                             "pass":  true,
+                             "detail":  {
+                                            "exit":  0,
+                                            "seconds":  12.7
+                                        }
+                         },
+    "program_installed":  {
+                              "pass":  true,
+                              "detail":  "C:\\Program Files\\Claude Talk\\claude-talk.exe"
+                          },
+    "listed_in_installed_apps":  {
+                                     "pass":  true,
+                                     "detail":  "Claude Talk"
+                                 },
+    "endpoints_after":  [
+                            {
+                                "Flow":  "Render",
+                                "FriendlyName":  "Claude Talk – intern (VB-Audio)",
+                                "Id":  "{0.0.0.00000000}.{725aeffa-2091-4302-b2f4-2cfae597281f}"
+                            },
+                            {
+                                "Flow":  "Render",
+                                "FriendlyName":  "Claude Talk – intern 16ch (VB-Audio)",
+                                "Id":  "{0.0.0.00000000}.{8cbac6c5-cd02-4d8d-8d74-6cddeca404c3}"
+                            },
+                            {
+                                "Flow":  "Capture",
+                                "FriendlyName":  "Claude Talk – til Discord (VB-Audio)",
+                                "Id":  "{0.0.1.00000000}.{62deb23a-e3c5-4906-bb71-3f9b1e627057}"
+                            }
+                        ],
+    "discord_microphone_named":  {
+                                     "pass":  true,
+                                     "detail":  {
+                                                    "capture":  [
+                                                                    "Claude Talk – til Discord (VB-Audio)"
+                                                                ],
+                                                    "render":  [
+                                                                   "Claude Talk – intern (VB-Audio)",
+                                                                   "Claude Talk – intern 16ch (VB-Audio)"
+                                                               ]
+                                                }
+                                 },
+    "cable_render_named":  {
+                               "pass":  true,
+                               "detail":  [
+                                              "Claude Talk – intern (VB-Audio)",
+                                              "Claude Talk – intern 16ch (VB-Audio)"
+                                          ]
+                           },
+    "cable_marked_as_ours":  {
+                                 "pass":  true,
+                                 "detail":  "C:\\Program Files\\Claude Talk\\vbcable\\installed-by-claude-talk"
+                             },
+    "driver_production_signed":  {
+                                     "pass":  true,
+                                     "detail":  {
+                                                    "DeviceName":  "VB-Audio Virtual Cable",
+                                                    "DriverVersion":  "3.5.2.0",
+                                                    "Signer":  "Microsoft Windows Hardware Compatibility Publisher",
+                                                    "Manufacturer":  "VB-Audio Software"
+                                                }
+                                 },
+    "app_starts":  {
+                       "pass":  true,
+                       "detail":  {
+                                      "exited":  false,
+                                      "seconds_to_audio_engine":  0.38,
+                                      "events":  null,
+                                      "exit_code":  null
+                                  }
+                   },
+    "performance":  {
+                        "pass":  false,
+                        "detail":  {
+                                       "cpu_percent":  4.97,
+                                       "cores":  2,
+                                       "start_s":  0.38,
+                                       "processes":  2,
+                                       "ram_mb":  144.6
+                                   }
+                    },
+    "autostart_registered":  {
+                                 "pass":  false,
+                                 "detail":  null
+                             },
+    "program_removed":  {
+                            "pass":  true,
+                            "detail":  {
+                                           "dir_exists":  false
+                                       }
+                        },
+    "removed_from_installed_apps":  {
+                                        "pass":  true,
+                                        "detail":  null
+                                    },
+    "autostart_removed":  {
+                              "pass":  true,
+                              "detail":  null
+                          },
+    "endpoints_end":  null,
+    "virtual_microphone_removed":  {
+                                       "pass":  true,
+                                       "detail":  [
+
+                                                  ]
+                                   },
+    "cable_files_removed":  {
+                                "pass":  true,
+                                "detail":  "C:\\Program Files\\Claude Talk\\vbcable"
+                            },
+    "pass":  false,
+    "failed":  [
+                   "performance",
+                   "autostart_registered"
+               ]
+}
