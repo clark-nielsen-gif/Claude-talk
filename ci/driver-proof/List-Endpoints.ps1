@@ -59,5 +59,6 @@ public static class CoreAudioList {
 
 $rows = [CoreAudioList]::List() | ForEach-Object { [pscustomobject]@{ Flow = $_[0]; FriendlyName = $_[1]; Id = $_[2] } }
 $rows | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
-if ($OutFile) { $rows | ConvertTo-Json | Set-Content -Encoding utf8 $OutFile }
+# (no endpoints at all is a result too: "[]", not a missing file)
+if ($OutFile) { if ($rows) { ConvertTo-Json @($rows) | Set-Content -Encoding utf8 $OutFile } else { '[]' | Set-Content -Encoding utf8 $OutFile } }
 $rows
