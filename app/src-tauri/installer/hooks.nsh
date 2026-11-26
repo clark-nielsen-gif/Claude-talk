@@ -45,18 +45,15 @@
     ${EndIf}
     nsExec::ExecToLog '"$INSTDIR\claude-talk.exe" --uninstall-cleanup'
     Pop $0
-    ; The Claude window's login (claude.ai cookies) and the settings stay
-    ; unless the user says so; "No" is the default button, and a silent
-    ; uninstall (/S) keeps them.
-    ${If} $LANGUAGE == 1030
-      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Vil du også slette dine indstillinger og logge ud af Claude i Claude Talk?$\r$\n$\r$\nDin Claude-konto og dine samtaler bliver ikke slettet." /SD IDNO IDNO keep_user_data
-    ${Else}
-      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Do you also want to delete your settings and sign out of Claude in Claude Talk?$\r$\n$\r$\nYour Claude account and conversations are not deleted." /SD IDNO IDNO keep_user_data
-    ${EndIf}
+    ; The Claude window's login (claude.ai cookies) and the settings go only
+    ; if the user ticks Tauri's own "delete data" box on the uninstall page
+    ; (its Danish text: "Slet også indstillinger og Claude-login"). Tauri's
+    ; box removes only its own folders, so ours are removed here.
+    ${If} $DeleteAppDataCheckboxState = 1
       SetShellVarContext current
       RMDir /r "$LOCALAPPDATA\Claude Talk"
       RMDir /r "$APPDATA\Claude Talk"
       SetShellVarContext all
-    keep_user_data:
+    ${EndIf}
   ${EndIf}
 !macroend

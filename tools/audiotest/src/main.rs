@@ -909,8 +909,9 @@ mod imp {
     /// total CPU seconds used so far.
     fn app_usage(pid: u32) -> (f64, f64) {
         let cmd = format!(
-            "$p = Get-CimInstance Win32_Process | Where-Object {{ $_.ProcessId -eq {pid} -or $_.ParentProcessId -eq {pid} }} | ForEach-Object {{ Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }}; \
-             '{{0}} {{1}}' -f ($p | Measure-Object WorkingSet64 -Sum).Sum, ($p | Measure-Object TotalProcessorTime -Sum).Sum.TotalSeconds"
+            "$all = Get-CimInstance Win32_Process; $ids = @({pid}); do {{ $n = $ids.Count; $ids = @($ids + @($all | Where-Object {{ $ids -contains $_.ParentProcessId }} | ForEach-Object {{ $_.ProcessId }})) | Select-Object -Unique }} while ($ids.Count -gt $n); \
+             $p = $ids | ForEach-Object {{ Get-Process -Id $_ -ErrorAction SilentlyContinue }}; \
+             '{{0}} {{1}}' -f ($p | Measure-Object WorkingSet64 -Sum).Sum, ($p | ForEach-Object {{ $_.TotalProcessorTime.TotalSeconds }} | Measure-Object -Sum).Sum"
         );
         let out = std::process::Command::new("powershell")
             .args(["-NoProfile", "-Command", &cmd])

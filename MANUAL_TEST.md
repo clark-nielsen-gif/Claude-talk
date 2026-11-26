@@ -2,7 +2,7 @@
 
 Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester trin 9. Hvert trin har ét forventet resultat. Skriv ✓ eller ✗.
 
-1. **Installer.** Kør `ClaudeTalk-Setup.exe`. Du ser højst én Windows-sikkerhedsdialog (UAC) og ingen driverdialog. Ingen genstart.
+1. **Installer.** Kør `ClaudeTalk-Setup.exe`. Du ser højst én Windows-sikkerhedsdialog (UAC) og ingen driverdialog, og alle tekster i installeren er på dansk. Ingen genstart.
    - [ ] Installeret uden flere dialoger
 2. **Første opstart.** Claude Talk åbner med »Tag Claude med i dine Discord-opkald«. Tryk »Sæt det op for mig«. Alle fire punkter får flueben, og du ender på »Klar!«.
    - [ ] Tre skærme, ingen tekniske ord
@@ -47,7 +47,7 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
 17. **Gendan.** Indstillinger → »Gendan normale lydindstillinger«.
     - [ ] Discord bruger igen din almindelige mikrofon
 18. **Afinstaller** via Windows' »Installerede apps«.
-    - [ ] Du bliver spurgt, om indstillinger og Claude-login også skal slettes. Svar **Ja**.
+    - [ ] Alle tekster i afinstallationen er på dansk. Sæt flueben ved »Slet også indstillinger og Claude-login«.
     - [ ] Claude Talk, »Claude Talk – til Discord«-mikrofonen og autostart er væk. Discord bruger din almindelige mikrofon. Åbner du Claude Talk igen efter en ny installation, skal du logge ind på Claude igen.
 
 Hvis noget fejler: Hjælp → »Gem fejlrapport«, og send filen fra skrivebordet.

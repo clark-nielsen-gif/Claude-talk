@@ -60,6 +60,9 @@
           "English"
         ],
         "displayLanguageSelector": false,
+        "customLanguageFiles": {
+          "Danish": "./installer/Danish.nsh"
+        },
         "installerHooks": "./installer/hooks.nsh"
       }
     }

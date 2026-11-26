@@ -44,6 +44,68 @@ pub fn apply(_app: &AppHandle, enabled: bool) {
 #[cfg(not(windows))]
 pub fn apply(_app: &AppHandle, _enabled: bool) {}
 
+/// Whether Windows will really start Claude Talk at the next sign-in: our
+/// Run value points at this program, and it is not turned off under the
+/// startup apps (StartupApproved: an odd first byte means disabled).
+#[cfg(windows)]
+pub fn will_start() -> bool {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_ANY};
+    let read = |path: &str| -> Option<Vec<u8>> {
+        let (key, name) = (HSTRING::from(path), HSTRING::from(VALUE_NAME));
+        let mut len = 0u32;
+        unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                &key,
+                &name,
+                RRF_RT_ANY,
+                None,
+                None,
+                Some(&mut len),
+            )
+        }
+        .ok()
+        .ok()?;
+        let mut buf = vec![0u8; len as usize];
+        unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                &key,
+                &name,
+                RRF_RT_ANY,
+                None,
+                Some(buf.as_mut_ptr() as *mut _),
+                Some(&mut len),
+            )
+        }
+        .ok()
+        .ok()?;
+        buf.truncate(len as usize);
+        Some(buf)
+    };
+    let Some(run) = read(r"Software\Microsoft\Windows\CurrentVersion\Run") else {
+        return false;
+    };
+    let wide: Vec<u16> = run
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let command = String::from_utf16_lossy(&wide).to_lowercase();
+    let ours = std::env::current_exe()
+        .map(|e| command.contains(&e.to_string_lossy().to_lowercase()))
+        .unwrap_or(false);
+    let disabled = read(r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|b| b % 2 == 1);
+    ours && !disabled
+}
+
+#[cfg(not(windows))]
+pub fn will_start() -> bool {
+    false
+}
+
 /// Removes every Run / StartupApproved entry that starts Claude Talk,
 /// whatever name it was written under (also the plugin's old ones).
 #[cfg(windows)]

@@ -58,6 +58,9 @@ export function App() {
     } catch (e) {
       const key = String(e).replace(/^error\./, '') as keyof typeof t.errors;
       setToastText(t.errors[key] ?? t.errors.internal);
+      // part of the change may have been saved (a shortcut that is taken):
+      // show what the settings really are now
+      api.getConfig().then(setConfig).catch(() => {});
     }
   }, [t]);
 

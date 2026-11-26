@@ -509,9 +509,14 @@ pub fn install_cable_elevated() -> Result<Option<u32>, String> {
         ..Default::default()
     };
     unsafe {
-        if ShellExecuteExW(&mut info).is_err() {
-            // ERROR_CANCELLED: the user said no to the Windows prompt
-            return Ok(None);
+        if let Err(e) = ShellExecuteExW(&mut info) {
+            // ERROR_CANCELLED (1223): the user said no to the Windows prompt;
+            // anything else is a real failure the user must hear about
+            if e.code() == windows::core::HRESULT::from_win32(1223) {
+                return Ok(None);
+            }
+            log::warn!("install cable: could not start the installer: {e}");
+            return Err("error.cableInstallFailed".into());
         }
         if info.hProcess.is_invalid() {
             return Err("no process".into());

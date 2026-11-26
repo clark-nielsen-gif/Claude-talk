@@ -99,3 +99,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 
 **Rettet efter runde 7:** kun browser- og side-nedbrud nulstiller Claudes mikrofon, og siden bekræfter hvert andet sekund, at den bruger den; den del af en sen pakke, der allerede er spillet som stilhed, springes over (WASAPI's tidsstempel), så tidslinjen ikke vokser; Discords indstilling bevares ved Windows-nedlukning, når Claude Talk starter med Windows; »Claude stille i Discord« overlever ikke en genstart; instruktioner sendes ikke, mens Claude er ude af opkaldet; README forklarer »hver gang«.
 
+## Runde 8 – 2026-11-26 – ikke ren (design ren)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 2 major, 3 minor | »Luk, og genstart Discord« gav ikke Discord sin mikrofon tilbage (runde 7-ændringen). Ved Windows-nedlukning blev Discords indstilling bevaret, selv om autostart var slået fra under Windows' startprogrammer. |
+| Lyd | afbrudt | Revieweren stoppede ved kontoens brugsgrænse; fortsættes. |
+| Design | 0 major, 10 minor | **Ren.** |
+| "Min mor" | 1 major, 16 minor | Tauris egne installer-tekster findes ikke på dansk: »Claude Talk is running! Click OK to kill it« ved afinstallation, plus to spørgsmål om data. |
+| "Bryd det" | afbrudt | Som lyd. |
+
+**Rettet efter runde 8:** Discord får altid sin mikrofon tilbage, når brugeren selv lukker; om Claude Talk starter med Windows, læses i Windows (Run og StartupApproved); danske tekster til Tauris installer (`installer/Danish.nsh`); kun Tauris egen »Slet også indstillinger og Claude-login«-boks (ét spørgsmål); en fejl ved start af installeren vises som fejl, ikke som »annulleret«; indstillingerne hentes igen efter en afvist genvej; udholdenhedstesten måler CPU og RAM for hele proces-træet.
+

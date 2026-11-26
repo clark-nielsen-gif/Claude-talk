@@ -92,7 +92,7 @@ pub fn request_quit(app: &AppHandle) {
             match ask_restart_discord(da) {
                 QuitChoice::Cancel => return,
                 QuitChoice::RestartDiscord => {
-                    shutdown_inner(app, false);
+                    shutdown_inner(app, true);
                     if let Err(e) = discord::restart() {
                         log::warn!("could not restart Discord on quit: {e}");
                     }
@@ -185,7 +185,9 @@ fn shutdown_inner(app: &AppHandle, user_quit: bool) {
         // Not when Windows ends the session and Claude Talk starts with
         // Windows: it is back at the next sign-in, and keeping Discord's
         // setting spares a "restart Discord" after every reboot (K8).
-        let autostart = st.config.lock().map(|c| c.autostart).unwrap_or(true);
+        // (checked in Windows itself: the setting may be on while the user
+        // turned Claude Talk off under the startup apps)
+        let autostart = crate::autostart::will_start();
         if user_quit || !autostart {
             discord::restore();
         }
