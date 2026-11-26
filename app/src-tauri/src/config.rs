@@ -381,6 +381,7 @@ mod tests {
     fn instruction_text() {
         let mut i = Instructions {
             group: false,
+            danish: false,
             ..Default::default()
         };
         assert_eq!(i.text("da", true), "");
