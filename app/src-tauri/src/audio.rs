@@ -192,16 +192,21 @@ mod imp {
         let mut last_states: Vec<(u32, StreamState)> = Vec::new();
         // diagnostics for the log: loudest peak per source/output over ~5 s
         let mut peaks: std::collections::BTreeMap<String, f32> = Default::default();
-        let mut tick: u32 = 0;
+        let mut last_diag = std::time::Instant::now();
         while !state.shutting_down.load(Ordering::Relaxed) {
-            std::thread::sleep(Duration::from_millis(33));
+            // 30 meter updates a second while the window is open; when it is
+            // hidden (Claude Talk in the tray) only the bookkeeping runs.
+            let visible = app
+                .get_webview_window("main")
+                .and_then(|w| w.is_visible().ok())
+                .unwrap_or(false);
+            std::thread::sleep(Duration::from_millis(if visible { 33 } else { 250 }));
             let (snap, echo_active) = {
                 let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
                 let Some(host) = g.as_mut() else { continue };
                 host.maintain();
                 (host.snapshot(), host.echo_reduction_active())
             };
-            tick += 1;
             for s in &snap.sources {
                 let e = peaks.entry(format!("src{}", s.id)).or_insert(0.0);
                 *e = e.max(s.peak);
@@ -214,7 +219,8 @@ mod imp {
                 let e = peaks.entry("echo".into()).or_insert(0.0);
                 *e = e.max(p);
             }
-            if tick.is_multiple_of(150) {
+            if last_diag.elapsed() >= Duration::from_secs(5) {
+                last_diag = std::time::Instant::now();
                 let db = |v: f32| if v > 0.0 { 20.0 * v.log10() } else { -120.0 };
                 let levels: Vec<String> = peaks
                     .iter()
@@ -322,7 +328,9 @@ mod imp {
             st.echo_active = echo_active;
             st.claude_window_open = state.claude_pid.load(Ordering::Relaxed) != 0;
             st.claude_listening = state.claude_mic_active.load(Ordering::Relaxed);
-            let _ = app.emit("audio-status", &st);
+            if visible {
+                let _ = app.emit("audio-status", &st);
+            }
         }
     }
 }

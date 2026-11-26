@@ -40,6 +40,8 @@ pub struct AdaptiveResampler {
     in_rate: u32,
     blocks_since_underrun: u64,
     blocks_per_second: f64,
+    /// lowest fill seen before a pull since the last adaptation (frames)
+    min_fill: usize,
 }
 
 impl AdaptiveResampler {
@@ -78,11 +80,13 @@ impl AdaptiveResampler {
             priming: true,
             target_frames,
             min_target: target_frames,
-            max_target: (in_rate as usize * 60 / 1000).max(target_frames),
+            // grow in small steps, never past 40 ms (latency budget)
+            max_target: (in_rate as usize * 40 / 1000).max(target_frames),
             step: (in_rate as usize * 5 / 1000).max(1),
             in_rate,
             blocks_since_underrun: 0,
             blocks_per_second,
+            min_fill: usize::MAX,
         }
     }
 
@@ -93,22 +97,30 @@ impl AdaptiveResampler {
 
     fn adapt_after_underrun(&mut self) {
         // A source that delivers in bigger bursts than expected: give it more
-        // room (up to 60 ms) instead of crackling forever.
+        // room (5 ms at a time, up to 40 ms) instead of crackling forever.
         self.target_frames = (self.target_frames + self.step).min(self.max_target);
         self.drift.set_target(self.target_frames as f64);
         self.blocks_since_underrun = 0;
+        self.min_fill = usize::MAX;
     }
 
     fn adapt_when_stable(&mut self) {
-        // After a minute without trouble, win back 1 ms of latency.
+        // After 15 s without trouble, win back 1 ms of latency.
+        // ... but only if the buffer never ran low in that time: the lowest
+        // fill must have kept 4 ms to spare, or the source's bursts need it.
         self.blocks_since_underrun += 1;
-        if self.target_frames > self.min_target
-            && self.blocks_since_underrun as f64 > 60.0 * self.blocks_per_second
-        {
-            self.target_frames =
-                (self.target_frames - (self.in_rate as usize / 1000)).max(self.min_target);
-            self.drift.set_target(self.target_frames as f64);
+        if self.blocks_since_underrun as f64 > 15.0 * self.blocks_per_second {
+            let spare = self.in_rate as usize * 4 / 1000 + CHUNK;
+            if self.target_frames > self.min_target
+                && self.min_fill != usize::MAX
+                && self.min_fill > spare
+            {
+                self.target_frames =
+                    (self.target_frames - (self.in_rate as usize / 1000)).max(self.min_target);
+                self.drift.set_target(self.target_frames as f64);
+            }
             self.blocks_since_underrun = 0;
+            self.min_fill = usize::MAX;
         }
     }
 
@@ -157,6 +169,7 @@ impl AdaptiveResampler {
             self.drift.reset();
         }
 
+        self.min_fill = self.min_fill.min(available);
         self.adapt_when_stable();
         // One controller update per pull (per output block).
         let rel = self.drift.update(available as f64);

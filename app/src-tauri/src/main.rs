@@ -133,8 +133,17 @@ fn main() {
             let autostart = handle.state::<AppState>().config.lock().map(|c| c.autostart).unwrap_or(true);
             autostart::apply(&handle, autostart);
             #[cfg(feature = "ci-testpage")]
-            if std::env::var("CLAUDE_TALK_TEST_OPEN_CLAUDE").is_ok() {
-                let _ = claude_window::open(&handle);
+            if let Ok(v) = std::env::var("CLAUDE_TALK_TEST_OPEN_CLAUDE") {
+                // the value is a delay in ms ("1": right away)
+                let delay = v.parse::<u64>().unwrap_or(1);
+                let h = handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                    let h2 = h.clone();
+                    let _ = h.run_on_main_thread(move || {
+                        let _ = claude_window::open(&h2);
+                    });
+                });
             }
             // The main window is created here, after the sound is running:
             // its WebView2 can take seconds on a first start, and Discord's

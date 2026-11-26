@@ -112,16 +112,7 @@ pub fn install_cable() -> i32 {
 pub fn uninstall_cleanup() -> i32 {
     let _com = ComGuard::new();
     crate::discord::restore();
-    // autostart entry written by tauri-plugin-autostart
-    let _ = std::process::Command::new("reg")
-        .args([
-            "delete",
-            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-            "/v",
-            "Claude Talk",
-            "/f",
-        ])
-        .status();
+    remove_autostart();
     // VB-CABLE is removed only if Claude Talk installed it, and only with
     // the very setup program that installed it.
     if let Ok(expected) = std::fs::read_to_string(marker()) {
@@ -137,6 +128,68 @@ pub fn uninstall_cleanup() -> i32 {
     }
     let _ = std::fs::remove_dir_all(data_dir());
     0
+}
+
+/// Removes "start with Windows" entries that start Claude Talk, whatever
+/// name they were written under.
+fn remove_autostart() {
+    use windows::core::{HSTRING, PCWSTR, PWSTR};
+    use windows::Win32::System::Registry::*;
+    for path in [
+        r"Software\Microsoft\Windows\CurrentVersion\Run",
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+    ] {
+        unsafe {
+            let mut key = HKEY::default();
+            if RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                &HSTRING::from(path),
+                None,
+                KEY_READ | KEY_SET_VALUE,
+                &mut key,
+            )
+            .is_err()
+            {
+                continue;
+            }
+            let mut doomed: Vec<Vec<u16>> = Vec::new();
+            let mut i = 0u32;
+            loop {
+                let mut name = [0u16; 512];
+                let mut nlen = name.len() as u32;
+                let mut data = vec![0u8; 4096];
+                let mut dlen = data.len() as u32;
+                if RegEnumValueW(
+                    key,
+                    i,
+                    Some(PWSTR(name.as_mut_ptr())),
+                    &mut nlen,
+                    None,
+                    None,
+                    Some(data.as_mut_ptr()),
+                    Some(&mut dlen),
+                )
+                .is_err()
+                {
+                    break;
+                }
+                let n = String::from_utf16_lossy(&name[..nlen as usize]).to_lowercase();
+                let words: Vec<u16> = data[..dlen as usize]
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .collect();
+                let d = String::from_utf16_lossy(&words).to_lowercase();
+                if d.contains("claude-talk.exe") || n == "claude talk" || n == "claude-talk" {
+                    doomed.push(name[..nlen as usize].iter().copied().chain([0]).collect());
+                }
+                i += 1;
+            }
+            for n in doomed {
+                let _ = RegDeleteValueW(key, PCWSTR(n.as_ptr()));
+            }
+            let _ = RegCloseKey(key);
+        }
+    }
 }
 
 fn cable_present() -> bool {

@@ -38,3 +38,6 @@ Windows' lydtjeneste husker Discords mikrofonvalg i hukommelsen, så det kan fø
 
 ## K13 – Aktiveringsordet er en instruktion til Claude
 »Svar kun, når nogen siger …« bliver sendt til Claude som en instruktion. Claude følger den godt, men kan en sjælden gang svare alligevel. Skal Claude slet ikke høre noget før ordet, kræver det talegenkendelse på pc'en. Windows' indbyggede talegenkendelse kan ikke dansk og kan ikke lytte til Claude Talks egen lyd. »Claude hører kun mig« håndhæves derimod af Claude Talk selv. Hvis claude.ai ændrer sit beskedfelt, kan den automatiske afsendelse stoppe. Så viser Claude Talk en besked, og instruktionerne kan indsættes manuelt.
+
+## K14 – Ekkodæmpningen skal lige finde sig til rette
+Når ekkodæmpningen starter (Claude Talk opdager højttalere), tager WebRTC AEC3 ca. 6 sekunder om at se, at din stemme ikke er ekko. Taler Claude eller Discord i de sekunder, bliver din stemme dæmpet kraftigt. Derefter går den uændret igennem (målt i `aec.rs`-testene). AEC3's hurtigere HMM-tilstand forkorter det til 2 sekunder, men klipper så ca. 20 ms af hver sætningsstart, mens Claude taler, resten af opkaldet. Den er derfor fravalgt.

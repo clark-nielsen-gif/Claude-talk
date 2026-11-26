@@ -61,7 +61,8 @@ Check 'driver_production_signed' ($null -ne $driver -and $driver.Signer -like '*
 $logs = Join-Path $env:APPDATA 'Claude Talk\logs'
 if (Test-Path $logs) { Remove-Item $logs -Recurse -Force }
 $t0 = Get-Date
-$app = Start-Process $exe -PassThru
+# as after a Windows start: in the tray (window hidden)
+$app = Start-Process $exe -ArgumentList "--minimized" -PassThru
 $started = $null
 for ($i = 0; $i -lt 100 -and -not $started; $i++) {
     Start-Sleep -Milliseconds 100
@@ -79,7 +80,16 @@ Get-ChildItem $logs -ErrorAction SilentlyContinue | Copy-Item -Destination $Out
 if ($exited) { throw 'the app did not keep running' }
 Start-Sleep 5
 # the program and its WebView2 helpers (none while the Claude window is closed)
-function Tree { Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq $app.Id -or $_.ParentProcessId -eq $app.Id } }
+# the program and all its WebView2 processes (renderers are grandchildren)
+function Tree {
+    $all = Get-CimInstance Win32_Process
+    $ids = @($app.Id); $grew = $true
+    while ($grew) {
+        $more = @($all | Where-Object { $ids -contains $_.ParentProcessId -and $ids -notcontains $_.ProcessId } | ForEach-Object ProcessId)
+        $grew = $more.Count -gt 0; $ids += $more
+    }
+    $all | Where-Object { $ids -contains $_.ProcessId }
+}
 function CpuSeconds($p) { ($p | ForEach-Object { $_.TotalProcessorTime.TotalSeconds } | Measure-Object -Sum).Sum }
 $cpu0 = CpuSeconds (Get-Process -Id (Tree).ProcessId)
 $w0 = Get-Date
@@ -90,8 +100,13 @@ $cores = [Environment]::ProcessorCount
 $cpuPct = [math]::Round(100 * ($cpu1 - $cpu0) / ((Get-Date) - $w0).TotalSeconds / $cores, 2)
 $ramMB = [math]::Round(($procs | Measure-Object WorkingSet64 -Sum).Sum / 1MB, 1)
 Check 'performance' ($startS -lt 2 -and $cpuPct -lt 3 -and $ramMB -lt 150) @{ start_s = $startS; cpu_percent = $cpuPct; ram_mb = $ramMB; processes = $procs.Count; cores = $cores }
-$runKey = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
-Check 'autostart_registered' ($null -ne $runKey.'Claude Talk') $runKey.'Claude Talk'
+function AutostartEntries {
+    $k = Get-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
+    if (-not $k) { return @() }
+    @($k.GetValueNames() | Where-Object { "$($k.GetValue($_))" -like '*claude-talk.exe*' } | ForEach-Object { "$_ = $($k.GetValue($_))" })
+}
+$auto = AutostartEntries
+Check 'autostart_registered' ($auto.Count -gt 0) $auto
 Get-ChildItem $logs -ErrorAction SilentlyContinue | Copy-Item -Destination $Out
 Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep 2
@@ -107,8 +122,8 @@ Check 'program_removed' (-not (Test-Path $exe)) @{ dir_exists = (Test-Path $dir)
 $gone = Get-ChildItem 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
     Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -eq 'Claude Talk' }
 Check 'removed_from_installed_apps' ($null -eq $gone) $null
-$runKey = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
-Check 'autostart_removed' ($null -eq $runKey.'Claude Talk') $null
+$auto = AutostartEntries
+Check 'autostart_removed' ($auto.Count -eq 0) $auto
 $end = Endpoints
 $r.endpoints_end = $end
 $left = @($end | Where-Object { $_.FriendlyName -like '*Claude Talk*' -or $_.FriendlyName -like '*VB-Audio Virtual Cable*' })

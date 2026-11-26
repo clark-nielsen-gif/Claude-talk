@@ -505,7 +505,12 @@ mod imp {
     fn start_app(app: &str, echo: &str) -> std::process::Child {
         std::process::Command::new(app)
             .env("CLAUDE_TALK_TEST_URL", "http://127.0.0.1:8765/test.html")
-            .env("CLAUDE_TALK_TEST_OPEN_CLAUDE", "1")
+            // speaker mode: the page starts after the echo reducer's start
+            // phase (~6 s, KNOWN_ISSUES K14), as in a call that is under way
+            .env(
+                "CLAUDE_TALK_TEST_OPEN_CLAUDE",
+                if echo == "on" { "7000" } else { "1" },
+            )
             .env("CLAUDE_TALK_TEST_MIC_EXE", "fakemic.exe")
             .env("CLAUDE_TALK_TEST_ECHO", echo)
             .spawn()
@@ -653,6 +658,15 @@ mod imp {
             std::thread::sleep(Duration::from_secs(4)); // the app finds the restarted programs
             let marks_file = page_report.with_file_name("page-marks.json");
             let _ = std::fs::remove_file(&marks_file);
+            let cable_probe = play_pattern(
+                4000.0,
+                0.5,
+                DeviceSelector::FirstMatching(
+                    Flow::Render,
+                    ct_engine::win::host::cable_render_patterns(),
+                ),
+                Some((25.0, 650.0)),
+            );
             let (epoch, recs) = record_multi(
                 vec![
                     CaptureTarget::Process(ProcessTarget::ExeNames(vec!["fakemic.exe".into()])),
@@ -661,14 +675,15 @@ mod imp {
                         ct_engine::win::host::cable_capture_patterns(),
                     )),
                     CaptureTarget::Process(ProcessTarget::ExeNames(vec!["discord.exe".into()])),
-                    // what Claude Talk plays into the cable, before VB-CABLE's own buffer
-                    CaptureTarget::DeviceLoopback(DeviceSelector::FirstMatching(
-                        Flow::Render,
-                        ct_engine::win::host::cable_render_patterns(),
-                    )),
+                    // this test tool itself: it plays 4000 Hz bursts straight into
+                    // the cable, so VB-CABLE's own delay can be measured apart
+                    CaptureTarget::Process(ProcessTarget::Pid(Arc::new(AtomicU32::new(
+                        std::process::id(),
+                    )))),
                 ],
                 8.0,
             );
+            drop(cable_probe);
             std::thread::sleep(Duration::from_millis(1500)); // the page posts its marks
             let ms = |idx: Vec<usize>| {
                 idx.into_iter()
@@ -689,15 +704,23 @@ mod imp {
                 .map(|t| t - cable_buf)
                 .collect();
             let to_discord_total = match_delays(&a, &b, 300.0);
-            // Claude Talk's own share: from the microphone into the cable
-            // (VB-CABLE then adds its internal buffer, see KNOWN_ISSUES K9)
-            let (into_rec, into_buf) = &recs[3];
-            let c: Vec<f64> = ms(burst_onsets(into_rec, 2500.0, rate, 0.3, 2400))
+            // VB-CABLE's own share: our 4000 Hz bursts as played (process
+            // loopback of this tool) against the same bursts out of the cable
+            let (probe_rec, probe_buf) = &recs[3];
+            let p_in: Vec<f64> = ms(burst_onsets(probe_rec, 4000.0, rate, 0.3, 2400))
                 .into_iter()
-                .map(|t| t - into_buf)
+                .map(|t| t - probe_buf)
                 .collect();
-            let to_discord = match_delays(&a, &c, 300.0);
-            let cable_added = median(&match_delays(&c, &b, 300.0));
+            let p_out: Vec<f64> = ms(burst_onsets(cable_rec, 4000.0, rate, 0.3, 2400))
+                .into_iter()
+                .map(|t| t - cable_buf)
+                .collect();
+            let cable_added = median(&match_delays(&p_in, &p_out, 300.0));
+            // Claude Talk's share = everything minus VB-CABLE's buffer
+            let to_discord: Vec<f64> = to_discord_total
+                .iter()
+                .map(|d| d - cable_added.unwrap_or(0.0))
+                .collect();
             // Discord → Claude: wall-clock time the burst entered the
             // recorder (a sample is pulled one 10 ms block after its slot and
             // waited `dc_buf` in the tap), minus one more 10 ms capture
@@ -722,7 +745,8 @@ mod imp {
                 median(&to_claude),
                 median(&to_discord_total),
             );
-            let pass = to_discord.len() >= 5
+            let pass = cable_added.is_some()
+                && to_discord.len() >= 5
                 && to_claude.len() >= 5
                 && md.is_some_and(|v| v < 40.0)
                 && mc.is_some_and(|v| v < 40.0);
@@ -736,8 +760,8 @@ mod imp {
                 "latency".into(),
                 json!({"pass": pass, "to_discord_ms": md, "vbcable_added_ms": cable_added, "to_discord_total_ms": mt, "to_claude_ms": mc,
                        "to_discord_all": to_discord, "to_claude_all": to_claude,
-                       "bursts": {"mic": a.len(), "into_cable": c.len(), "cable": b.len(), "discord": sent.len(), "page": marks.len()},
-                       "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf, into_buf]}),
+                       "bursts": {"mic": a.len(), "cable": b.len(), "cable_probe": [p_in.len(), p_out.len()], "discord": sent.len(), "page": marks.len()},
+                       "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf, probe_buf]}),
             );
             ok &= pass;
             // back to steady tones for the next mode

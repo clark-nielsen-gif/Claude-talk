@@ -172,7 +172,12 @@ mod delay_tests {
             out.extend_from_slice(aec.process(&r, &m));
             inp.extend_from_slice(&m);
         }
-        let ms = |x: &[f32]| burst_onsets(x, 2500.0, 48000.0, 0.3, 2400).into_iter().map(|i| i as f64 / 48.0).collect::<Vec<_>>();
+        let ms = |x: &[f32]| {
+            burst_onsets(x, 2500.0, 48000.0, 0.3, 2400)
+                .into_iter()
+                .map(|i| i as f64 / 48.0)
+                .collect::<Vec<_>>()
+        };
         let d = median(&match_delays(&ms(&inp), &ms(&out), 300.0)).expect("bursts found");
         eprintln!("echo reducer delay: {d:.1} ms");
         assert!(d < 12.0, "echo reducer delays the voice by {d:.1} ms");

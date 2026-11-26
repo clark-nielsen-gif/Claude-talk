@@ -204,6 +204,9 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
     let (mut tx, mut rx) = rtrb::RingBuffer::<f32>::new(BLOCK * 20);
     let state = app.state::<AppState>().inner().clone();
     let clock_state = state.clone();
+    // the sender sleeps until the clock wakes it with a new block
+    let sender_thread: Arc<std::sync::OnceLock<std::thread::Thread>> = Arc::default();
+    let wake_sender = sender_thread.clone();
     std::thread::Builder::new()
         .name("claude-bridge-clock".into())
         .spawn(move || {
@@ -218,7 +221,9 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
             while !clock_state.shutting_down.load(Ordering::Relaxed) {
                 let due = (start.elapsed().as_secs_f64() * 48_000.0) as u64;
                 if due < sent + BLOCK as u64 {
-                    std::thread::sleep(Duration::from_millis(1));
+                    // sleep until the next block is due (1 ms timer resolution)
+                    let wait_ms = ((sent + BLOCK as u64 - due) / 48).max(1);
+                    std::thread::sleep(Duration::from_millis(wait_ms));
                     continue;
                 }
                 // After a stall of more than 30 ms, skip ahead instead of
@@ -235,6 +240,9 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
                     b.copy_from_slice(&buf[a.len()..]);
                     chunk.commit_all();
                 }
+                if let Some(t) = wake_sender.get() {
+                    t.unpark();
+                }
             }
         })
         .expect("spawn bridge clock");
@@ -243,13 +251,14 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
         .spawn(move || {
             #[cfg(windows)]
             let _period = win::TimerResolution::new();
+            let _ = sender_thread.set(std::thread::current());
             let in_flight = Arc::new(std::sync::atomic::AtomicU32::new(0));
             let mut block = vec![0f32; BLOCK];
             let mut bytes = vec![0u8; BLOCK * 4];
             let mut text = String::with_capacity(8 + BLOCK * 4 * 4 / 3 + 4);
             while !state.shutting_down.load(Ordering::Relaxed) {
                 let Ok(chunk) = rx.read_chunk(BLOCK) else {
-                    std::thread::sleep(Duration::from_millis(1));
+                    std::thread::park_timeout(Duration::from_millis(50));
                     continue;
                 };
                 let (a, b) = chunk.as_slices();

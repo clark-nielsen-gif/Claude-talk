@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// Buffer each route keeps against scheduling jitter. WASAPI shared mode
 /// delivers 10 ms periods; 20 ms of margin holds through normal system load
 /// while keeping the end-to-end latency inside the 40 ms budget.
-pub const ROUTE_BUFFER_MS: f64 = 20.0;
+pub const ROUTE_BUFFER_MS: f64 = 12.0;
 
 /// Executables whose sound is "Discord".
 pub fn discord_executables() -> Vec<String> {
