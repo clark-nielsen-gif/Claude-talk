@@ -1,0 +1,199 @@
+{
+  "echo_off": {
+    "latency": {
+      "bursts": {
+        "cable": 14,
+        "discord": 11,
+        "mic": 14,
+        "page": 0
+      },
+      "pass": false,
+      "recorder_buffer_ms": [
+        22.079839627644297,
+        22.017261404865824,
+        22.116865069755775
+      ],
+      "to_claude_all": [],
+      "to_claude_ms": null,
+      "to_discord_all": [
+        113.58341155611181,
+        114.54174488944511,
+        115.58341155611197,
+        116.64591155611174,
+        117.79174488944545,
+        118.93757822277848,
+        120.06257822277848,
+        121.06257822277803,
+        121.979244889445,
+        122.791744889445,
+        123.39591155611197,
+        123.95841155611106,
+        124.43757822277803,
+        124.81257822277803
+      ],
+      "to_discord_ms": 121.06257822277803
+    },
+    "to_claude": {
+      "page": {
+        "errors": [],
+        "levels": {
+          "1000": -10.5,
+          "2500": -10.7,
+          "3000": -121.8,
+          "440": -157.7
+        },
+        "rate": 48000,
+        "samples": 143360,
+        "steps": [
+          {
+            "name": "voice",
+            "state": "running"
+          },
+          {
+            "name": "permission",
+            "state": "granted"
+          },
+          {
+            "audioinput": [
+              "Claude Talk|default",
+              "Claude Talk|claude-talk"
+            ],
+            "name": "devices"
+          },
+          {
+            "label": "Claude Talk",
+            "name": "track",
+            "settings": {
+              "autoGainControl": false,
+              "channelCount": 1,
+              "deviceId": "claude-talk",
+              "echoCancellation": false,
+              "groupId": "claude-talk",
+              "latency": 0.01,
+              "noiseSuppression": false,
+              "sampleRate": 48000,
+              "sampleSize": 32
+            },
+            "state": "live"
+          },
+          {
+            "name": "second_call_ok"
+          },
+          {
+            "name": "analysis_context",
+            "state": "running"
+          },
+          {
+            "1000": -10.5,
+            "2500": -10.7,
+            "3000": -121.8,
+            "440": -157.7,
+            "name": "levels"
+          },
+          {
+            "bytes": 94167,
+            "name": "mediarecorder"
+          },
+          {
+            "name": "webrtc",
+            "remoteState": "live",
+            "totalAudioEnergy": 0.6907498474058205
+          },
+          {
+            "name": "stopped"
+          }
+        ],
+        "webrtcEnergy": 0.6907498474058205
+      },
+      "pass": true
+    },
+    "to_discord": {
+      "device": "Claude Talk – til Discord (VB-Audio)",
+      "diag": {
+        "capture_peak_last": 0.5999183654785156,
+        "captured_frames": 189600,
+        "discontinuities": 1,
+        "overflow": 0,
+        "recorded_peak": 0.5998850464820862,
+        "silence_filled": 0,
+        "tap_buffered_ms": 19.208332061767578,
+        "tap_underrun": 3360
+      },
+      "levels_db": {
+        "1000": -153.2,
+        "1000_hz": 996.2,
+        "2500": -10.6,
+        "2500_hz": 2506.8,
+        "3000": -121.4,
+        "3000_hz": 2988.2,
+        "440": -10.6,
+        "440_hz": 439.9
+      },
+      "pass": true
+    }
+  },
+  "echo_on": {
+    "latency": {
+      "bursts": {
+        "cable": 14,
+        "discord": 12,
+        "mic": 14,
+        "page": 0
+      },
+      "pass": false,
+      "recorder_buffer_ms": [
+        19.974290893134544,
+        15.24893095138225,
+        19.974290893134544
+      ],
+      "to_claude_all": [],
+      "to_claude_ms": null,
+      "to_discord_all": [
+        155.95452660841894,
+        165.05869327508572,
+        165.14202660841875,
+        165.32952660841897,
+        165.53785994175223,
+        165.74619327508572,
+        165.9545266084192,
+        166.20452660841966,
+        166.49619327508572,
+        166.87119327508663,
+        167.30869327508663,
+        167.70452660841966,
+        168.10035994175269,
+        168.43369327508572
+      ],
+      "to_discord_ms": 166.20452660841966
+    },
+    "to_claude": {
+      "page": null,
+      "pass": false
+    },
+    "to_discord": {
+      "device": "Claude Talk – til Discord (VB-Audio)",
+      "diag": {
+        "capture_peak_last": 0.306671142578125,
+        "captured_frames": 190560,
+        "discontinuities": 1,
+        "overflow": 0,
+        "recorded_peak": 0.30666327476501465,
+        "silence_filled": 0,
+        "tap_buffered_ms": 19.97916603088379,
+        "tap_underrun": 2400
+      },
+      "levels_db": {
+        "1000": -154.9,
+        "1000_hz": 998.2,
+        "2500": -10.7,
+        "2500_hz": 2509.0,
+        "3000": -121.3,
+        "3000_hz": 2990.8,
+        "440": -150.3,
+        "440_hz": 441.7
+      },
+      "pass": false
+    }
+  },
+  "pass": false
+}
