@@ -102,7 +102,16 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
     let _ = std::fs::create_dir_all(&data_dir);
     let nav_app = app.clone();
     let popup_app = app.clone();
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::External(start_url()))
+    #[allow(unused_mut)]
+    let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::External(start_url()));
+    // CI builds only: the voice test page plays and records without a click.
+    #[cfg(feature = "ci-testpage")]
+    {
+        builder = builder.additional_browser_args(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
+        );
+    }
+    let window = builder
         .title("Claude")
         .inner_size(1100.0, 820.0)
         .min_inner_size(520.0, 520.0)

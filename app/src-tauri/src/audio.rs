@@ -55,7 +55,15 @@ mod imp {
 
     pub fn start(app: &AppHandle) {
         let state = app.state::<AppState>().inner().clone();
-        let mut host = AudioHost::standard(HostConfig::standard(state.claude_pid.clone()));
+        #[allow(unused_mut)]
+        let mut cfg = HostConfig::standard(state.claude_pid.clone());
+        // CI builds only: the "microphone" is a test program's sound.
+        #[cfg(feature = "ci-testpage")]
+        if let Ok(exe) = std::env::var("CLAUDE_TALK_TEST_MIC_EXE") {
+            cfg.mic = ct_engine::win::host::SourceKind::Program(ct_engine::win::stream::ProcessTarget::ExeNames(vec![exe.to_lowercase()]));
+            log::warn!("TEST MODE: microphone replaced by program {exe}");
+        }
+        let mut host = AudioHost::standard(cfg);
         if let Some(mixer) = host.take_pulled(ids::TO_CLAUDE) {
             crate::claude_window::spawn_bridge(app.clone(), mixer);
         }

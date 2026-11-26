@@ -41,7 +41,8 @@ pub enum OutputKind {
 }
 
 pub struct HostConfig {
-    pub mic: DeviceSelector,
+    /// Normally the user's microphone; CI tests replace it with a program.
+    pub mic: SourceKind,
     pub to_discord: DeviceSelector,
     pub discord: ProcessTarget,
     /// PID of the Claude window's WebView2 browser process (0 = not open).
@@ -52,7 +53,7 @@ impl HostConfig {
     pub fn standard(claude_pid: Arc<AtomicU32>) -> Self {
         let own: Vec<String> = OWN_VIRTUAL_DEVICES.iter().map(|s| s.to_string()).collect();
         HostConfig {
-            mic: DeviceSelector::DefaultExcluding(Flow::Capture, own),
+            mic: SourceKind::Microphone(DeviceSelector::DefaultExcluding(Flow::Capture, own)),
             to_discord: DeviceSelector::FirstMatching(Flow::Render, cable_render_patterns()),
             discord: ProcessTarget::ExeNames(discord_executables()),
             claude_pid,
@@ -158,7 +159,7 @@ impl AudioHost {
         h.add_output(Output { id: ids::TO_DISCORD, label: "Til Discord".into(), heard_by: set(&[Party::Discord]) }, OutputKind::Device(cfg.to_discord));
         h.add_output(Output { id: ids::TO_CLAUDE, label: "Til Claude".into(), heard_by: set(&[Party::Claude]) }, OutputKind::Pulled { channels: 1 });
         let none = BTreeSet::new;
-        let _ = h.add_source(Source { id: ids::MIC, label: "Mikrofon".into(), parties: set(&[Party::User]), contains_outputs: none() }, SourceKind::Microphone(cfg.mic));
+        let _ = h.add_source(Source { id: ids::MIC, label: "Mikrofon".into(), parties: set(&[Party::User]), contains_outputs: none() }, cfg.mic);
         let _ = h.add_source(
             Source { id: ids::CLAUDE, label: "Claude".into(), parties: set(&[Party::Claude]), contains_outputs: none() },
             SourceKind::Program(ProcessTarget::Pid(cfg.claude_pid)),

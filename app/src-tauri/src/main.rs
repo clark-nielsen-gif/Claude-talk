@@ -89,6 +89,10 @@ fn main() {
             }
             let autostart = handle.state::<AppState>().config.lock().map(|c| c.autostart).unwrap_or(true);
             autostart::apply(&handle, autostart);
+            #[cfg(feature = "ci-testpage")]
+            if std::env::var("CLAUDE_TALK_TEST_OPEN_CLAUDE").is_ok() {
+                let _ = claude_window::open(&handle);
+            }
             if let Some(w) = app.get_webview_window("main") {
                 if !started_minimized {
                     let _ = w.show();

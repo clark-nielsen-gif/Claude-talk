@@ -27,6 +27,7 @@ fn main() {
         Some("devices") => imp::devices(),
         Some("tone") => imp::tone(&args[2..]),
         Some("smoke") => imp::smoke(&args[2..]),
+        Some("e2e") => imp::e2e(&args[2..]),
         _ => {
             eprintln!("usage: ct-audiotest devices | tone --freq F [--device NAME] [--seconds S] [--amp A] | smoke ...");
             2
@@ -306,6 +307,100 @@ mod imp {
             .args(["tone", "--freq", &freq.to_string(), "--device", device, "--seconds", "120"])
             .spawn()
             .expect("start tone process")
+    }
+
+    /// Full end-to-end test of the app with the Claude window on the CI voice
+    /// page. Fake programs (copies of this tool) play the tones:
+    /// "Discord" 1000 Hz, microphone 2500 Hz, background 3000 Hz; the page
+    /// itself plays Claude's 440 Hz.
+    ///
+    /// `e2e --app claude-talk.exe --sink "Virtual Audio" --out results`
+    pub fn e2e(args: &[String]) -> i32 {
+        std::panic::set_hook(Box::new(|info| eprintln!("PANIC: {info}")));
+        let _com = ComGuard::new();
+        let app = arg(args, "--app").unwrap_or("claude-talk.exe").to_string();
+        let sink = arg(args, "--sink").unwrap_or("Virtual Audio").to_string();
+        let out = std::path::PathBuf::from(arg(args, "--out").unwrap_or("results"));
+        let _ = std::fs::create_dir_all(&out);
+        let page_report = out.join("page-report.json");
+        let _ = std::fs::remove_file(&page_report);
+        let mut report = serde_json::Map::new();
+        let mut ok = true;
+
+        // test page server
+        let srv_out = page_report.to_string_lossy().into_owned();
+        std::thread::spawn(move || super::serve::run(&["--port".into(), "8765".into(), "--out".into(), srv_out]));
+
+        // fake programs: copies of this tool under the names the app looks for
+        let me = std::env::current_exe().expect("exe");
+        let dir = std::env::temp_dir().join("ct-e2e");
+        let _ = std::fs::create_dir_all(&dir);
+        let mut kids = Vec::new();
+        for (name, freq) in [("Discord.exe", 1000.0), ("fakemic.exe", 2500.0), ("background.exe", 3000.0)] {
+            let p = dir.join(name);
+            let _ = std::fs::copy(&me, &p);
+            kids.push(spawn_tone_process(&p, freq, &sink));
+        }
+        std::thread::sleep(Duration::from_millis(1500));
+
+        // the app in test mode
+        let log_dir = std::env::var("APPDATA").map(|a| std::path::PathBuf::from(a).join("Claude Talk").join("logs")).ok();
+        let mut app_proc = std::process::Command::new(&app)
+            .env("CLAUDE_TALK_TEST_URL", "http://127.0.0.1:8765/test.html")
+            .env("CLAUDE_TALK_TEST_OPEN_CLAUDE", "1")
+            .env("CLAUDE_TALK_TEST_MIC_EXE", "fakemic.exe")
+            .spawn()
+            .expect("start app");
+
+        // what Discord hears: record our virtual microphone while the page runs
+        std::thread::sleep(Duration::from_secs(8));
+        let cable = record(
+            CaptureTarget::Device(DeviceSelector::FirstMatching(Flow::Capture, vec!["claude talk – til discord".into(), "claude talk".into()])),
+            4.0,
+            |_| {},
+        );
+        let l = levels(&cable, 3.0, &[440.0, 2500.0, 1000.0, 3000.0]);
+        let (claude, mic, discord, bg) = (lv(&l, 440.0), lv(&l, 2500.0), lv(&l, 1000.0), lv(&l, 3000.0));
+        let pass = claude > -30.0 && mic > -30.0 && discord < claude.min(mic) - 60.0 && bg < claude.min(mic) - 60.0;
+        println!("[{}] to_discord: {l}", if pass { "PASS" } else { "FAIL" });
+        report.insert("to_discord".into(), json!({"pass": pass, "levels_db": l, "diag": cable.diag, "device": cable.device}));
+        ok &= pass;
+
+        // what Claude hears: the page reports what getUserMedia delivered
+        let t0 = Instant::now();
+        while !page_report.exists() && t0.elapsed() < Duration::from_secs(60) {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        let page: Value = std::fs::read(&page_report).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        let pl = |f: &str| page["levels"][f].as_f64().unwrap_or(-400.0);
+        let (p_discord, p_mic, p_claude, p_bg) = (pl("1000"), pl("2500"), pl("440"), pl("3000"));
+        let errors = page["errors"].as_array().map(|a| a.len()).unwrap_or(1);
+        let pass = errors == 0 && p_discord > -30.0 && p_mic > -30.0 && p_claude < p_discord.min(p_mic) - 60.0 && p_bg < p_discord.min(p_mic) - 60.0;
+        println!("[{}] to_claude (page): {}", if pass { "PASS" } else { "FAIL" }, page["levels"]);
+        report.insert("to_claude".into(), json!({"pass": pass, "page": page}));
+        ok &= pass;
+
+        // tidy up
+        let _ = app_proc.kill();
+        let _ = app_proc.wait();
+        for mut k in kids {
+            let _ = k.kill();
+            let _ = k.wait();
+        }
+        if let Some(d) = log_dir {
+            if let Ok(rd) = std::fs::read_dir(d) {
+                for e in rd.flatten() {
+                    let _ = std::fs::copy(e.path(), out.join(e.file_name()));
+                }
+            }
+        }
+        report.insert("pass".into(), json!(ok));
+        let _ = std::fs::write(out.join("e2e.json"), serde_json::to_string_pretty(&Value::Object(report)).unwrap_or_default());
+        if ok {
+            0
+        } else {
+            1
+        }
     }
 
     pub fn smoke(args: &[String]) -> i32 {

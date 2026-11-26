@@ -9,6 +9,8 @@ default-run = "claude-talk"
 [features]
 default = ["updater"]
 updater = ["dep:tauri-plugin-updater"]
+# set by `tauri build`; needed for plain `cargo build` of a release binary
+custom-protocol = ["tauri/custom-protocol"]
 # Hidden test mode for CI only: lets the Claude window load the local test
 # page instead of claude.ai. Never enabled in release builds.
 ci-testpage = []

@@ -1,0 +1,59 @@
+# End-to-end on Windows with the real app: Claude window (WebView2) on the CI
+# voice page, VB-CABLE as Discord's microphone, fake programs as Discord,
+# microphone and background. Checks frequency isolation both ways.
+name: app-e2e
+
+on:
+  push:
+    branches: [main]
+    paths: ['engine/**', 'tools/**', 'app/**', 'ci/fixtures/**', '.github/workflows/app-e2e.yml', 'Cargo.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # results are published to ci-results/* branches
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  GH_TOKEN: ${{ github.token }}
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: app-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - name: Build UI
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+      - name: Build app (CI test mode) and test tool
+        run: |
+          cargo build -p claude-talk --release --no-default-features --features "ci-testpage custom-protocol"
+          cargo build -p ct-audiotest --release
+      - name: App unit tests
+        run: cargo test -p claude-talk --release --no-default-features --features ci-testpage
+      - name: Install VB-CABLE (as the product does)
+        shell: powershell
+        run: ci/fixtures/install-vbcable.ps1
+      - name: Install CI test sink
+        shell: powershell
+        run: ci/fixtures/install-test-sink.ps1
+      - name: End-to-end test
+        shell: powershell
+        run: |
+          target/release/ct-audiotest.exe e2e --app target/release/claude-talk.exe --sink 'Virtual Audio' --out results
+          if ($LASTEXITCODE -ne 0) { throw 'end-to-end test failed' }
+      - name: Publish results
+        if: always()
+        shell: powershell
+        run: ci/publish-results.ps1 -Folder results -Job 'app-e2e'
