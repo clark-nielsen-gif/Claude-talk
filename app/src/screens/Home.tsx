@@ -74,6 +74,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   else if (cableMissing) discordCheck = { state: 'warn', text: t.main.discordNoMic };
   else if (!s?.discordRunning) discordCheck = { state: 'wait', text: t.main.discordNotRunning };
   else if (!config.routeDiscord && s.discordCableChosen) discordCheck = { state: 'warn', text: t.main.discordCableChosen, fix: 'mic' };
+  else if (!config.routeDiscord && s.discordStillOnCable) discordCheck = { state: 'wait', text: t.main.discordStillOnCable };
   else if (s.discordNeedsRestart) discordCheck = { state: 'warn', text: t.guide.restartDiscordTitle, fix: 'restart' };
   else if (s.discordUsesCable === 'no') {
     // after "Gendan normale lydindstillinger" Discord is meant to use the
@@ -132,7 +133,8 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     ? (micBroken || cableBroken ? t.main.switchOffProblem
       : cableMissing ? t.main.switchOffSeeBelow
       : config.micMuted && config.routeDiscord && s?.discordUsesCable === 'no' ? t.main.switchOffMutedDiscordHears
-      : config.micMuted && config.routeDiscord ? t.main.switchOffMuted : t.main.switchOff)
+      : config.micMuted && config.routeDiscord ? t.main.switchOffMuted
+      : discordBroken ? t.main.switchOffSeeBelow : t.main.switchOff)
     : cableMissing ? t.main.switchOnNotReady
     : micBroken ? t.main.switchOnMicProblem
     : discordBroken ? t.main.switchOnFixDiscord
@@ -148,7 +150,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })
     : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
     : t.main.switchOn;
-  const switchWarn = cableMissing || micBroken || (on && discordBroken) || (on && soundNotice)
+  const switchWarn = cableMissing || micBroken || discordBroken || (on && soundNotice)
     || (config.micMuted && s?.discordUsesCable === 'no');
 
   return (

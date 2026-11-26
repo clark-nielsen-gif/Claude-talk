@@ -19,6 +19,8 @@ pub struct Inner {
     /// Discord records the cable although Claude Talk doesn't route it: set
     /// to "Claude Talk – til Discord" in Discord itself.
     pub discord_cable_chosen: AtomicBool,
+    /// Discord still records the cable it opened before "Gendan" (K12).
+    pub discord_still_on_cable: AtomicBool,
     /// The recording side of the cable ("Claude Talk – til Discord") is
     /// there and enabled (checked by the Discord watcher every 2 s).
     pub cable_capture_ok: AtomicBool,
@@ -55,6 +57,7 @@ impl Inner {
             discord_uses_cable: AtomicU8::new(0),
             discord_needs_restart: AtomicBool::new(false),
             discord_cable_chosen: AtomicBool::new(false),
+            discord_still_on_cable: AtomicBool::new(false),
             cable_capture_ok: AtomicBool::new(true),
             discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),

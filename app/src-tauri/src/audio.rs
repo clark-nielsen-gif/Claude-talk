@@ -36,6 +36,7 @@ pub struct AudioStatus {
     pub discord_uses_cable: String,
     pub discord_needs_restart: bool,
     pub discord_cable_chosen: bool,
+    pub discord_still_on_cable: bool,
     /// Windows' default output was our cable and was set back (last 30 s).
     pub output_fixed: bool,
     /// Shortcuts that could not be registered ("" = all fine).
@@ -163,7 +164,10 @@ mod imp {
         let discord_to_claude = on && cfg.claude_hears_discord;
         // To Claude the microphone follows the big switch and, if
         // push-to-talk is on, the key.
-        let mic_to_claude = on && !(cfg.push_to_talk && !ptt_down);
+        // After "Gendan" the mute keeps the microphone from Claude only:
+        // Discord may still record the cable for a while (K12), and the
+        // window says Discord keeps hearing you.
+        let mic_to_claude = on && !(cfg.push_to_talk && !ptt_down) && !cfg.mic_muted;
         let claude_to_discord = on && !cfg.claude_to_discord_muted;
         Some(match (s, o) {
             (ids::CLAUDE, ids::TO_DISCORD) | (EXTERNAL_SRC, ids::TO_DISCORD) => !claude_to_discord,
@@ -190,7 +194,7 @@ mod imp {
             .clone();
         let ptt_down = state.ptt_down.load(Ordering::Relaxed);
         let Some(host) = guard.as_mut() else { return };
-        host.set_source_muted(ids::MIC, cfg.mic_muted);
+        host.set_source_muted(ids::MIC, cfg.mic_muted && cfg.route_discord);
         for (s, o) in SWITCHED_ROUTES {
             if let Some(m) = switch_mute(&cfg, ptt_down, s, o) {
                 host.set_route_muted(s, o, m);
@@ -414,6 +418,7 @@ mod imp {
             .into();
             st.discord_needs_restart = state.discord_needs_restart.load(Ordering::Relaxed);
             st.discord_cable_chosen = state.discord_cable_chosen.load(Ordering::Relaxed);
+            st.discord_still_on_cable = state.discord_still_on_cable.load(Ordering::Relaxed);
             st.claude_login = state.claude_login.load(Ordering::Relaxed);
             st.output_fixed = state
                 .output_fixed_at

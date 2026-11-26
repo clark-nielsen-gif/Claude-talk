@@ -67,6 +67,8 @@ export interface AudioStatus {
   discordNeedsRestart: boolean;
   /** Discord itself is set to "Claude Talk – til Discord" (seen after Gendan) */
   discordCableChosen?: boolean;
+  /** Discord still records the cable it opened before Gendan (K12) */
+  discordStillOnCable?: boolean;
   /** Windows' default output was our cable and was just set back */
   outputFixed: boolean;
   /** shortcuts that could not be registered: '' fine, 'duplicate', or the keys */
@@ -141,6 +143,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-muted': return { ...ok, mic: quiet };
     case 'main-output-elsewhere': return { ...ok, outputMismatch: ['Headset (Jabra Evolve2)', 'Højttalere (Realtek High Definition Audio)'] };
     case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
+    case 'main-restored-still-on-cable': return { ...ok, discordUsesCable: 'yes', discordStillOnCable: true, claudeListening: false };
     case 'main-restored-cable-chosen': return { ...ok, discordUsesCable: 'yes', discordCableChosen: true, claudeListening: false };
     case 'main-output-fixed': return { ...ok, outputFixed: true };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };

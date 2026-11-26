@@ -25,7 +25,7 @@ function Sketch({ label, choice }: { label: string; choice: string }) {
 
 export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'restart'; onClose: () => void; onSettings: () => void }) {
   const t = useT();
-  const { toast, status } = useApp();
+  const { toast, status, config } = useApp();
   const first = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -54,13 +54,13 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
           <>
             <h2 id="guide-title">{t.guide.discordTitle}</h2>
             <Sketch label={t.guide.sketchLabel} choice={t.guide.sketchChoice} />
-            {status?.micName && (
+            <ol>{(config.routeDiscord ? t.guide.discordSteps : t.guide.discordStepsRestored).map((s) => <li key={s}>{s}</li>)}</ol>
+            {status?.micName && config.routeDiscord && (
               <>
                 <p className="muted">{fill(t.guide.micInUse, { mic: status.micName })}</p>
                 <button className="btn quiet flush" style={{ alignSelf: 'flex-start' }} onClick={onSettings}>{t.main.otherMic}</button>
               </>
             )}
-            <ol>{t.guide.discordSteps.map((s) => <li key={s}>{s}</li>)}</ol>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>
               <button ref={first} className="btn primary" onClick={() => api.openPlace('discordVoice')}>{t.guide.discordButton}</button>

@@ -106,14 +106,14 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{micUnplugged ? fill(t.settings.micUnpluggedHint, { name: status?.micName ?? '' }) : config.routeDiscord ? t.settings.microphoneHint : t.settings.microphoneHintRestored}</span></div>
+          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{micUnplugged ? fill(t.settings.micUnpluggedHint, { name: status?.micName ?? '' }) : config.routeDiscord ? t.settings.microphoneHint : status?.discordUsesCable === 'yes' ? t.settings.microphoneHintClaudeOnly : t.settings.microphoneHintRestored}</span></div>
           <MicPicker />
         </div>
       </div>
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.startup}</span><span className="small">{t.settings.startupHint}</span></div>
+          <div className="text"><span className="label">{t.settings.startup}</span><span className="small">{config.routeDiscord ? t.settings.startupHint : t.settings.startupHintRestored}</span></div>
           <Switch on={config.autostart} label={t.settings.startup} onChange={(v) => update({ autostart: v })} />
         </div>
         <div className="row">

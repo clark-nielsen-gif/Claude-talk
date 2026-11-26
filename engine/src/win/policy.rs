@@ -227,8 +227,20 @@ fn note_given_back(path: &str) {
     g.push(path.to_string());
 }
 
-/// The value Claude Talk wrote for Discord most recently, if any.
+/// What this Claude Talk last wrote as Discord's input (also "" for "Default"
+/// and the user's own value, which are not kept in the given-back list).
+static LAST_WRITTEN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The value Claude Talk wrote for Discord most recently, if any (from an
+/// earlier run: the newest in the given-back list).
 pub fn last_given_back() -> Option<String> {
+    if let Some(v) = LAST_WRITTEN
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+    {
+        return Some(v);
+    }
     DISCORD_GIVEN_BACK
         .lock()
         .unwrap_or_else(|p| p.into_inner())
@@ -275,6 +287,11 @@ pub fn discord_input_as_wanted(exes: &[String]) -> Option<bool> {
 /// at it). For a VB-CABLE the user had before, only Discord's settings for it
 /// are removed.
 static CABLE_IS_OURS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether Claude Talk installed the cable itself (see `set_cable_is_ours`).
+pub fn cable_is_ours() -> bool {
+    CABLE_IS_OURS.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 pub fn set_cable_is_ours(ours: bool) {
     CABLE_IS_OURS.store(ours, std::sync::atomic::Ordering::Relaxed);
@@ -354,6 +371,8 @@ pub fn restore_discord(exes: &[String]) -> usize {
             for role in ROLES {
                 if f.set(pid, role, &back).is_ok() {
                     n += 1;
+                    *LAST_WRITTEN.lock().unwrap_or_else(|p| p.into_inner()) =
+                        Some(wanted.clone().unwrap_or_default());
                     // remembered once really written (and never as the
                     // user's own setting)
                     if own.is_none() {

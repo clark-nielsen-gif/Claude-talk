@@ -47,7 +47,7 @@ export function Instructions() {
     <div className="page">
       <header>
         <h1>{t.instructions.title}</h1>
-        <p className="muted">{t.instructions.intro}</p>
+        <p className="muted">{config.externalClaude ? t.instructions.introExternal : t.instructions.intro}</p>
       </header>
 
       <h2 className="section-title">{t.instructions.hearingTitle}</h2>

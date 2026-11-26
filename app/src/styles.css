@@ -184,7 +184,7 @@ button, select, input { font: inherit; color: inherit; }
 }
 .meter.off span { background: var(--switch-off); }
 
-.check { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.875rem; min-height: 1.75rem; }
+.check { display: flex; align-items: flex-start; gap: 0.5rem; font-weight: 600; font-size: 0.875rem; min-height: 1.75rem; }
 .check .dot { width: 1.375rem; height: 1.375rem; border-radius: 50%; display: grid; place-items: center; flex: none; }
 .check.ok { color: var(--sage); }
 .check.ok .dot { background: var(--sage); color: #fff; }
@@ -192,7 +192,7 @@ button, select, input { font: inherit; color: inherit; }
 .check.wait .dot { border: 2px solid var(--switch-off); }
 .check.warn { color: var(--amber-ink); }
 .check.warn .dot { background: var(--amber-ink); color: var(--card); }
-.check .label { line-height: 1.3; }
+.check .label { line-height: 1.3; padding-top: 0.12rem; }
 
 .iconbtn {
   white-space: nowrap;

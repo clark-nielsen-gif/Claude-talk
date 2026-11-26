@@ -612,7 +612,12 @@ impl AudioHost {
                     let (rest, newest) = loop {
                         let seq = mic_stats.push_seq.load(Ordering::Acquire);
                         if seq % 2 == 1 {
-                            std::thread::yield_now(); // a push is half done
+                            // a push is half done (never for good: a capture
+                            // thread that died mid-push must not hang the stop)
+                            if stop2.load(Ordering::Relaxed) {
+                                break (0, 0);
+                            }
+                            std::thread::yield_now();
                             continue;
                         }
                         let slots = raw.slots();

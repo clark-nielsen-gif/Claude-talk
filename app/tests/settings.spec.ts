@@ -41,3 +41,9 @@ test('after “Gendan”, Discord set to the Claude Talk cable itself is pointed
   await page.getByRole('button', { name: 'Vis mig hvordan' }).first().click();
   await expect(page.getByRole('heading', { name: 'Sæt Discords mikrofon til »Standard«' })).toBeVisible();
 });
+
+test('after “Gendan”, a Discord still on the cable from before is told calmly, without a fix to choose', async ({ page }) => {
+  await page.goto('/?scenario=main-restored-still-on-cable&theme=light&freeze=1');
+  await expect(page.getByText('Discord hører dig gennem Claude Talk, indtil du genstarter Discord.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Vis mig hvordan' })).toHaveCount(0);
+});

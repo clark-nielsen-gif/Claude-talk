@@ -116,7 +116,7 @@ pub fn init_in(dir: std::path::PathBuf) {
         // Discord must not be left on a silent cable.
         #[cfg(windows)]
         if std::thread::current().name() == Some("main") {
-            crate::discord::restore();
+            crate::discord::give_up_after_panic();
         }
     }));
     log::info!("Claude Talk {} starting", env!("CARGO_PKG_VERSION"));
