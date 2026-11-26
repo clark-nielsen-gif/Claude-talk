@@ -231,14 +231,14 @@ pub fn run(sc: Scen, seed: u64) -> Res {
                 last_tg = tg;
             }
             res.max_target = res.max_target.max(tg);
-            if kout % 10 == 0 {
+            if kout.is_multiple_of(10) {
                 res.ratios.push((t / 1e6, stats.drift_ppm.load()));
             }
             kout += 1;
             next_out = 7_300.0
                 + kout as f64 * 10_000.0 / (1.0 + sc.ppm_out * 1e-6)
                 + (rng.next() * 2.0 - 1.0) * sc.out_jit_us;
-            if kout % 50 == 0 {
+            if kout.is_multiple_of(50) {
                 mh.collect_garbage();
                 src_h.collect_garbage();
             }
@@ -249,7 +249,7 @@ pub fn run(sc: Scen, seed: u64) -> Res {
     res
 }
 
-fn pct(v: &mut Vec<f64>, p: f64) -> f64 {
+fn pct(v: &mut [f64], p: f64) -> f64 {
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     v[((v.len() - 1) as f64 * p) as usize]
 }
