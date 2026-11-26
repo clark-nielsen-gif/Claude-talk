@@ -31,11 +31,15 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
     - [ ] Din ven hører dig, men ikke Claude. Claude hører hverken dig eller Discord.
 12. **Genstart Discord** midt i opkaldet.
     - [ ] Efter genstart virker alt igen uden at røre Claude Talk
-13. **Lang samtale.** Lad opkaldet køre i 30 minutter.
+13. **Instruktioner.** Gå til Instruktioner, og slå »Svar kun, når nogen siger aktiveringsordet« til. Start en ny samtale i Claude-vinduet.
+    - [ ] Instruktionerne står som første besked i samtalen og er sendt af sig selv
+    - [ ] Claude svarer ikke, når I snakker sammen uden at sige »Claude«, men svarer, når nogen siger »Claude«
+    - [ ] Med »Claude hører de andre i opkaldet« slået fra reagerer Claude ikke på din vens spørgsmål
+14. **Lang samtale.** Lad opkaldet køre i 30 minutter.
     - [ ] Ingen klik, udfald eller voksende forsinkelse
-14. **Gendan.** Indstillinger → "Gendan normale lydindstillinger".
+15. **Gendan.** Indstillinger → "Gendan normale lydindstillinger".
     - [ ] Discord bruger igen din almindelige mikrofon
-15. **Afinstallér** via Windows' "Installerede apps".
+16. **Afinstallér** via Windows' "Installerede apps".
     - [ ] Claude Talk, "Claude Talk – til Discord"-mikrofonen og autostart er væk. Discord bruger din almindelige mikrofon.
 
 Hvis noget fejler: Hjælp → "Gem fejlrapport", og send filen fra skrivebordet.

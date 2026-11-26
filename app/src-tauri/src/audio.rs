@@ -114,7 +114,9 @@ mod imp {
             ids::TO_DISCORD,
             !on || cfg.claude_to_discord_muted,
         );
-        host.set_route_muted(ids::DISCORD, ids::TO_CLAUDE, !on);
+        // "Claude hears only you": Discord's voices never reach Claude
+        let discord_to_claude = on && cfg.claude_hears_discord;
+        host.set_route_muted(ids::DISCORD, ids::TO_CLAUDE, !discord_to_claude);
         // Your microphone always reaches Discord (Discord uses our cable as
         // its microphone). To Claude it follows the big switch and, if
         // push-to-talk is on, the key.
@@ -132,7 +134,7 @@ mod imp {
                 ids::TO_DISCORD,
                 !on || cfg.claude_to_discord_muted,
             );
-            host.set_route_muted(ids::DISCORD, EXTERNAL_OUT, !on);
+            host.set_route_muted(ids::DISCORD, EXTERNAL_OUT, !discord_to_claude);
             host.set_route_muted(
                 ids::MIC,
                 EXTERNAL_OUT,

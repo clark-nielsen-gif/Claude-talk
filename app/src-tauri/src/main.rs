@@ -99,6 +99,8 @@ fn main() {
             commands::restore_audio_settings,
             commands::restart_discord,
             commands::install_cable,
+            commands::send_instructions,
+            commands::instruction_text,
             mixer::mixer_choices,
             mixer::add_mixer_source,
             mixer::remove_mixer_source,

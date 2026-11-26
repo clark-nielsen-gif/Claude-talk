@@ -95,3 +95,21 @@ Drift-reguleringen må med vilje rette op til ±0,25 % (ca. 4 cent, uhørligt). 
 
 ## D17 – 1 ms timeropløsning
 Alle tråde, der tager tid efter uret (stilhed for ventende kilder, testtoner, ekkodæmpning og Claude-broen), kalder `timeBeginPeriod(1)` én gang pr. proces. Ellers kan en kort pause på Windows vare 15,6 ms, og lyden kommer i ryk.
+
+## D18 – Mikrofonen er kun åben, når nogen kan høre den
+Mikrofonen åbnes kun, mens Discord optager (i et opkald), Claude-siden bruger mikrofonen, Claude kører i et andet program, eller Claude Talks vindue er åbent (dets »Vi kan høre dig«-måler). Ellers er enheden lukket. Windows' mikrofonikon slukker, og Bluetooth-headsets skifter ikke til den dårlige håndfri-lyd. Mens mikrofonen er lukket, leverer motoren stilhed i realtid, så alt andet kører videre.
+
+## D19 – Genvejstaster bruger F-taster
+Ctrl+Alt+bogstav er det samme som AltGr+bogstav på danske tastaturer (Ctrl+Alt+M skriver µ). Standardtasterne er derfor Ctrl+Shift+F9 (gør Claude stille i Discord), Ctrl+Shift+F10 (min mikrofon) og Ctrl+Shift+F12 (hold for at tale til Claude). Tastvælgeren tager kun bogstaver, tal, F-taster og mellemrum.
+
+## D20 – Installerens tillidskæde
+VB-CABLE hentes til en mappe under Program Files, hvor kun administratorer kan skrive. Pakken accepteres kun, hvis dens SHA-256 er den testede, eller hvis driverkataloget er signeret af »Microsoft Windows Hardware Compatibility Publisher«. Installationsprogrammet skal desuden være gyldigt signeret. Ved afinstallation køres det kun, hvis det har samme SHA-256 som ved installationen. Claude Talk omdøber og fjerner kun et VB-CABLE, som det selv har installeret. Et VB-CABLE, brugeren havde i forvejen, bruges med sine egne navne.
+
+## D21 – Ekkodæmperens reference
+Referencen er alle kilder, der ikke er brugeren: Claude, Discord, Claude i et andet program og tilføjede programmer. Ekkodæmperen genopbygges, hver gang sådan en kilde kommer eller går.
+
+## D22 – Instruktioner til Claude
+Brugeren kan bestemme, hvordan Claude opfører sig i opkaldet: aktiveringsord, korte svar, dansk, »flere personer taler« og egne instruktioner. De bliver til én besked, som Claude Talk skriver ind i Claudes beskedfelt og sender, når en ny samtale starter (`/new`), eller med »Send til Claude nu«. Sidens script rører kun beskedfeltet og send-knappen og læser intet på siden.
+- **Følges af Claude:** Aktiveringsordet er en instruktion. Claude følger den godt, men ikke garanteret. Et ægte lokalt aktiveringsord, hvor lyden slet ikke når Claude før ordet, kræver talegenkendelse på pc'en (se K13).
+- **Håndhæves af Claude Talk:** »Claude hører kun mig« er routing. Discords lyd når slet ikke Claude, uanset hvad Claude gør.
+- **Test:** Playwright-testen `instructions are written into the message field and sent` tjekker leveringen mod en side, der efterligner Claudes beskedfelt. Det rigtige forløb står i `MANUAL_TEST.md` trin 13.

@@ -6,10 +6,11 @@ import { dictionaries } from './i18n';
 import { Advanced } from './screens/Advanced';
 import { Help } from './screens/Help';
 import { Home } from './screens/Home';
+import { Instructions } from './screens/Instructions';
 import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
 
-type Page = 'home' | 'advanced' | 'settings' | 'help';
+type Page = 'home' | 'instructions' | 'advanced' | 'settings' | 'help';
 
 function useSystemDark(): boolean {
   const q = '(prefers-color-scheme: dark)';
@@ -24,7 +25,7 @@ function useSystemDark(): boolean {
 }
 
 const pageFromScenario = (s: string): Page =>
-  s.startsWith('advanced') ? 'advanced' : s.startsWith('settings') ? 'settings' : s.startsWith('help') ? 'help' : 'home';
+  s.startsWith('instructions') ? 'instructions' : s.startsWith('advanced') ? 'advanced' : s.startsWith('settings') ? 'settings' : s.startsWith('help') ? 'help' : 'home';
 
 export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -78,14 +79,15 @@ export function App() {
         ) : (
           <div className="body">
             <nav className="nav" aria-label={t.appName}>
-              {(['home', 'advanced', 'settings', 'help'] as Page[]).map((p) => (
+              {(['home', 'instructions', 'advanced', 'settings', 'help'] as Page[]).map((p) => (
                 <button key={p} aria-current={page === p ? 'page' : undefined} onClick={() => setPage(p)}>
-                  {p === 'home' ? t.nav.home : p === 'advanced' ? t.nav.advanced : p === 'settings' ? t.nav.settings : t.nav.help}
+                  {t.nav[p]}
                 </button>
               ))}
             </nav>
             <main className="content">
               {page === 'home' && <Home info={info} />}
+              {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}
               {page === 'help' && <Help info={info} />}

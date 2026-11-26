@@ -75,6 +75,8 @@ pub struct ConfigPatch {
     pub echo: Option<EchoMode>,
     pub hotkeys: Option<crate::config::Hotkeys>,
     pub advanced_unlocked: Option<bool>,
+    pub instructions: Option<crate::config::Instructions>,
+    pub claude_hears_discord: Option<bool>,
 }
 
 #[tauri::command]
@@ -110,6 +112,14 @@ pub fn set_config(
         if let Some(v) = patch.advanced_unlocked {
             c.advanced_unlocked = v;
         }
+        if let Some(mut v) = patch.instructions {
+            v.wake_word = v.wake_word.trim().chars().take(40).collect();
+            v.own = v.own.chars().take(2000).collect();
+            c.instructions = v;
+        }
+        if let Some(v) = patch.claude_hears_discord {
+            c.claude_hears_discord = v;
+        }
         if let Some(v) = patch.mic_muted {
             c.mic_muted = v;
         }
@@ -138,6 +148,33 @@ pub fn set_config(
         crate::autostart::apply(&app, cfg.autostart);
     }
     Ok(cfg)
+}
+
+/// The exact message the instructions become (shown as a preview).
+#[tauri::command]
+pub fn instruction_text(instructions: crate::config::Instructions, language: String) -> String {
+    instructions.text(&language)
+}
+
+/// Writes the instructions into the Claude window and sends them. The result
+/// arrives as the "claude-prompt" event ({ ok, reason }).
+#[tauri::command]
+pub fn send_instructions(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    let text = {
+        let c = state
+            .config
+            .lock()
+            .map_err(|_| "error.internal".to_string())?;
+        c.instructions.text(&c.language)
+    };
+    if text.is_empty() {
+        return Err("error.noInstructions".into());
+    }
+    if !crate::claude_window::is_open(&app) {
+        return Err("error.claudeNotOpen".into());
+    }
+    crate::claude_window::send_prompt(&app, &text);
+    Ok(())
 }
 
 #[tauri::command]

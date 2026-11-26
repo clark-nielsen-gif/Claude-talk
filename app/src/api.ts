@@ -27,6 +27,18 @@ export interface Config {
   advancedUnlocked: boolean;
   presets?: { name: string }[];
   externalClaude?: string | null;
+  instructions: Instructions;
+  claudeHearsDiscord: boolean;
+}
+
+export interface Instructions {
+  onlyWhenCalled: boolean;
+  wakeWord: string;
+  short: boolean;
+  danish: boolean;
+  group: boolean;
+  own: string;
+  autoSend: boolean;
 }
 
 export interface Choice { value: string; label: string }
@@ -82,6 +94,8 @@ const defaultConfig: Config = {
   hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F12' },
   advancedUnlocked: false,
   presets: [{ name: 'Musik' }],
+  instructions: { onlyWhenCalled: true, wakeWord: 'Claude', short: true, danish: false, group: true, own: '', autoSend: true },
+  claudeHearsDiscord: true,
   externalClaude: scenario === 'advanced-extra-cable' ? 'chrome.exe' : null,
 };
 
@@ -148,6 +162,23 @@ export const api = {
    *  installer's exit code; rejects with 'cancelled' if the prompt is declined. */
   async installCable(): Promise<number> {
     return inTauri ? invoke<number>('install_cable') : 0;
+  },
+  /** The exact message the instructions become. */
+  async instructionText(instructions: Instructions, language: string): Promise<string> {
+    if (inTauri) return invoke<string>('instruction_text', { instructions, language });
+    return 'Du er med i et Discord-opkald med flere personer. Du hører alle i opkaldet, og de hører dig. Svar kun, når nogen siger »Claude«. Hvis ingen siger »Claude«, så sig ingenting og vent. Hold dine svar korte: en til tre sætninger. Du behøver ikke svare på denne besked – bare følg den.';
+  },
+  /** Writes the instructions into the Claude window and sends them. */
+  async sendInstructions(): Promise<void> {
+    if (inTauri) await invoke('send_instructions');
+  },
+  /** Whether the Claude window accepted the instructions. */
+  onPrompt(cb: (r: { ok: boolean; reason: string }) => void): () => void {
+    if (!inTauri) return () => {};
+    let un: UnlistenFn | undefined;
+    let dead = false;
+    listen<{ ok: boolean; reason: string }>('claude-prompt', (e) => cb(e.payload)).then((u) => (dead ? u() : (un = u)));
+    return () => { dead = true; un?.(); };
   },
   async restartDiscord(): Promise<void> {
     if (inTauri) await invoke('restart_discord');

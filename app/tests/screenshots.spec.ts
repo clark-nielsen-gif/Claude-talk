@@ -8,7 +8,7 @@ const scenarios = [
   'main-ok', 'main-off', 'main-muted', 'main-claude-closed', 'main-claude-not-listening',
   'main-discord-closed', 'main-discord-wrong-mic', 'main-discord-restart', 'main-speakers', 'main-update',
   'error-mic-blocked', 'error-mic-missing', 'error-cable-missing', 'error-unsupported',
-  'advanced', 'advanced-add', 'settings', 'advanced-extra-cable', 'help',
+  'instructions', 'advanced', 'advanced-add', 'settings', 'advanced-extra-cable', 'help',
 ];
 const themes = ['light', 'dark'] as const;
 const scales = [1, 1.5];

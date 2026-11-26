@@ -14,6 +14,7 @@ const fakeHost = `
   const listeners = [];
   const sent = [];
   window.__hostSent = sent;
+  window.__hostSend = (m) => listeners.forEach((l) => l({ data: m }));
   window.chrome = window.chrome || {};
   window.chrome.webview = {
     addEventListener: (t, f) => { if (t === 'message') listeners.push(f); },
@@ -101,4 +102,28 @@ test('a clone keeps the microphone alive; stopping every track releases it', asy
   expect(result.afterOriginal).toBe(true);
   expect(result.afterFirstClone).toBe(true);
   expect(result.afterAll).toBe(false);
+});
+
+test('instructions are written into the message field and sent', async ({ page }) => {
+  // a stand-in for Claude's message field: ProseMirror-like editor whose send
+  // button is enabled only after text was typed
+  const html = `<!doctype html><title>chat</title><main>
+    <fieldset><div class="ProseMirror" contenteditable="true" role="textbox"></div></fieldset>
+    <button aria-label="Send message" disabled>send</button></main>
+    <script>
+      const box = document.querySelector('.ProseMirror'), btn = document.querySelector('button');
+      box.addEventListener('input', () => { btn.disabled = !box.textContent.trim(); });
+      btn.addEventListener('click', () => { window.__submitted = box.textContent; box.textContent = ''; btn.disabled = true; });
+    </script>`;
+  await page.route('https://claude-ci.test/new', (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: html }));
+  await page.addInitScript(fakeHost);
+  await page.addInitScript(bridge);
+  await page.goto('https://claude-ci.test/new');
+  // the page tells the host that a new conversation started
+  await expect.poll(() => page.evaluate(() => (window as any).__hostSent.map((m: string) => JSON.parse(m).type))).toContain('fresh');
+  const text = 'Svar kun, når nogen siger »Claude«.';
+  await page.evaluate((t) => (window as any).__hostSend('ct:p:' + JSON.stringify(t)), text);
+  await expect.poll(() => page.evaluate(() => (window as any).__submitted)).toBe(text);
+  const results = await page.evaluate(() => (window as any).__hostSent.map((m: string) => JSON.parse(m)).filter((m: any) => m.type === 'prompt'));
+  expect(results).toEqual([{ ct: 1, type: 'prompt', ok: true }]);
 });

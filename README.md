@@ -40,6 +40,8 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 
 **Hvad sker der med mine samtaler og min adgangskode?** Ingenting. Du logger ind direkte på Anthropics egen side. Claude Talk læser aldrig adgangskoder, koder eller cookies.
 
+**Kan Claude kun svare, når nogen siger »Claude«?** Ja. Gå til **Instruktioner**, og slå »Svar kun, når nogen siger aktiveringsordet« til. Du kan vælge et andet ord, bede Claude svare kort, tale dansk eller skrive dine egne instruktioner, f.eks. »Du er spilleder i vores rollespil«. Claude Talk sender dem til Claude, hver gang du starter en ny samtale. Vil du have, at Claude slet ikke hører de andre i opkaldet, så slå »Claude hører de andre i opkaldet« fra.
+
 **Mine venner kan ikke høre Claude.** Se på Discord-kortet i Claude Talk. Står der et grønt flueben ved »Discord hører Claude«, så tjek, at Claudes stemme er slået til i Claude-vinduet. Ellers følg knappen på kortet.
 
 **Hvordan fjerner jeg det igen?** Afinstaller Claude Talk under Windows' »Installerede apps«. Discord får sin almindelige mikrofon tilbage, og Claude Talk-mikrofonen fjernes.

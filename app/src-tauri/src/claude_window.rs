@@ -159,6 +159,38 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+pub fn is_open(app: &AppHandle) -> bool {
+    app.get_webview_window(LABEL).is_some()
+}
+
+/// Hands the instructions to the page script, which writes them into
+/// Claude's message field and sends them (nothing on the page is read).
+pub fn send_prompt(app: &AppHandle, text: &str) {
+    let msg = format!("ct:p:{}", serde_json::Value::String(text.to_string()));
+    #[cfg(windows)]
+    {
+        let _ = app.run_on_main_thread(move || win::post(&msg));
+    }
+    #[cfg(not(windows))]
+    let _ = (app, msg);
+}
+
+/// Sends the instructions automatically when a new conversation starts.
+fn auto_send(app: &AppHandle) {
+    let text = {
+        let st = app.state::<AppState>();
+        let c = st.config.lock().unwrap_or_else(|p| p.into_inner());
+        if !c.instructions.auto_send {
+            return;
+        }
+        c.instructions.text(&c.language)
+    };
+    if !text.is_empty() {
+        log::info!("Claude window: sending the instructions to a new conversation");
+        send_prompt(app, &text);
+    }
+}
+
 /// Sends the engine's "Til Claude" mix to the Claude window, 10 ms at a time.
 ///
 /// Two threads: the clock thread is the virtual microphone's clock (Pro
@@ -445,6 +477,19 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
             let _ = app.emit(
                 "claude-window",
                 serde_json::json!({"open": true, "micActive": active}),
+            );
+        }
+        Some("fresh") => auto_send(app),
+        Some("prompt") => {
+            let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+            let reason = v.get("reason").and_then(|x| x.as_str()).unwrap_or("");
+            log::info!(
+                "Claude window: instructions {}",
+                if ok { "sent" } else { "not sent" }
+            );
+            let _ = app.emit(
+                "claude-prompt",
+                serde_json::json!({ "ok": ok, "reason": reason }),
             );
         }
         Some("ready") => {

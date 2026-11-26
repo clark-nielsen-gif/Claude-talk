@@ -12,4 +12,13 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Min mor" | 8 major, 7 minor | Kort, der modsiger fejl. "Ingen ekko" (forkert dansk). "Du ville høre sig selv". "Send den til os" uden adresse. Tekniske tal i Hjælp. Ingen knap til Claude-vinduet. README-link til en GitHub-side og en skræmmende SmartScreen-forklaring. |
 | "Bryd det" | 7 major, 8 minor | En anden VB-Audio-enhed (Hi-Fi Cable, brugerens eget VB-CABLE) kan blive omdøbt og overtaget. Et nyt standard-headset følges ikke. Mikrofonen er åben hele tiden (Bluetooth i håndfri-tilstand). Stereo Mix omgår låsene. Installer-tillid. Chrome-tilstand plus højttalere giver ekko. VoiceMeeter fejlklassificeres. |
 
-Rettelser fra runde 1 står i commit-historikken med henvisning "review 1". Fund, der ikke rettes, står med begrundelse i `KNOWN_ISSUES.md`.
+**Rettet efter runde 1** (commit `ed5448b`, »Review 1 fixes«):
+- Alle major-fund.
+- Fra minor-fundene: NaN-værn, ordnede kommandokøer, korrekt låserækkefølge i kontakterne, bakkekontakten, forudindstillinger mod Chrome-tilstand, frisk tilstand i Claude-vinduet, F-taster, selvtest-vagt, WebView2-profil lokalt, rigtigt skrivebord, backup af nyere config og Windows 24H2's lager for app-mikrofoner.
+
+**Ikke rettet, med begrundelse:**
+- Ekkodæmperens allokering (K10).
+- VB-CABLE's egen buffer (K9).
+- Afinstallation med en andens administratorkode (K11).
+- Ikke-transitiv selvhørings-kontrol: ingen nuværende vej rammer den, fordi loopback-indgange er udelukket.
+- Glidende overgange ved underrun og tilbagefald til ScriptProcessor: små lydpletter ved fejl, ikke ved normal drift.

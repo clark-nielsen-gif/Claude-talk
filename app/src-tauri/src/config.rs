@@ -42,6 +42,89 @@ pub enum EchoMode {
     Off,
 }
 
+/// "Instruktioner til Claude": how Claude behaves in the call. Sent to the
+/// Claude window as the first message of a new conversation (or by hand).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Instructions {
+    /// Answer only when someone says the wake word.
+    pub only_when_called: bool,
+    pub wake_word: String,
+    pub short: bool,
+    pub danish: bool,
+    /// Remember that several people talk.
+    pub group: bool,
+    /// The user's own text.
+    pub own: String,
+    /// Send automatically when a new conversation starts.
+    pub auto_send: bool,
+}
+
+impl Default for Instructions {
+    fn default() -> Self {
+        Instructions {
+            only_when_called: false,
+            wake_word: "Claude".into(),
+            short: false,
+            danish: false,
+            group: true,
+            own: String::new(),
+            auto_send: true,
+        }
+    }
+}
+
+impl Instructions {
+    /// The message Claude gets, in the app's language; empty if nothing is chosen.
+    pub fn text(&self, language: &str) -> String {
+        let da = language == "da";
+        let word = self.wake_word.trim();
+        let word = if word.is_empty() { "Claude" } else { word };
+        let mut parts: Vec<String> = Vec::new();
+        if self.group {
+            parts.push(if da {
+                "Du er med i et Discord-opkald med flere personer. Du hører alle i opkaldet, og de hører dig.".into()
+            } else {
+                "You are in a Discord call with several people. You hear everyone in the call, and they hear you.".into()
+            });
+        }
+        if self.only_when_called {
+            parts.push(if da {
+                format!("Svar kun, når nogen siger »{word}«. Hvis ingen siger »{word}«, så sig ingenting og vent.")
+            } else {
+                format!("Only answer when someone says \"{word}\". If nobody says \"{word}\", say nothing and wait.")
+            });
+        }
+        if self.short {
+            parts.push(if da {
+                "Hold dine svar korte: en til tre sætninger.".into()
+            } else {
+                "Keep your answers short: one to three sentences.".into()
+            });
+        }
+        if self.danish {
+            parts.push(if da {
+                "Tal dansk.".into()
+            } else {
+                "Speak Danish.".into()
+            });
+        }
+        let own = self.own.trim();
+        if !own.is_empty() {
+            parts.push(own.chars().take(2000).collect());
+        }
+        if parts.is_empty() {
+            return String::new();
+        }
+        if da {
+            parts.push("Du behøver ikke svare på denne besked – bare følg den.".into());
+        } else {
+            parts.push("You don't need to reply to this message – just follow it.".into());
+        }
+        parts.join(" ")
+    }
+}
+
 /// What an added mixer source records.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -121,6 +204,10 @@ pub struct Config {
     /// the program whose sound is Claude's voice (claude.exe, chrome.exe,
     /// msedge.exe), or none.
     pub external_claude: Option<String>,
+    pub instructions: Instructions,
+    /// Claude hears the others in the call (off: only you). Enforced by the
+    /// routing, not by asking Claude.
+    pub claude_hears_discord: bool,
 }
 
 impl Default for Config {
@@ -142,6 +229,8 @@ impl Default for Config {
             mixer: Mixer::default(),
             presets: Vec::new(),
             external_claude: None,
+            instructions: Instructions::default(),
+            claude_hears_discord: true,
         }
     }
 }
@@ -198,6 +287,22 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn instruction_text() {
+        let mut i = Instructions {
+            group: false,
+            ..Default::default()
+        };
+        assert_eq!(i.text("da"), "");
+        i.only_when_called = true;
+        i.wake_word = "Robot".into();
+        i.short = true;
+        let t = i.text("da");
+        assert!(t.contains("»Robot«") && t.contains("korte"), "{t}");
+        i.wake_word = "  ".into();
+        assert!(i.text("en").contains("\"Claude\""));
+    }
 
     #[test]
     fn mixer_settings_roundtrip() {

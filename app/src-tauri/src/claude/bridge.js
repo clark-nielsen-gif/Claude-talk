@@ -190,9 +190,69 @@
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new Float32Array(bytes.buffer);
   }
+  // ---- instructions: written into Claude's message field and sent -----------
+  // Only the message field and its send button are touched; nothing on the
+  // page is read.
+  function composer() {
+    return document.querySelector('div.ProseMirror[contenteditable="true"]')
+      || document.querySelector('div[contenteditable="true"][role="textbox"]')
+      || document.querySelector('fieldset div[contenteditable="true"]')
+      || document.querySelector('textarea');
+  }
+  function sendButton() {
+    return document.querySelector('button[aria-label="Send message" i]')
+      || document.querySelector('button[aria-label="Send Message" i]')
+      || document.querySelector('button[aria-label*="send" i]')
+      || document.querySelector('button[type="submit"]');
+  }
+  function deliverPrompt(text) {
+    const t0 = Date.now();
+    const attempt = () => {
+      const box = composer();
+      if (!box) {
+        if (Date.now() - t0 < 15000) return setTimeout(attempt, 300);
+        return post({ type: 'prompt', ok: false, reason: 'noComposer' });
+      }
+      box.focus();
+      if (box.tagName === 'TEXTAREA') {
+        const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+        set.call(box, text);
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        document.execCommand('selectAll', false);
+        document.execCommand('insertText', false, text);
+      }
+      // the page enables its send button once it has seen the text
+      let tries = 0;
+      const send = () => {
+        const btn = sendButton();
+        if (btn && !btn.disabled) { btn.click(); return post({ type: 'prompt', ok: true }); }
+        if (++tries < 20) return setTimeout(send, 100);
+        box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+        post({ type: 'prompt', ok: true, reason: 'enter' });
+      };
+      setTimeout(send, 100);
+    };
+    attempt();
+  }
+  // A new conversation (claude.ai is a single-page app: watch the address).
+  let lastPath = '';
+  setInterval(() => {
+    const p = location.pathname;
+    if (p !== lastPath) {
+      lastPath = p;
+      if (p === '/new') post({ type: 'fresh' });
+    }
+  }, 700);
+
   wv.addEventListener('message', (ev) => {
     const d = ev.data;
-    if (typeof d !== 'string' || d.charCodeAt(0) !== 99 /* c */ || !d.startsWith('ct:a:')) return;
+    if (typeof d !== 'string' || d.charCodeAt(0) !== 99 /* c */) return;
+    if (d.startsWith('ct:p:')) {
+      try { deliverPrompt(JSON.parse(d.slice(5))); } catch (_) { post({ type: 'prompt', ok: false, reason: 'bad' }); }
+      return;
+    }
+    if (!d.startsWith('ct:a:')) return;
     if (!source || liveClones === 0) return;
     const samples = decode(d.slice(5));
     framesIn += samples.length;

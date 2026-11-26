@@ -23,3 +23,18 @@ Første gang programmet starter på en pc, opretter WebView2 sin profil. På en 
 
 ## K8 – Discord skal måske genstartes én gang
 Windows' indstilling for mikrofon pr. program kan først sættes, når Discord har brugt lyd, og en optagelse, der allerede kører, flytter ikke altid med. Claude Talk prøver igen hvert andet sekund og viser "Genstart Discord for mig", hvis Discord stadig optager fra en anden mikrofon. Indstillingen huskes derefter af Windows.
+
+## K9 – VB-CABLE lægger sin egen forsinkelse til
+VB-CABLE har en intern buffer (standard 7168 samples). Kablet lægger målt ca. 35–40 ms til Discord-retningen ud over Claude Talks egen del (`app-e2e`, `vbcable_added_ms`). VB-Audio anbefaler kun eksperter at ændre den og dokumenterer ikke, hvor indstillingen gemmes. Claude Talk ændrer den derfor ikke. Claude Talks egen del måles og holdes for sig.
+
+## K10 – Ekkodæmperen kører i sin egen tråd og allokerer
+WebRTC AEC3-biblioteket (`aec3`) allokerer pr. blok. Det kører derfor ikke i en enhedstråd, men i en egen tråd med »Pro Audio«-prioritet, der læser mikrofonen fra en låsefri ring. En forsinket blok kan i værste fald give et kort udfald i mikrofonen, men aldrig i de andre lydveje.
+
+## K11 – Afinstallation via en anden brugers administratorkode
+Hvis en almindelig bruger afinstallerer med en administrators kode, rydder afinstallationen administratorens brugerindstillinger (autostart og Discords mikrofonvalg), ikke brugerens. Brugerens autostart peger så på et program, der ikke findes, og Windows ignorerer den. Discords mikrofonvalg peger på en enhed, der er fjernet, og Discord falder tilbage til standardmikrofonen.
+
+## K12 – »Gendan normale lydindstillinger«, mens Discord er lukket
+Windows' lydtjeneste husker Discords mikrofonvalg i hukommelsen, så det kan først ændres, når Discord kører. Claude Talk sletter det gemte valg med det samme og retter det, så snart Discord starter. Hvis Discord allerede er begyndt at optage, skal Discord genstartes én gang. Det viser Claude Talk selv.
+
+## K13 – Aktiveringsordet er en instruktion til Claude
+»Svar kun, når nogen siger …« bliver sendt til Claude som en instruktion. Claude følger den godt, men kan en sjælden gang svare alligevel. Skal Claude slet ikke høre noget før ordet, kræver det talegenkendelse på pc'en. Windows' indbyggede talegenkendelse kan ikke dansk og kan ikke lytte til Claude Talks egen lyd. »Claude hører kun mig« håndhæves derimod af Claude Talk selv. Hvis claude.ai ændrer sit beskedfelt, kan den automatiske afsendelse stoppe. Så viser Claude Talk en besked, og instruktionerne kan indsættes manuelt.
