@@ -17,7 +17,7 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
   // Anything the overview shows as a problem: then the sound is not "fine".
   const problem = !!status && (
     !info.supported
-    || !status.cableOk
+    || (!status.cableOk && !info.cableInstalled)
     || status.micState === 'blocked' || status.micState === 'missing'
     || status.discordNeedsRestart
     || (status.discordUsesCable === 'no' && config.routeDiscord));

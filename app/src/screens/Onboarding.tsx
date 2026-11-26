@@ -84,9 +84,9 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
                 const revealed = i < shown;
                 const ok = revealed && c.done;
                 return (
-                  <li key={c.label} className={ok ? '' : 'pending'}>
+                  <li key={c.label} className={ok ? '' : i === failed ? 'failed' : 'pending'}>
                     {ok ? <span className="check ok"><span className="dot">{Icon.check()}</span></span>
-                      : i === failed ? <span className="check warn"><span className="dot">!</span></span>
+                      : i === failed ? <span className="check warn"><span className="dot">{Icon.alert()}</span></span>
                       : failed >= 0 && i > failed ? <span className="check wait"><span className="dot" /></span>
                       : <span className="spinner" aria-hidden="true" />}
                     {c.label}

@@ -351,7 +351,7 @@ fn reference_delay_holds_through_late_packets_pauses_and_drift() {
     for (name, sc) in cases {
         for seed in seeds {
             let s = summarize(&format!("{name} (seed {seed:#x})"), sc, seed);
-            if s.off_share > 0.01 || s.max_jump > 2.0 || s.spread > 4.0 {
+            if s.off_share > 0.0 || s.max_jump > 1.0 || s.spread > 1.5 {
                 bad.push(format!("{name} (seed {seed:#x})"));
             }
         }

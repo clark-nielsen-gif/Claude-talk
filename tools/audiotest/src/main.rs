@@ -1273,7 +1273,18 @@ mod imp {
                 }
             }
             let lower = mic.to_lowercase();
+            // something must be picked whenever another microphone exists
+            let others = devices::list(Flow::Capture)
+                .unwrap_or_default()
+                .into_iter()
+                .any(|e| {
+                    let n = e.name.to_lowercase();
+                    !devices::NOT_A_MICROPHONE
+                        .iter()
+                        .any(|p| n.contains(&p.to_lowercase()))
+                });
             let pass = made_default
+                && (!others || !mic.is_empty())
                 && !devices::OWN_VIRTUAL_DEVICES
                     .iter()
                     .any(|p| lower.contains(p));

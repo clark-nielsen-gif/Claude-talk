@@ -7,6 +7,8 @@ export interface Ctx {
   config: Config;
   status: AudioStatus | null;
   update: (patch: Partial<Config>) => Promise<void>;
+  /** Shows settings the backend just returned. */
+  setConfig: (c: Config) => void;
   toast: (text: string) => void;
 }
 

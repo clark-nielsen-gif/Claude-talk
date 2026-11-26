@@ -12,7 +12,7 @@ Du skal bruge Windows 11, Discord-programmet på din pc (ikke Discord i browsere
 
 **2. Installer.** Dobbeltklik på filen. Siger Windows »Windows har beskyttet din pc«, så tryk på **Flere oplysninger** og derefter **Kør alligevel** (se længere nede, hvorfor). Windows spørger så én gang, om programmet må ændre din pc. Boksen er gul, og der står, at udgiveren er ukendt. Det er normalt for Claude Talk. Tryk **Ja**. Tryk **Næste** og **Installer**, vent lidt, og tryk **Næste** og til sidst **Udfør**. Installationen henter selv Claude Talk-mikrofonen, så der skal være internet i et øjeblik. Bagefter finder du Claude Talk i Start-menuen.
 
-**3. Tryk på knappen.** Claude Talk åbner. Tryk **Sæt det op for mig**, og derefter **Åbn Claude**. Log ind på Claude med din e-mail (kun første gang, se herunder). Start et opkald i Discord. Tryk så på stemme-knappen i Claude-vinduet: den runde knap med lydbølger i højre side af skrivefeltet.
+**3. Tryk på knappen.** Claude Talk åbner. Tryk **Sæt det op for mig**, og derefter **Åbn Claude**. Log ind på Claude med din e-mail (kun første gang, se herunder). Start et opkald i Discord. Tryk så på stemme-knappen i Claude-vinduet: den runde knap med lydbølger i højre side af skrivefeltet. Viser feltet **Discord** i Claude Talk en orange knap ved dit første opkald, så tryk på den, og følg den.
 
 **Hver gang du vil have Claude med:** Claude Talk starter selv med Windows og ligger ved uret. Klik på ikonet (tryk på den lille pil ^ ved uret, hvis du ikke kan se det, eller åbn Claude Talk fra Start-menuen), tryk **Åbn Claude**, og tryk på den runde knap med lydbølger i Claude-vinduet.
 
@@ -26,7 +26,7 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 2. Tryk på knappen **Kør alligevel**, der dukker op nederst.
 
 ### Hvis Windows siger »Smart App Control har blokeret en app«
-Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der endnu ikke er signeret af en kendt udgiver, og den kan ikke tilsidesættes for ét program. Claude Talk er ikke signeret endnu, så på de pc'er kan det ikke bruges endnu. Spørg den, der har sendt dig linket.
+Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der endnu ikke er signeret af en kendt udgiver, og den kan ikke tilsidesættes for ét program. Claude Talk er ikke signeret endnu, så på de pc'er kan Claude Talk ikke bruges. Spørg den, der har sendt dig linket.
 
 ## Det skal du vide
 - **Claude kører i sit eget vindue i Claude Talk.** Det er det, der gør, at Claude kan høre dig og Discord, uden at noget andet på din pc kommer med. Du logger ind én gang, og så husker vinduet det.
@@ -55,7 +55,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 
 **De andre kan ikke høre Claude.** Se i feltet med overskriften **Discord** i Claude Talk. Står der et grønt flueben ved »De andre i Discord hører Claude«, så tjek i Discord, at du ikke har slået din mikrofon fra, og at Discord står på »Stemmeaktivitet« (ikke »Tryk for at tale«). Se også i Claude-vinduet, om Claude taler (lydbølgerne bevæger sig). Ellers følg knappen i feltet.
 
-**Hvordan fjerner jeg det igen?** Åbn Windows' **Indstillinger** (tandhjulet i Start-menuen) **→ Apps → Installerede apps**, tryk på **…** ved Claude Talk, vælg **Afinstaller** og **Afinstaller** igen, og svar **Ja** i den gule boks. I det vindue, der så åbner (»Afinstaller Claude Talk«), kan du sætte flueben ved »Slet også indstillinger og Claude-login«, hvis du ikke skal bruge Claude Talk igen (din Claude-konto og dine samtaler bliver ikke slettet). Tryk **Afinstaller**; siger den, at Claude Talk kører, så tryk **OK**. Tryk til sidst **Luk**. Discord får sin almindelige mikrofon tilbage (står Discord på »Standard«, er det Windows' standardmikrofon), og Claude Talk-mikrofonen fjernes.
+**Hvordan fjerner jeg det igen?** Åbn Windows' **Indstillinger** (tandhjulet i Start-menuen) **→ Apps → Installerede apps**, tryk på **…** ved Claude Talk, vælg **Afinstaller** og **Afinstaller** igen, og svar **Ja** i den gule boks. I det vindue, der så åbner (»Afinstaller Claude Talk«), kan du sætte flueben ved »Slet også indstillinger og Claude-login«, hvis du ikke skal bruge Claude Talk igen (din Claude-konto og dine samtaler bliver ikke slettet). Tryk **Afinstaller**; siger den, at Claude Talk kører, så tryk **OK**. Tryk til sidst **Luk**. Discord får din mikrofon tilbage, og Claude Talk-mikrofonen fjernes. Var Discord lukket, da du afinstallerede, så åbn Discords lydindstillinger bagefter, og tjek, at din mikrofon er valgt som inputenhed.
 
 ## Fejlfinding
 

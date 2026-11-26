@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type EchoMode, type Hotkeys, type Theme } from '../api';
 import { Switch } from '../components';
 import { useApp, useT } from '../context';
+import { fill } from '../i18n';
 
 /** Records a key combination like "Ctrl+Shift+D". Only one listens at a time. */
 function KeyPicker({ value, onChange, label, listening, setListening }: {
@@ -12,6 +13,8 @@ function KeyPicker({ value, onChange, label, listening, setListening }: {
   useEffect(() => {
     if (!listening) { setRefused(false); return; }
     const down = (e: KeyboardEvent) => {
+      // plain Tab, Enter and Space keep working (to reach and press Fortryd)
+      if (!e.ctrlKey && !e.metaKey && ['Tab', 'Enter', ' '].includes(e.key)) return;
       e.preventDefault();
       if (e.key === 'Escape') { setListening(false); return; }
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
@@ -44,19 +47,19 @@ function KeyPicker({ value, onChange, label, listening, setListening }: {
 /** Which microphone is "you" (Windows' default, or one the user picks). */
 function MicPicker() {
   const t = useT();
-  const { config, status, toast } = useApp();
+  const { config, status, toast, setConfig } = useApp();
   const [mics, setMics] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => { api.listMicrophones().then(setMics).catch(() => {}); }, [status?.micName]);
   const choose = async (id: string) => {
-    try { await api.setMicrophone(id || null); } catch { toast(t.errors.generic); }
+    try { setConfig(await api.setMicrophone(id || null)); } catch { toast(t.errors.generic); }
   };
   const chosen = config.microphone ?? '';
   const known = !chosen || mics.some((m) => m.id === chosen);
   return (
-    <select aria-label={t.settings.microphone} value={chosen} onChange={(e) => choose(e.target.value)} className="field">
-      <option value="">{!chosen && status?.micName ? `${t.settings.micDefault} (${status.micName})` : t.settings.micDefault}</option>
+    <select id="mic-select" aria-label={t.settings.microphone} value={chosen} onChange={(e) => choose(e.target.value)} className="field">
+      <option value="">{!chosen && status?.micName ? `${t.settings.micDefault}: ${status.micName}` : t.settings.micDefault}</option>
       {mics.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-      {!known && <option value={chosen}>{status?.micName || chosen}</option>}
+      {!known && <option value={chosen}>{fill(t.settings.micUnplugged, { name: config.microphoneName ?? '' })}</option>}
     </select>
   );
 }
@@ -101,7 +104,7 @@ export function Settings() {
 
       <div className="panel">
         <div className="row">
-          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{t.settings.microphoneHint}</span></div>
+          <div className="text"><span className="label">{t.settings.microphone}</span><span className="small">{config.routeDiscord ? t.settings.microphoneHint : t.settings.microphoneHintRestored}</span></div>
           <MicPicker />
         </div>
       </div>
@@ -131,11 +134,15 @@ export function Settings() {
       <div className="panel">
         <div className="row">
           <div className="text"><span className="label">{t.settings.restore}</span><span className="small">{t.settings.restoreHint}</span></div>
-          <button className={confirmRestore ? 'btn primary' : 'btn secondary'} onClick={async () => {
-            if (!confirmRestore) { setConfirmRestore(true); return; }
-            setConfirmRestore(false);
-            try { await api.restoreAudioSettings(); toast(t.settings.restored); } catch { toast(t.errors.generic); }
-          }}>{confirmRestore ? t.settings.restoreSure : t.settings.restore}</button>
+          <div className="confirm" aria-live="polite">
+            {confirmRestore && <span className="small">{t.settings.restoreAsk}</span>}
+            {confirmRestore && <button className="btn quiet" onClick={() => setConfirmRestore(false)}>{t.settings.restoreNo}</button>}
+            <button className={confirmRestore ? 'btn primary' : 'btn secondary'} onClick={async () => {
+              if (!confirmRestore) { setConfirmRestore(true); return; }
+              setConfirmRestore(false);
+              try { await api.restoreAudioSettings(); toast(t.settings.restored); } catch { toast(t.errors.generic); }
+            }}>{confirmRestore ? t.settings.restoreSure : t.settings.restore}</button>
+          </div>
         </div>
       </div>
     </div>

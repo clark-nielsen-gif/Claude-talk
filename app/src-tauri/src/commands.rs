@@ -161,7 +161,7 @@ pub struct Microphone {
 }
 
 /// The microphones the user can choose (never Claude Talk's own devices).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_microphones() -> Vec<Microphone> {
     #[cfg(windows)]
     {
@@ -185,23 +185,37 @@ pub fn list_microphones() -> Vec<Microphone> {
     Vec::new()
 }
 
-/// Chooses the microphone (None: Windows' default microphone).
-#[tauri::command]
+/// Chooses the microphone (None: Windows' default microphone). `async`:
+/// device lookups and the audio lock stay off the main thread.
+#[tauri::command(async)]
 pub fn set_microphone(
     app: AppHandle,
     state: State<AppState>,
     id: Option<String>,
 ) -> Result<Config, String> {
+    let id = id.filter(|s| !s.is_empty());
+    let name = id.as_ref().and_then(|id| {
+        list_microphones()
+            .into_iter()
+            .find(|m| &m.id == id)
+            .map(|m| m.name)
+    });
+    if id.is_some() && name.is_none() {
+        return Err("error.generic".into()); // not a microphone the user can choose
+    }
     let cfg = {
         let mut c = state
             .config
             .lock()
             .map_err(|_| "error.internal".to_string())?;
-        c.microphone = id.filter(|s| !s.is_empty());
+        c.microphone = id;
+        c.microphone_name = name;
+        c.microphone_chosen = true;
         c.clone()
     };
     state.save_config();
     crate::audio::use_microphone(&app, cfg.microphone.clone());
+    let _ = app.emit("config-changed", &cfg);
     Ok(cfg)
 }
 

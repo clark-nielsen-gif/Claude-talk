@@ -348,7 +348,11 @@ fn keep_only_driver_files(dir: &Path, setup: &Path) {
                 .extension()
                 .map(|x| x.to_string_lossy().to_lowercase())
                 .unwrap_or_default();
-            if p != setup && !DRIVER.contains(&ext.as_str()) {
+            let is_setup = p.file_name().zip(setup.file_name()).is_some_and(|(a, b)| {
+                a.to_string_lossy()
+                    .eq_ignore_ascii_case(&b.to_string_lossy())
+            }) && p.parent() == setup.parent();
+            if !is_setup && !DRIVER.contains(&ext.as_str()) {
                 if let Err(err) = std::fs::remove_file(&p) {
                     log::warn!("installer: could not remove {}: {err}", p.display());
                 }

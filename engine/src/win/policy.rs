@@ -188,8 +188,11 @@ pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
     // called while Discord is not pointed at the cable): nothing, or a device.
     if let Some(&first) = pids.first() {
         if let Ok(d) = f.get(first, eConsole) {
-            if !d.to_lowercase().contains(&id.to_lowercase()) {
-                set_discord_own_input((!d.is_empty()).then_some(d));
+            // (empty: nothing set now – keep what was saved: the entry may
+            // have been removed while Discord was closed, before it could be
+            // put back)
+            if !d.is_empty() && !d.to_lowercase().contains(&id.to_lowercase()) {
+                set_discord_own_input(Some(d));
             }
         }
     }
@@ -227,8 +230,15 @@ pub fn discord_routed_to_cable(exes: &[String]) -> Option<bool> {
 pub fn restore_discord(exes: &[String]) -> usize {
     let mut n = 0;
     if let Ok(f) = factory() {
-        // the user's own choice for Discord if there was one, else none
-        let back = HSTRING::from(discord_own_input().unwrap_or_default());
+        // The user's own choice for Discord if there was one. Otherwise the
+        // microphone Claude Talk recorded as "you" (taken over from Discord,
+        // D28): with Discord on "Default", nothing would give it back the
+        // headset the user had picked there. Else none (Windows' default).
+        let back = HSTRING::from(
+            discord_own_input()
+                .or_else(|| devices::preferred_microphone().map(|id| interface_path(&id)))
+                .unwrap_or_default(),
+        );
         for pid in pids_of(exes) {
             for role in ROLES {
                 if f.set(pid, role, &back).is_ok() {
@@ -249,9 +259,9 @@ const STORE: &str =
 /// subkey per program, one value per role pointing at a device.
 const STORE_NEW: &str = r"Software\Microsoft\Multimedia\Audio\DefaultEndpoint";
 
-/// Removes every stored per-program setting that points at our cable (only
-/// Claude Talk sets those), in both places Windows uses. Other settings –
-/// such as a program's output device – stay untouched.
+/// Removes Discord's stored per-program settings that point at our cable, in
+/// both places Windows uses. Other settings – a program's output device, or
+/// another program's use of a VB-CABLE the user already had – stay untouched.
 fn remove_stored_cable_entries() -> usize {
     let Some(id) = cable_capture_id() else {
         return 0;
@@ -348,9 +358,16 @@ unsafe fn remove_values_pointing_at(store: &str, endpoint_id: &str) -> usize {
                 .chunks_exact(2)
                 .map(|c| u16::from_le_bytes([c[0], c[1]]))
                 .collect();
-            if String::from_utf16_lossy(&words)
-                .to_lowercase()
-                .contains(endpoint_id)
+            // only Discord's entries: another program's setting that uses a
+            // VB-CABLE the user already had is theirs
+            let is_discord = sub.to_lowercase().contains("discord")
+                || String::from_utf16_lossy(&vname[..vlen as usize])
+                    .to_lowercase()
+                    .contains("discord");
+            if is_discord
+                && String::from_utf16_lossy(&words)
+                    .to_lowercase()
+                    .contains(endpoint_id)
             {
                 doomed.push(vname[..vlen as usize].to_vec());
             }

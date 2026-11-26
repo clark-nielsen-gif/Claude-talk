@@ -16,6 +16,9 @@ pub struct Inner {
     /// Discord records from our cable: 0 unknown, 1 yes, 2 no (see discord.rs).
     pub discord_uses_cable: AtomicU8,
     pub discord_needs_restart: AtomicBool,
+    /// The recording side of the cable ("Claude Talk – til Discord") is
+    /// there and enabled (checked by the Discord watcher every 2 s).
+    pub cable_capture_ok: AtomicBool,
     /// Discord is recording right now (in a call or a voice test).
     pub discord_recording: AtomicBool,
     /// The default output is speakers (sound can reach the microphone).
@@ -45,6 +48,7 @@ impl Inner {
             ptt_down: AtomicBool::new(false),
             discord_uses_cable: AtomicU8::new(0),
             discord_needs_restart: AtomicBool::new(false),
+            cable_capture_ok: AtomicBool::new(true),
             discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),
             added_speakers: AtomicBool::new(false),

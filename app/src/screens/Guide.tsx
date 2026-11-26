@@ -53,10 +53,10 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
             <h2 id="guide-title">{t.guide.discordTitle}</h2>
             <Sketch label={t.guide.sketchLabel} choice={t.guide.sketchChoice} />
             {status?.micName && (
-              <p className="muted">
-                {fill(t.guide.micInUse, { mic: status.micName })}{' '}
-                <button className="btn quiet" onClick={onSettings}>{t.main.otherMic}</button>
-              </p>
+              <>
+                <p className="muted">{fill(t.guide.micInUse, { mic: status.micName })}</p>
+                <button className="btn quiet" style={{ alignSelf: 'flex-start' }} onClick={onSettings}>{t.main.otherMic}</button>
+              </>
             )}
             <ol>{t.guide.discordSteps.map((s) => <li key={s}>{s}</li>)}</ol>
             <div className="buttons">

@@ -23,6 +23,7 @@ export interface Config {
   routeDiscord: boolean;
   /** Chosen microphone (endpoint id); null = Windows' default. */
   microphone: string | null;
+  microphoneName?: string | null;
   micMuted: boolean;
   claudeToDiscordMuted: boolean;
   pushToTalk: boolean;
@@ -173,7 +174,7 @@ export const api = {
     return inTauri ? invoke<string>('save_report') : 'C:\\Users\\dig\\Desktop\\Claude Talk fejlrapport.zip';
   },
   async listMicrophones(): Promise<{ id: string; name: string }[]> {
-    return inTauri ? invoke('list_microphones') : [{ id: 'jabra', name: 'Headset-mikrofon (Jabra Evolve2 40)' }, { id: 'realtek', name: 'Mikrofon (Realtek High Definition Audio)' }];
+    return inTauri ? invoke('list_microphones') : [{ id: 'jabra', name: 'Headset-mikrofon (Jabra Evolve2)' }, { id: 'realtek', name: 'Mikrofon (Realtek High Definition Audio)' }];
   },
   async setMicrophone(id: string | null): Promise<Config> {
     if (inTauri) return invoke<Config>('set_microphone', { id });

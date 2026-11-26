@@ -32,6 +32,19 @@ export function App() {
   const [config, setConfig] = useState<Config | null>(null);
   const [status, setStatus] = useState<AudioStatus | null>(null);
   const [page, setPage] = useState<Page>(pageFromScenario(initialScenario));
+  // A button that leads to another page puts the focus where it points, so
+  // keyboard and screen-reader users land there and hear it.
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const jump = (p: Page, id: string) => { setPage(p); setFocusId(id); };
+  useEffect(() => {
+    if (!focusId) return;
+    const el = document.getElementById(focusId);
+    if (el) {
+      if (!el.matches('button, select, input, textarea, [tabindex]')) el.setAttribute('tabindex', '-1');
+      el.focus();
+    }
+    setFocusId(null);
+  }, [focusId, page]);
   const [toastText, setToastText] = useState<string | null>(null);
   const closeToast = useCallback(() => setToastText(null), []);
   const systemDark = useSystemDark();
@@ -68,7 +81,7 @@ export function App() {
   }, [t]);
 
   const ctx: Ctx | null = useMemo(
-    () => (config ? { lang, config, status, update, toast: setToastText } : null),
+    () => (config ? { lang, config, status, update, setConfig, toast: setToastText } : null),
     [lang, config, status, update],
   );
 
@@ -93,11 +106,11 @@ export function App() {
               ))}
             </nav>
             <main className="content">
-              {page === 'home' && <Home info={info} onSettings={() => setPage('settings')} />}
+              {page === 'home' && <Home info={info} onSettings={() => jump('settings', 'mic-select')} />}
               {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}
-              {page === 'help' && <Help info={info} onHome={() => setPage('home')} />}
+              {page === 'help' && <Help info={info} onHome={() => jump('home', 'switch-title')} />}
             </main>
           </div>
         )}

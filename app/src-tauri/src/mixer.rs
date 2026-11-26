@@ -112,6 +112,18 @@ pub mod imp {
                 return Err("error.ownProgram".into());
             }
         }
+        if let MixerSourceKind::Input { device_id } = &s.kind {
+            // never one of Claude Talk's own devices (a loop the graph can't see)
+            let name = ct_engine::win::devices::resolve(&DeviceSelector::Id(device_id.clone()))
+                .map(|(_, e)| e.name.to_lowercase())
+                .unwrap_or_default();
+            if ct_engine::win::devices::NOT_A_MICROPHONE
+                .iter()
+                .any(|p| name.contains(&p.to_lowercase()))
+            {
+                return Err("error.ownProgram".into());
+            }
+        }
         let (party, kind) = match &s.kind {
             MixerSourceKind::Input { device_id } => (
                 Party::User,

@@ -177,7 +177,7 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
         (
             "Luk Claude Talk",
             concat!(
-                "Du er i et opkald i Discord, og Discord bruger Claude Talk som mikrofon.\n\n",
+                "Du er i et opkald i Discord, og Discord bruger Claude Talk-mikrofonen.\n\n",
                 "Lukker du Claude Talk nu, kan de andre ikke høre dig, før Discord starter igen.\n\n",
                 "Ja: Luk, og genstart Discord. Du skal selv gå ind i opkaldet igen bagefter.\n\n",
                 "Nej: Luk uden at genstarte Discord. De andre kan ikke høre dig, før du selv genstarter Discord.\n\n",
@@ -188,7 +188,7 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
         (
             "Quit Claude Talk",
             concat!(
-                "You're in a Discord call, and Discord uses Claude Talk as its microphone.\n\n",
+                "You're in a Discord call, and Discord uses the Claude Talk microphone.\n\n",
                 "If you quit Claude Talk now, nobody can hear you until Discord starts again.\n\n",
                 "Yes: Quit and restart Discord. Join the call again yourself afterwards.\n\n",
                 "No: Quit without restarting Discord. Nobody can hear you until you restart Discord yourself.\n\n",

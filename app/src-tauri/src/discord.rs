@@ -72,12 +72,17 @@ pub fn spawn_watcher(app: AppHandle) {
                                         .lock()
                                         .map(|mut c| {
                                             let changed = c.discord_own_input != own;
-                                            c.discord_own_input = own;
+                                            c.discord_own_input = own.clone();
                                             changed
                                         })
                                         .unwrap_or(false);
                                     if changed {
                                         state.save_config();
+                                    }
+                                    // the microphone set for Discord in Windows
+                                    // is the user's voice too (D28)
+                                    if let Some(id) = own.as_deref().and_then(endpoint_of) {
+                                        adopt_discords_microphone(&app, &state, &id);
                                     }
                                     routed_since = Some(Instant::now());
                                     routed_pids = discord_roots(&exes);
@@ -111,6 +116,9 @@ pub fn spawn_watcher(app: AppHandle) {
                     restarted_since_route = false;
                 }
                 let cable = policy::cable_capture_id();
+                state
+                    .cable_capture_ok
+                    .store(cable.is_some(), Ordering::Relaxed);
                 let mic = sessions::discord_mic(&exes, cable.as_deref());
                 let uses = match &mic {
                     sessions::DiscordMic::Cable => YES,
@@ -130,8 +138,23 @@ pub fn spawn_watcher(app: AppHandle) {
                 follow_default_microphone(&state);
                 // Windows says "cable" but Discord still records elsewhere for
                 // a while: Discord picked a specific device or needs a restart.
-                // If its device setting is "Default", a restart fixes it.
+                // If its device setting is "Default" (it records Windows'
+                // default microphone), a restart fixes it. A microphone picked
+                // in Discord itself stays after a restart: show the guide.
+                let on_default = match &mic {
+                    sessions::DiscordMic::Other(endpoint) => {
+                        let e = endpoint.to_lowercase();
+                        devices::default_ids(devices::Flow::Capture)
+                            .iter()
+                            .flatten()
+                            .any(|d| d.to_lowercase() == e)
+                            || policy::discord_own_input()
+                                .is_some_and(|own| own.to_lowercase().contains(&e))
+                    }
+                    _ => false,
+                };
                 let restart = uses == NO
+                    && on_default
                     && routed_since.is_some_and(|t| t.elapsed() > Duration::from_secs(6))
                     && enabled
                     && !restarted_since_route;
@@ -257,6 +280,15 @@ fn guard_default_output(state: &crate::state::Inner, last_good: &mut [Option<Str
     }
 }
 
+/// The endpoint id in a device interface path
+/// (`\\?\SWD#MMDEVAPI#{0.0.1.00000000}.{guid}#{interface}`).
+#[cfg(windows)]
+fn endpoint_of(path: &str) -> Option<String> {
+    let rest = path.split("MMDEVAPI#").nth(1)?;
+    let id = rest.split("#{").next()?;
+    (!id.is_empty()).then(|| id.to_string())
+}
+
 /// Discord's main processes (helper processes are not a restart).
 #[cfg(windows)]
 fn discord_roots(exes: &[String]) -> Vec<u32> {
@@ -275,7 +307,7 @@ fn adopt_discords_microphone(app: &AppHandle, state: &crate::state::Inner, endpo
     if state
         .config
         .lock()
-        .map(|c| c.microphone.is_some())
+        .map(|c| c.microphone.is_some() || c.microphone_chosen)
         .unwrap_or(true)
     {
         return;
@@ -303,6 +335,7 @@ fn adopt_discords_microphone(app: &AppHandle, state: &crate::state::Inner, endpo
     );
     let cfg = state.config.lock().map(|mut c| {
         c.microphone = Some(chosen.id.clone());
+        c.microphone_name = Some(chosen.name.clone());
         c.clone()
     });
     state.save_config();
@@ -344,6 +377,15 @@ pub fn spawn_watcher(_app: AppHandle) {}
 #[cfg(windows)]
 pub fn restore() -> usize {
     let _com = ct_engine::win::ComGuard::new();
+    // also in the helper and uninstall modes, which never started the audio:
+    // what to give back comes from the settings
+    let cfg = crate::config::Config::peek(&crate::paths::config_file());
+    if ct_engine::win::policy::discord_own_input().is_none() {
+        ct_engine::win::policy::set_discord_own_input(cfg.discord_own_input.clone());
+    }
+    if ct_engine::win::devices::preferred_microphone().is_none() {
+        ct_engine::win::devices::set_preferred_microphone(cfg.microphone.clone());
+    }
     let n = ct_engine::win::policy::restore_discord(&ct_engine::win::host::discord_executables());
     log::info!("restored Discord's microphone ({n} settings cleared)");
     n
@@ -416,7 +458,8 @@ pub fn restore_when_discord_starts() -> i32 {
     }
     let exes = discord_executables();
     let t0 = Instant::now();
-    while t0.elapsed() < Duration::from_secs(12 * 3600) {
+    // (ends with the Windows session at the latest)
+    while t0.elapsed() < Duration::from_secs(30 * 24 * 3600) {
         if main_running() {
             return 0;
         }
@@ -427,7 +470,7 @@ pub fn restore_when_discord_starts() -> i32 {
                 if main_running() {
                     return 0;
                 }
-                let n = policy::restore_discord(&exes);
+                let n = restore();
                 log::info!("restore helper: Discord's own microphone back ({n})");
             }
             return 0;

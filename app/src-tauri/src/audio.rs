@@ -363,10 +363,12 @@ mod imp {
                 match o.id {
                     ids::TO_DISCORD => {
                         st.to_discord = l;
+                        // both sides: Discord records the recording side
                         st.cable_ok = o
                             .stream
                             .as_ref()
-                            .is_some_and(|s| s.state == StreamState::Running);
+                            .is_some_and(|s| s.state == StreamState::Running)
+                            && state.cable_capture_ok.load(Ordering::Relaxed);
                     }
                     ids::TO_CLAUDE => st.to_claude = l,
                     _ => {}

@@ -211,6 +211,11 @@ pub struct Config {
     /// Windows' default microphone. Taken over from Discord when Discord
     /// used a specific microphone, so the voice in the call stays the same.
     pub microphone: Option<String>,
+    /// The user picked the microphone (or "Windows' default") themselves:
+    /// it is never taken over from Discord again.
+    pub microphone_chosen: bool,
+    /// Name of the chosen microphone (shown while it is unplugged).
+    pub microphone_name: Option<String>,
     /// What the user had set as Discord's input in Windows' "App volume and
     /// device preferences" before Claude Talk (given back on restore).
     pub discord_own_input: Option<String>,
@@ -242,6 +247,8 @@ impl Default for Config {
             presets: Vec::new(),
             external_claude: None,
             microphone: None,
+            microphone_chosen: false,
+            microphone_name: None,
             discord_own_input: None,
             instructions: Instructions::default(),
             claude_hears_discord: true,
@@ -254,6 +261,15 @@ impl Default for Config {
 static UNREAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl Config {
+    /// Reads the settings to look something up (helper modes, restore): a
+    /// file that can't be read doesn't block later saves of this process.
+    pub fn peek(path: &Path) -> Config {
+        let before = UNREAD.load(std::sync::atomic::Ordering::Relaxed);
+        let c = Config::load(path);
+        UNREAD.store(before, std::sync::atomic::Ordering::Relaxed);
+        c
+    }
+
     /// Loads the file. A missing file gives the defaults. A damaged one, or
     /// one from a newer Claude Talk, keeps every setting that can still be
     /// read; a copy of the original is kept next to it (`.json.bad` /
@@ -364,9 +380,11 @@ impl Config {
             std::fs::create_dir_all(dir)?;
         }
         if UNREAD.load(std::sync::atomic::Ordering::Relaxed) {
-            // keep the settings that could not be read before writing over them
-            std::fs::copy(path, path.with_extension("json.unread"))?;
-            UNREAD.store(false, std::sync::atomic::Ordering::Relaxed);
+            // The settings could not be read at start: never write defaults
+            // over them. Changes made now last until Claude Talk closes.
+            return Err(std::io::Error::other(
+                "settings could not be read at start; not overwriting them",
+            ));
         }
         let tmp = path.with_extension("json.tmp");
         std::fs::write(
