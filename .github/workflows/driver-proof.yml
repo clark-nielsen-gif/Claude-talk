@@ -1,7 +1,8 @@
 # Milestone 0: prove the virtual-device foundation on real Windows runners
 # before anything else is built.
 #   A) VirtualDrivers "Virtual Audio Driver" (MIT), signed release 25.7.14
-#   B) Official VB-Audio VB-CABLE + Hi-Fi Cable, downloaded from vb-audio.com
+#   B) Official VB-Audio VB-CABLE, downloaded from vb-audio.com
+#      (Hi-Fi Cable was tested and rejected: legacy cross-signed, see DECISIONS.md D1)
 #
 # Hosted runners boot with test signing ON (image default, cannot be changed
 # without a reboot), so "it installed" proves nothing. Production signing is
@@ -47,7 +48,7 @@ jobs:
         run: ci/publish-results.ps1 -Folder results -Job 'A-virtualdrivers'
 
   vbaudio:
-    name: B · VB-CABLE + Hi-Fi Cable (${{ matrix.os }})
+    name: B · VB-CABLE (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -68,10 +69,8 @@ jobs:
         run: |
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip -OutFile cable.zip
-          Invoke-WebRequest https://download.vb-audio.com/Download_CABLE/HiFiCableAsioBridgeSetup_v1007.zip -OutFile hifi.zip
-          Get-FileHash cable.zip, hifi.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Tee-Object results\sha256.txt
+          Get-FileHash cable.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Tee-Object results\sha256.txt
           Expand-Archive cable.zip -DestinationPath vb\cable -Force
-          Expand-Archive hifi.zip -DestinationPath vb\hifi -Force
           Copy-Item vb\cable\vbMmeCable64_win10.inf, vb\cable\readme.txt results\
           Get-Content vb\cable\vbMmeCable64_win10.inf | Select-String -Pattern 'Manufacturer|NTamd64|ROOT\\|FriendlyName|szPname|DriverVer|Desc' | ForEach-Object Line
 
@@ -92,26 +91,10 @@ jobs:
           "cable step outcome=${{ steps.cable.outcome }}" | Tee-Object -Append results\cable-install.txt
           ci/driver-proof/Report-Audio.ps1 -OutFile results\02-after-cable.json -Label after-cable
 
-      - name: Hi-Fi Cable – attempt 1, no pre-trust (recorded with screenshots)
-        shell: powershell
-        run: ci/driver-proof/Watch-Installer.ps1 -Exe vb\hifi\HiFiCableAsioBridgeSetup.exe -Arguments '-i','-h' -OutDir results -Name hifi-1 | Tee-Object results\hifi-install.txt
-
-      - name: Hi-Fi Cable – attempt 2, installer signer pre-trusted
-        shell: powershell
-        run: |
-          $cert = (Get-AuthenticodeSignature vb\hifi\HiFiCableAsioBridgeSetup.exe).SignerCertificate
-          "Trusting publisher for this runner only: $($cert.Subject)"
-          $store = New-Object Security.Cryptography.X509Certificates.X509Store 'TrustedPublisher', 'LocalMachine'
-          $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
-          ci/driver-proof/Watch-Installer.ps1 -Exe vb\hifi\HiFiCableAsioBridgeSetup.exe -Arguments '-i','-h' -OutDir results -Name hifi-2 | Tee-Object -Append results\hifi-install.txt
-
-      - name: Report after Hi-Fi Cable
+      - name: Endpoints before rename
         if: always()
         shell: powershell
-        run: |
-          Start-Sleep 5
-          ci/driver-proof/Report-Audio.ps1 -OutFile results\03-after-hifi.json -Label after-hifi
-          ci/driver-proof/List-Endpoints.ps1 -OutFile results\04-endpoints-before-rename.json | Out-Null
+        run: ci/driver-proof/List-Endpoints.ps1 -OutFile results\04-endpoints-before-rename.json | Out-Null
 
       - name: Signature proof of the packages Windows installed
         if: always()
@@ -120,35 +103,31 @@ jobs:
           pnputil /enum-drivers | Out-String | Tee-Object results\pnputil-drivers.txt | Out-Null
           $repo = "$env:SystemRoot\System32\DriverStore\FileRepository"
           $dirs = Get-ChildItem $repo -Directory | Where-Object {
-            Get-ChildItem $_.FullName -Filter *.inf | Select-String -Pattern 'VB-Audio|Burel' -Quiet
+            Get-ChildItem $_.FullName -Filter *.inf | Select-String -Pattern 'VB-Audio' -Quiet
           }
           "VB-Audio packages in DriverStore:"; $dirs.FullName
           ci/driver-proof/Assert-KernelSignature.ps1 -Path $dirs.FullName -OutFile results\05-signature-installed.json
 
-      - name: Rename capture endpoints to the product names
+      - name: Rename the virtual microphone (Core Audio API, SYSTEM fallback)
         if: always()
         shell: powershell
         run: |
-          $m1 = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc 'Claude Talk – til Discord' -NewInterface 'Claude Talk'
-          $m2 = 'not-run'
-          if (ci/driver-proof/List-Endpoints.ps1 | Where-Object { $_.Flow -eq 'Capture' -and $_.FriendlyName -match 'Hi-Fi' }) {
-            $m2 = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'Hi-Fi' -NewDeviceDesc 'Claude Talk – til Claude' -NewInterface 'Claude Talk'
-          }
-          "discord-mic method=$m1`nclaude-mic method=$m2" | Tee-Object results\rename-method.txt
+          $d = [char]0x2013   # en dash; kept out of the YAML so PowerShell 5.1 cannot mis-decode it
+          $m = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc "Claude Talk $d til Discord" -NewInterface ''
+          "method=$m" | Tee-Object results\rename-method.txt
 
-      - name: Verify names as apps see them
+      - name: Verify the name exactly as apps see it
         if: always()
         shell: powershell
         run: |
-          $rows = ci/driver-proof/List-Endpoints.ps1 -OutFile results\06-endpoints-after-rename.json
-          $cap = @($rows | Where-Object Flow -eq 'Capture' | ForEach-Object FriendlyName)
-          $ok = $true
-          foreach ($want in 'Claude Talk – til Discord', 'Claude Talk – til Claude') {
-            $hit = $cap | Where-Object { $_ -like "$want*" } | Select-Object -First 1
-            if ($hit) { "FOUND   '$want' as '$hit'" } else { "MISSING '$want'"; $ok = $false }
-          }
-          $cap | Set-Content -Encoding utf8 results\capture-names.txt
-          if (-not $ok) { throw 'Two renamed virtual microphones were not found.' }
+          $d = [char]0x2013
+          $want = "Claude Talk $d til Discord"
+          $rows = powershell -NoProfile -ExecutionPolicy Bypass -File ci/driver-proof/List-Endpoints.ps1 -OutFile results\06-endpoints-after-rename.json
+          $cap = Get-Content results\06-endpoints-after-rename.json -Raw -Encoding utf8 | ConvertFrom-Json | Where-Object Flow -eq 'Capture'
+          $cap | ForEach-Object { "capture endpoint: '$($_.FriendlyName)'" } | Tee-Object results\capture-names.txt
+          $hit = $cap | Where-Object { $_.FriendlyName -like "$want*" } | Select-Object -First 1
+          if (-not $hit) { throw "Virtual microphone '$want' not found." }
+          if ($hit.FriendlyName -ne $want) { "::warning::Name shown to apps is '$($hit.FriendlyName)', not exactly '$want'." } else { "EXACT name verified: '$want'" }
 
       - name: Publish results
         if: always()
