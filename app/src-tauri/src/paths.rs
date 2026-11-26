@@ -2,7 +2,9 @@
 use std::path::PathBuf;
 
 pub fn app_dir() -> PathBuf {
-    let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let base = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
     base.join("Claude Talk")
 }
 pub fn logs_dir() -> PathBuf {

@@ -179,6 +179,16 @@ export const api = {
     listen<Config>('config-changed', (e) => cb(e.payload)).then((u) => (dead ? u() : (un = u)));
     return () => { dead = true; un?.(); };
   },
+  onUpdate(cb: (version: string) => void): () => void {
+    if (!inTauri) { if (scenario === 'main-update') cb('1.1.0'); return () => {}; }
+    let un: UnlistenFn | undefined;
+    let dead = false;
+    listen<string>('update-available', (e) => cb(e.payload)).then((u) => (dead ? u() : (un = u)));
+    return () => { dead = true; un?.(); };
+  },
+  async installUpdate(): Promise<void> {
+    if (inTauri) await invoke('install_update');
+  },
   async windowAction(action: 'minimize' | 'close' | 'toggleMaximize'): Promise<void> {
     if (!inTauri) return;
     const { getCurrentWindow } = await import('@tauri-apps/api/window');

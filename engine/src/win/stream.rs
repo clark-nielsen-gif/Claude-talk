@@ -16,23 +16,25 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicU8, O
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use windows::core::{implement, Interface, IUnknown, Ref, HRESULT};
+use windows::core::{implement, IUnknown, Interface, Ref, HRESULT};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::Media::Audio::{
-    ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation, IActivateAudioInterfaceCompletionHandler,
-    IActivateAudioInterfaceCompletionHandler_Impl, IAudioCaptureClient, IAudioClient, IAudioRenderClient,
-    AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY, AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED,
-    AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
-    AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, AUDIOCLIENT_ACTIVATION_PARAMS, AUDIOCLIENT_ACTIVATION_PARAMS_0,
-    AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK, AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS,
-    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE, VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX,
+    ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
+    IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,
+    IAudioCaptureClient, IAudioClient, IAudioRenderClient, AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY,
+    AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+    AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
+    AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, AUDIOCLIENT_ACTIVATION_PARAMS,
+    AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+    AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+    VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX,
 };
 use windows::Win32::Media::Multimedia::WAVE_FORMAT_IEEE_FLOAT;
 use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
 use windows::Win32::System::Com::{IAgileObject, IAgileObject_Impl, BLOB, CLSCTX_ALL};
 use windows::Win32::System::Threading::{
-    AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW, CreateEventW, SetEvent, WaitForMultipleObjects,
-    WaitForSingleObject,
+    AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW, CreateEventW, SetEvent,
+    WaitForMultipleObjects, WaitForSingleObject,
 };
 use windows::Win32::System::Variant::VT_BLOB;
 
@@ -157,7 +159,9 @@ struct Mmcss(HANDLE);
 impl Mmcss {
     fn enter() -> Option<Mmcss> {
         let mut idx = 0u32;
-        unsafe { AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut idx) }.ok().map(Mmcss)
+        unsafe { AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut idx) }
+            .ok()
+            .map(Mmcss)
     }
 }
 impl Drop for Mmcss {
@@ -197,7 +201,11 @@ impl From<windows::core::Error> for Ended {
         const RESOURCES_INVALIDATED: HRESULT = HRESULT(0x88890026u32 as i32);
         const SERVICE_NOT_RUNNING: HRESULT = HRESULT(0x88890010u32 as i32);
         const NOT_FOUND: HRESULT = HRESULT(0x80070490u32 as i32);
-        if code == DEVICE_INVALIDATED || code == RESOURCES_INVALIDATED || code == SERVICE_NOT_RUNNING || code == NOT_FOUND {
+        if code == DEVICE_INVALIDATED
+            || code == RESOURCES_INVALIDATED
+            || code == SERVICE_NOT_RUNNING
+            || code == NOT_FOUND
+        {
             Ended::WaitDevice(code)
         } else {
             Ended::Failed(code)
@@ -249,7 +257,8 @@ fn supervise(
                 }
                 ctx.status.set(StreamState::Starting);
                 let started = Instant::now();
-                let ended = catch_unwind(AssertUnwindSafe(|| run(&ctx))).unwrap_or(Ended::Failed(HRESULT(-1)));
+                let ended = catch_unwind(AssertUnwindSafe(|| run(&ctx)))
+                    .unwrap_or(Ended::Failed(HRESULT(-1)));
                 let mut new_stretch = ctx.status.state() == StreamState::Running || first_wait;
                 first_wait = false;
                 match ended {
@@ -300,11 +309,24 @@ fn new_ctx() -> (Ctx, Arc<AtomicBool>, Arc<Event>, Arc<StreamStatus>) {
     let stop = Arc::new(AtomicBool::new(false));
     let wake = Arc::new(Event::new().expect("CreateEvent"));
     let status = Arc::new(StreamStatus::default());
-    (Ctx { stop: stop.clone(), wake: wake.clone(), status: status.clone() }, stop, wake, status)
+    (
+        Ctx {
+            stop: stop.clone(),
+            wake: wake.clone(),
+            status: status.clone(),
+        },
+        stop,
+        wake,
+        status,
+    )
 }
 
 /// Starts a capture stream feeding `fanout`.
-pub fn spawn_capture(name: &'static str, target: CaptureTarget, fanout: SourceFanout) -> StreamHandle {
+pub fn spawn_capture(
+    name: &'static str,
+    target: CaptureTarget,
+    fanout: SourceFanout,
+) -> StreamHandle {
     let (ctx, stop, wake, status) = new_ctx();
     // The fanout is used by the run loop and, between runs, for silence.
     let shared = Arc::new(Mutex::new(fanout));
@@ -327,7 +349,9 @@ pub fn spawn_capture(name: &'static str, target: CaptureTarget, fanout: SourceFa
             }
             let start = idle_start.expect("set above");
             let due = (start.elapsed().as_secs_f64() * ENGINE_RATE as f64) as u64;
-            let n = due.saturating_sub(silence_sent).min(ENGINE_RATE as u64 / 10) as usize;
+            let n = due
+                .saturating_sub(silence_sent)
+                .min(ENGINE_RATE as u64 / 10) as usize;
             if n > 0 {
                 let mut f = shared.lock().unwrap_or_else(|p| p.into_inner());
                 f.push(None, ENGINE_CHANNELS, n);
@@ -335,21 +359,43 @@ pub fn spawn_capture(name: &'static str, target: CaptureTarget, fanout: SourceFa
             }
         },
     );
-    StreamHandle { stop, wake, thread: Some(thread), status }
+    StreamHandle {
+        stop,
+        wake,
+        thread: Some(thread),
+        status,
+    }
 }
 
 /// Starts a render stream pulling from `mixer`.
-pub fn spawn_render(name: &'static str, device: DeviceSelector, mut mixer: OutputMixer) -> StreamHandle {
+pub fn spawn_render(
+    name: &'static str,
+    device: DeviceSelector,
+    mut mixer: OutputMixer,
+) -> StreamHandle {
     let (ctx, stop, wake, status) = new_ctx();
-    let thread = supervise(name, ctx, move |ctx| run_render(ctx, &device, &mut mixer), |_: bool| {});
-    StreamHandle { stop, wake, thread: Some(thread), status }
+    let thread = supervise(
+        name,
+        ctx,
+        move |ctx| run_render(ctx, &device, &mut mixer),
+        |_: bool| {},
+    );
+    StreamHandle {
+        stop,
+        wake,
+        thread: Some(thread),
+        status,
+    }
 }
 
 #[implement(IActivateAudioInterfaceCompletionHandler, IAgileObject)]
 struct ActivationDone(HANDLE);
 
 impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
-    fn ActivateCompleted(&self, _op: Ref<IActivateAudioInterfaceAsyncOperation>) -> windows::core::Result<()> {
+    fn ActivateCompleted(
+        &self,
+        _op: Ref<IActivateAudioInterfaceAsyncOperation>,
+    ) -> windows::core::Result<()> {
         unsafe { SetEvent(self.0) }
     }
 }
@@ -372,12 +418,21 @@ fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
     let mut pv = std::mem::ManuallyDrop::new(PROPVARIANT::default());
     unsafe {
         (*pv.Anonymous.Anonymous).vt = VT_BLOB;
-        (*pv.Anonymous.Anonymous).Anonymous.blob =
-            BLOB { cbSize: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32, pBlobData: &params as *const _ as *mut u8 };
+        (*pv.Anonymous.Anonymous).Anonymous.blob = BLOB {
+            cbSize: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
+            pBlobData: &params as *const _ as *mut u8,
+        };
     }
     let done = Event::new()?;
     let handler: IActivateAudioInterfaceCompletionHandler = ActivationDone(done.0).into();
-    let op = unsafe { ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, &IAudioClient::IID, Some(&*pv), &handler) }?;
+    let op = unsafe {
+        ActivateAudioInterfaceAsync(
+            VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+            &IAudioClient::IID,
+            Some(&*pv),
+            &handler,
+        )
+    }?;
     if unsafe { WaitForSingleObject(done.0, 5000) } != WAIT_OBJECT_0 {
         return Err(windows::Win32::Foundation::E_ABORT.into());
     }
@@ -385,13 +440,16 @@ fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
     let mut unk: Option<IUnknown> = None;
     unsafe { op.GetActivateResult(&mut hr, &mut unk) }?;
     hr.ok()?;
-    unk.ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_NOINTERFACE))?.cast()
+    unk.ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_NOINTERFACE))?
+        .cast()
 }
 
 fn resolve_pid(target: &ProcessTarget) -> Option<u32> {
     match target {
         ProcessTarget::Pid(p) => Some(p.load(Ordering::Relaxed)).filter(|&p| p != 0),
-        ProcessTarget::ExeNames(names) => process::find_roots(&process::snapshot(), names).into_iter().next(),
+        ProcessTarget::ExeNames(names) => process::find_roots(&process::snapshot(), names)
+            .into_iter()
+            .next(),
     }
 }
 
@@ -405,7 +463,10 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                 Ok(v) => v,
                 Err(e) => return Ended::WaitDevice(e.code()),
             };
-            *ctx.status.device_name.lock().unwrap_or_else(|p| p.into_inner()) = info.name;
+            *ctx.status
+                .device_name
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()) = info.name;
             fill_silence = matches!(target, CaptureTarget::DeviceLoopback(_));
             match unsafe { dev.Activate::<IAudioClient>(CLSCTX_ALL, None) } {
                 Ok(c) => c,
@@ -413,7 +474,9 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             }
         }
         CaptureTarget::Process(pt) => {
-            let Some(pid) = resolve_pid(pt) else { return Ended::WaitProcess };
+            let Some(pid) = resolve_pid(pt) else {
+                return Ended::WaitProcess;
+            };
             proc_handle = ProcHandle::open(pid);
             if proc_handle.is_none() {
                 return Ended::WaitProcess;
@@ -427,20 +490,28 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         }
     };
     let loopback = !matches!(target, CaptureTarget::Device(_));
-    let mut flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+    let mut flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+        | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+        | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
     if loopback {
         flags |= AUDCLNT_STREAMFLAGS_LOOPBACK;
     }
     let fmt = engine_format();
     // 20 ms buffer: enough slack for the engine to schedule us.
-    if let Err(e) = unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 200_000, 0, &fmt, None) } {
+    if let Err(e) =
+        unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 200_000, 0, &fmt, None) }
+    {
         return e.into();
     }
     let event = match Event::new() {
         Ok(e) => e,
         Err(e) => return e.into(),
     };
-    let capture: IAudioCaptureClient = match unsafe { client.SetEventHandle(event.0).and_then(|_| client.GetService()) } {
+    let capture: IAudioCaptureClient = match unsafe {
+        client
+            .SetEventHandle(event.0)
+            .and_then(|_| client.GetService())
+    } {
         Ok(c) => c,
         Err(e) => return e.into(),
     };
@@ -481,7 +552,9 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             let mut data: *mut u8 = std::ptr::null_mut();
             let mut frames = 0u32;
             let mut bflags = 0u32;
-            if let Err(e) = unsafe { capture.GetBuffer(&mut data, &mut frames, &mut bflags, None, None) } {
+            if let Err(e) =
+                unsafe { capture.GetBuffer(&mut data, &mut frames, &mut bflags, None, None) }
+            {
                 return finish(&client, e.into());
             }
             if bflags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32 != 0 {
@@ -490,7 +563,12 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             if bflags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
                 fanout.push(None, ENGINE_CHANNELS, frames as usize);
             } else {
-                let samples = unsafe { std::slice::from_raw_parts(data as *const f32, frames as usize * ENGINE_CHANNELS) };
+                let samples = unsafe {
+                    std::slice::from_raw_parts(
+                        data as *const f32,
+                        frames as usize * ENGINE_CHANNELS,
+                    )
+                };
                 fanout.push(Some(samples), ENGINE_CHANNELS, frames as usize);
             }
             if let Err(e) = unsafe { capture.ReleaseBuffer(frames) } {
@@ -510,7 +588,9 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                 let frames = (gap.as_secs_f64() * ENGINE_RATE as f64) as usize;
                 let frames = frames.min(ENGINE_RATE as usize / 10);
                 fanout.push(None, ENGINE_CHANNELS, frames);
-                ctx.status.silence_filled_frames.fetch_add(frames as u64, Ordering::Relaxed);
+                ctx.status
+                    .silence_filled_frames
+                    .fetch_add(frames as u64, Ordering::Relaxed);
                 last_data = now;
             }
         }
@@ -531,26 +611,37 @@ fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended
         Ok(v) => v,
         Err(e) => return Ended::WaitDevice(e.code()),
     };
-    *ctx.status.device_name.lock().unwrap_or_else(|p| p.into_inner()) = info.name;
+    *ctx.status
+        .device_name
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = info.name;
     let client: IAudioClient = match unsafe { dev.Activate(CLSCTX_ALL, None) } {
         Ok(c) => c,
         Err(e) => return e.into(),
     };
     let fmt = engine_format();
-    let flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
-    if let Err(e) = unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 0, 0, &fmt, None) } {
+    let flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+        | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+        | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+    if let Err(e) = unsafe { client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 0, 0, &fmt, None) }
+    {
         return e.into();
     }
     let event = match Event::new() {
         Ok(e) => e,
         Err(e) => return e.into(),
     };
-    let (render, buffer_frames): (IAudioRenderClient, u32) =
-        match unsafe { client.SetEventHandle(event.0).and_then(|_| Ok((client.GetService()?, client.GetBufferSize()?))) } {
-            Ok(v) => v,
-            Err(e) => return e.into(),
-        };
-    ctx.status.period_frames.store(buffer_frames, Ordering::Relaxed);
+    let (render, buffer_frames): (IAudioRenderClient, u32) = match unsafe {
+        client
+            .SetEventHandle(event.0)
+            .and_then(|_| Ok((client.GetService()?, client.GetBufferSize()?)))
+    } {
+        Ok(v) => v,
+        Err(e) => return e.into(),
+    };
+    ctx.status
+        .period_frames
+        .store(buffer_frames, Ordering::Relaxed);
     // pre-roll one buffer of silence so the first period never underruns
     unsafe {
         if render.GetBuffer(buffer_frames).is_ok() {
@@ -592,7 +683,9 @@ fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended
             Ok(p) => p,
             Err(e) => break e.into(),
         };
-        let out = unsafe { std::slice::from_raw_parts_mut(ptr as *mut f32, avail as usize * ENGINE_CHANNELS) };
+        let out = unsafe {
+            std::slice::from_raw_parts_mut(ptr as *mut f32, avail as usize * ENGINE_CHANNELS)
+        };
         mixer.render(out);
         if let Err(e) = unsafe { render.ReleaseBuffer(avail, 0) } {
             break e.into();

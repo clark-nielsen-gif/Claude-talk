@@ -63,9 +63,16 @@ pub struct ConfigPatch {
 }
 
 #[tauri::command]
-pub fn set_config(app: AppHandle, state: State<AppState>, patch: ConfigPatch) -> Result<Config, String> {
+pub fn set_config(
+    app: AppHandle,
+    state: State<AppState>,
+    patch: ConfigPatch,
+) -> Result<Config, String> {
     let (cfg, hotkeys_changed, autostart_changed) = {
-        let mut c = state.config.lock().map_err(|_| "error.internal".to_string())?;
+        let mut c = state
+            .config
+            .lock()
+            .map_err(|_| "error.internal".to_string())?;
         if let Some(v) = patch.language.filter(|l| l == "da" || l == "en") {
             c.language = v;
         }
@@ -146,7 +153,9 @@ pub fn open_place(app: AppHandle, place: String) -> Result<(), String> {
         }
         _ => return Err("error.open".into()),
     };
-    app.opener().open_url(url, None::<&str>).map_err(|_| "error.open".to_string())
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|_| "error.open".to_string())
 }
 
 /// Saves logs, settings and a status snapshot as a zip on the Desktop and
@@ -183,7 +192,9 @@ pub fn restore_audio_settings(state: State<AppState>) {
 
 #[tauri::command]
 pub async fn restart_discord() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(crate::discord::restart).await.map_err(|_| "error.internal".to_string())?
+    tauri::async_runtime::spawn_blocking(crate::discord::restart)
+        .await
+        .map_err(|_| "error.internal".to_string())?
 }
 
 #[derive(Serialize)]
@@ -216,7 +227,13 @@ pub fn get_matrix(state: State<AppState>) -> Matrix {
     {
         use ct_engine::graph::{Party, Rejection};
         let g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
-        let Some(host) = g.as_ref() else { return Matrix { sources: vec![], outputs: vec![], cells: vec![] } };
+        let Some(host) = g.as_ref() else {
+            return Matrix {
+                sources: vec![],
+                outputs: vec![],
+                cells: vec![],
+            };
+        };
         let graph = host.graph();
         let who = |p: &Party| match p {
             Party::Claude => "Claude".to_string(),
@@ -225,8 +242,21 @@ pub fn get_matrix(state: State<AppState>) -> Matrix {
             Party::App(a) => a.clone(),
             Party::Other => "?".to_string(),
         };
-        let sources: Vec<Labeled> = graph.sources().filter(|s| s.id < 900).map(|s| Labeled { id: s.id, label: s.label.clone() }).collect();
-        let outputs: Vec<Labeled> = graph.outputs().map(|o| Labeled { id: o.id, label: o.label.clone() }).collect();
+        let sources: Vec<Labeled> = graph
+            .sources()
+            .filter(|s| s.id < 900)
+            .map(|s| Labeled {
+                id: s.id,
+                label: s.label.clone(),
+            })
+            .collect();
+        let outputs: Vec<Labeled> = graph
+            .outputs()
+            .map(|o| Labeled {
+                id: o.id,
+                label: o.label.clone(),
+            })
+            .collect();
         let mut cells = Vec::new();
         for s in &sources {
             for o in &outputs {
@@ -240,27 +270,58 @@ pub fn get_matrix(state: State<AppState>) -> Matrix {
                     },
                 };
                 let gain = graph.route(s.id, o.id).map(|r| r.gain_db).unwrap_or(0.0);
-                cells.push(MatrixCell { source: s.id, output: o.id, state: st, gain_db: gain, who: w });
+                cells.push(MatrixCell {
+                    source: s.id,
+                    output: o.id,
+                    state: st,
+                    gain_db: gain,
+                    who: w,
+                });
             }
         }
-        Matrix { sources, outputs, cells }
+        Matrix {
+            sources,
+            outputs,
+            cells,
+        }
     }
     #[cfg(not(windows))]
     {
         let _ = state;
-        Matrix { sources: vec![], outputs: vec![], cells: vec![] }
+        Matrix {
+            sources: vec![],
+            outputs: vec![],
+            cells: vec![],
+        }
     }
 }
 
 #[tauri::command]
-pub fn set_route(app: AppHandle, state: State<AppState>, source: u32, output: u32, enabled: bool, gain_db: f32) -> Result<(), String> {
+pub fn set_route(
+    app: AppHandle,
+    state: State<AppState>,
+    source: u32,
+    output: u32,
+    enabled: bool,
+    gain_db: f32,
+) -> Result<(), String> {
     #[cfg(windows)]
     {
         use ct_engine::graph::Route;
         let mut g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
-        let Some(host) = g.as_mut() else { return Err("error.internal".into()) };
+        let Some(host) = g.as_mut() else {
+            return Err("error.internal".into());
+        };
         if enabled {
-            host.set_route(source, output, Route { gain_db: gain_db.clamp(-60.0, 12.0), muted: false }).map_err(|e| format!("error.{}", e.key()))?;
+            host.set_route(
+                source,
+                output,
+                Route {
+                    gain_db: gain_db.clamp(-60.0, 12.0),
+                    muted: false,
+                },
+            )
+            .map_err(|e| format!("error.{}", e.key()))?;
         } else {
             host.remove_route(source, output);
         }
@@ -278,7 +339,12 @@ pub fn set_route(app: AppHandle, state: State<AppState>, source: u32, output: u3
 #[tauri::command]
 pub fn set_unlocked(state: State<AppState>, unlocked: bool) {
     #[cfg(windows)]
-    if let Some(h) = state.audio.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+    if let Some(h) = state
+        .audio
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_mut()
+    {
         h.set_self_hearing_unlocked(unlocked);
     }
     #[cfg(not(windows))]
@@ -287,5 +353,7 @@ pub fn set_unlocked(state: State<AppState>, unlocked: bool) {
 
 #[tauri::command]
 pub async fn self_test(app: AppHandle) -> Result<Vec<crate::selftest::RouteResult>, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::selftest::run(&app)).await.map_err(|_| "error.internal".to_string())?
+    tauri::async_runtime::spawn_blocking(move || crate::selftest::run(&app))
+        .await
+        .map_err(|_| "error.internal".to_string())?
 }

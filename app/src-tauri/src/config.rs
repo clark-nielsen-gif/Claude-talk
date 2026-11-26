@@ -85,7 +85,9 @@ impl Config {
     /// Loads the file; a missing or damaged file gives the defaults (the
     /// damaged file is kept as `config.json.bad` for the error report).
     pub fn load(path: &Path) -> Config {
-        let Ok(text) = std::fs::read_to_string(path) else { return Config::default() };
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return Config::default();
+        };
         match serde_json::from_str::<Config>(&text) {
             Ok(c) => c.migrate(),
             Err(e) => {
@@ -99,7 +101,10 @@ impl Config {
     fn migrate(mut self) -> Config {
         // Version 1 is the first format; future versions convert here.
         if self.version > CONFIG_VERSION {
-            log::warn!("config.json is from a newer Claude Talk (v{}); unknown settings are ignored", self.version);
+            log::warn!(
+                "config.json is from a newer Claude Talk (v{}); unknown settings are ignored",
+                self.version
+            );
         }
         if !["da", "en"].contains(&self.language.as_str()) {
             self.language = "da".into();
@@ -114,7 +119,10 @@ impl Config {
             std::fs::create_dir_all(dir)?;
         }
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)?;
+        std::fs::write(
+            &tmp,
+            serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?,
+        )?;
         std::fs::rename(tmp, path)
     }
 }
@@ -126,7 +134,10 @@ mod tests {
     fn roundtrip_and_damaged_file() {
         let dir = std::env::temp_dir().join(format!("ct-cfg-{}", std::process::id()));
         let path = dir.join("config.json");
-        let c = Config { language: "en".into(), ..Default::default() };
+        let c = Config {
+            language: "en".into(),
+            ..Default::default()
+        };
         c.save(&path).unwrap();
         assert_eq!(Config::load(&path), c);
         std::fs::write(&path, "{ not json").unwrap();

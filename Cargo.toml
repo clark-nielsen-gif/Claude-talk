@@ -11,3 +11,10 @@ license = "MIT"
 lto = "thin"
 codegen-units = 1
 panic = "unwind"
+
+# Faster optimised builds for CI tests (release keeps LTO for size/speed).
+[profile.ci]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = false

@@ -5,11 +5,15 @@ use windows::core::{Interface, GUID, PCWSTR, PWSTR};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::{
-    eCapture, eCommunications, eConsole, eRender, EDataFlow, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
-    DEVICE_STATE_ACTIVE, PKEY_AudioEndpoint_FormFactor,
+    eCapture, eCommunications, eConsole, eRender, EDataFlow, IMMDevice, IMMDeviceEnumerator,
+    MMDeviceEnumerator, PKEY_AudioEndpoint_FormFactor, DEVICE_STATE_ACTIVE,
 };
-use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToStringAlloc, PropVariantToUInt32, PROPVARIANT};
-use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL, STGM_READ, STGM_READWRITE};
+use windows::Win32::System::Com::StructuredStorage::{
+    PropVariantClear, PropVariantToStringAlloc, PropVariantToUInt32, PROPVARIANT,
+};
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoTaskMemFree, CLSCTX_ALL, STGM_READ, STGM_READWRITE,
+};
 use windows::Win32::System::Variant::VT_LPWSTR;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,7 +71,8 @@ pub enum DeviceSelector {
 
 /// Name fragments of the virtual devices Claude Talk itself feeds. They are
 /// never used as the user's microphone.
-pub const OWN_VIRTUAL_DEVICES: &[&str] = &["claude talk", "vb-audio", "cable output", "cable input"];
+pub const OWN_VIRTUAL_DEVICES: &[&str] =
+    &["claude talk", "vb-audio", "cable output", "cable input"];
 
 fn excluded(name: &str, patterns: &[String]) -> bool {
     let n = name.to_lowercase();
@@ -98,14 +103,22 @@ fn pwstr_to_string(p: PWSTR) -> String {
 }
 
 pub(crate) fn device_id(dev: &IMMDevice) -> String {
-    unsafe { dev.GetId() }.map(pwstr_to_string).unwrap_or_default()
+    unsafe { dev.GetId() }
+        .map(pwstr_to_string)
+        .unwrap_or_default()
 }
 
 fn read_string(dev: &IMMDevice, key: &PROPERTYKEY) -> String {
     unsafe {
-        let Ok(store) = dev.OpenPropertyStore(STGM_READ) else { return String::new() };
-        let Ok(mut v) = store.GetValue(key) else { return String::new() };
-        let s = PropVariantToStringAlloc(&v).map(pwstr_to_string).unwrap_or_default();
+        let Ok(store) = dev.OpenPropertyStore(STGM_READ) else {
+            return String::new();
+        };
+        let Ok(mut v) = store.GetValue(key) else {
+            return String::new();
+        };
+        let s = PropVariantToStringAlloc(&v)
+            .map(pwstr_to_string)
+            .unwrap_or_default();
         let _ = PropVariantClear(&mut v);
         s
     }
@@ -129,7 +142,12 @@ pub(crate) fn describe(dev: &IMMDevice, flow: Flow) -> Endpoint {
         Some(4) => FormFactor::Microphone,
         _ => FormFactor::Other,
     };
-    Endpoint { id: device_id(dev), name: read_string(dev, &PKEY_Device_FriendlyName), flow, form_factor: ff }
+    Endpoint {
+        id: device_id(dev),
+        name: read_string(dev, &PKEY_Device_FriendlyName),
+        flow,
+        form_factor: ff,
+    }
 }
 
 /// All active endpoints of a flow.
@@ -150,12 +168,21 @@ pub fn list(flow: Flow) -> windows::core::Result<Vec<Endpoint>> {
 pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoint)> {
     let e = enumerator()?;
     let (dev, flow) = match sel {
-        DeviceSelector::Default(f) => (unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eConsole) }?, *f),
-        DeviceSelector::DefaultCommunications(f) => (unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eCommunications) }?, *f),
+        DeviceSelector::Default(f) => (
+            unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eConsole) }?,
+            *f,
+        ),
+        DeviceSelector::DefaultCommunications(f) => (
+            unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eCommunications) }?,
+            *f,
+        ),
         DeviceSelector::Id(id) => {
             let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
             let dev = unsafe { e.GetDevice(PCWSTR(wide.as_ptr())) }?;
-            let flow = match unsafe { dev.cast::<windows::Win32::Media::Audio::IMMEndpoint>()?.GetDataFlow() }? {
+            let flow = match unsafe {
+                dev.cast::<windows::Win32::Media::Audio::IMMEndpoint>()?
+                    .GetDataFlow()
+            }? {
                 f if f == eCapture => Flow::Capture,
                 _ => Flow::Render,
             };
@@ -163,7 +190,10 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
         }
         DeviceSelector::DefaultExcluding(f, patterns) => {
             let def = unsafe { e.GetDefaultAudioEndpoint(data_flow(*f), eConsole) }.ok();
-            let def_ok = def.as_ref().filter(|d| !excluded(&read_string(d, &PKEY_Device_FriendlyName), patterns)).cloned();
+            let def_ok = def
+                .as_ref()
+                .filter(|d| !excluded(&read_string(d, &PKEY_Device_FriendlyName), patterns))
+                .cloned();
             match def_ok {
                 Some(d) => (d, *f),
                 None => {
@@ -177,7 +207,10 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
                             break;
                         }
                     }
-                    (found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?, *f)
+                    (
+                        found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?,
+                        *f,
+                    )
                 }
             }
         }
@@ -190,10 +223,15 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
                 let name = read_string(&dev, &PKEY_Device_FriendlyName).to_lowercase();
                 all.push((dev, name));
             }
-            let found = patterns
-                .iter()
-                .find_map(|p| all.iter().find(|(_, name)| name.contains(&p.to_lowercase())).map(|(d, _)| d.clone()));
-            (found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?, *f)
+            let found = patterns.iter().find_map(|p| {
+                all.iter()
+                    .find(|(_, name)| name.contains(&p.to_lowercase()))
+                    .map(|(d, _)| d.clone())
+            });
+            (
+                found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?,
+                *f,
+            )
         }
         DeviceSelector::NameContains(f, text) => {
             let coll = unsafe { e.EnumAudioEndpoints(data_flow(*f), DEVICE_STATE_ACTIVE) }?;
@@ -202,12 +240,18 @@ pub fn resolve(sel: &DeviceSelector) -> windows::core::Result<(IMMDevice, Endpoi
             let mut found = None;
             for i in 0..n {
                 let dev = unsafe { coll.Item(i) }?;
-                if read_string(&dev, &PKEY_Device_FriendlyName).to_lowercase().contains(&needle) {
+                if read_string(&dev, &PKEY_Device_FriendlyName)
+                    .to_lowercase()
+                    .contains(&needle)
+                {
                     found = Some(dev);
                     break;
                 }
             }
-            (found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?, *f)
+            (
+                found.ok_or_else(|| windows::core::Error::from(NOT_FOUND))?,
+                *f,
+            )
         }
     };
     if unsafe { dev.GetState() }? != DEVICE_STATE_ACTIVE {
@@ -226,17 +270,24 @@ pub fn default_id(flow: Flow) -> Option<String> {
 
 /// Property keys for renaming (see `DECISIONS.md` D1): Windows shows
 /// "<description> (<interface name>)".
-const PKEY_DEVICE_DESC: PROPERTYKEY =
-    PROPERTYKEY { fmtid: GUID::from_u128(0xa45c254e_df1c_4efd_8020_67d146a850e0), pid: 2 };
-const PKEY_DEVICE_INTERFACE_NAME: PROPERTYKEY =
-    PROPERTYKEY { fmtid: GUID::from_u128(0xb3f8fa53_0004_438e_9003_51a46e139bfc), pid: 6 };
+const PKEY_DEVICE_DESC: PROPERTYKEY = PROPERTYKEY {
+    fmtid: GUID::from_u128(0xa45c254e_df1c_4efd_8020_67d146a850e0),
+    pid: 2,
+};
+const PKEY_DEVICE_INTERFACE_NAME: PROPERTYKEY = PROPERTYKEY {
+    fmtid: GUID::from_u128(0xb3f8fa53_0004_438e_9003_51a46e139bfc),
+    pid: 6,
+};
 
 /// Renames an endpoint the same way the Sound control panel does. Needs an
 /// elevated caller (the installer).
 pub fn rename(dev: &IMMDevice, description: &str, interface: &str) -> windows::core::Result<()> {
     unsafe {
         let store = dev.OpenPropertyStore(STGM_READWRITE)?;
-        for (key, text) in [(&PKEY_DEVICE_DESC, description), (&PKEY_DEVICE_INTERFACE_NAME, interface)] {
+        for (key, text) in [
+            (&PKEY_DEVICE_DESC, description),
+            (&PKEY_DEVICE_INTERFACE_NAME, interface),
+        ] {
             let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
             // ManuallyDrop: the string belongs to `wide`, not to COM; letting
             // PROPVARIANT drop would CoTaskMemFree it.

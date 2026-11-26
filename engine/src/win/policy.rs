@@ -45,8 +45,20 @@ macro_rules! policy_interface {
             fn get_current_chat_applications(&self) -> HRESULT;
             fn add_chat_context_changed(&self) -> HRESULT;
             fn remove_chat_context_changed(&self) -> HRESULT;
-            fn set_persisted_default_audio_endpoint(&self, pid: u32, flow: i32, role: i32, device: *mut c_void) -> HRESULT;
-            fn get_persisted_default_audio_endpoint(&self, pid: u32, flow: i32, role: i32, device: *mut *mut c_void) -> HRESULT;
+            fn set_persisted_default_audio_endpoint(
+                &self,
+                pid: u32,
+                flow: i32,
+                role: i32,
+                device: *mut c_void,
+            ) -> HRESULT;
+            fn get_persisted_default_audio_endpoint(
+                &self,
+                pid: u32,
+                flow: i32,
+                role: i32,
+                device: *mut *mut c_void,
+            ) -> HRESULT;
             fn clear_all_persisted_application_default_endpoints(&self) -> HRESULT;
         }
     };
@@ -75,7 +87,9 @@ fn factory() -> windows::core::Result<Factory> {
         }
         match RoGetActivationFactory::<IPolicyDownlevel>(&class) {
             Ok(f) => Ok(Factory::Old(f)),
-            Err(e) => RoGetActivationFactory::<IPolicy21H2>(&class).map(Factory::New).map_err(|_| e),
+            Err(e) => RoGetActivationFactory::<IPolicy21H2>(&class)
+                .map(Factory::New)
+                .map_err(|_| e),
         }
     }
 }
@@ -86,8 +100,12 @@ impl Factory {
         let raw: *mut c_void = unsafe { std::mem::transmute_copy(device) };
         unsafe {
             match self {
-                Factory::New(f) => f.set_persisted_default_audio_endpoint(pid, eCapture.0, role.0, raw),
-                Factory::Old(f) => f.set_persisted_default_audio_endpoint(pid, eCapture.0, role.0, raw),
+                Factory::New(f) => {
+                    f.set_persisted_default_audio_endpoint(pid, eCapture.0, role.0, raw)
+                }
+                Factory::Old(f) => {
+                    f.set_persisted_default_audio_endpoint(pid, eCapture.0, role.0, raw)
+                }
             }
         }
         .ok()
@@ -97,8 +115,12 @@ impl Factory {
         let mut out: *mut c_void = std::ptr::null_mut();
         unsafe {
             match self {
-                Factory::New(f) => f.get_persisted_default_audio_endpoint(pid, eCapture.0, role.0, &mut out),
-                Factory::Old(f) => f.get_persisted_default_audio_endpoint(pid, eCapture.0, role.0, &mut out),
+                Factory::New(f) => {
+                    f.get_persisted_default_audio_endpoint(pid, eCapture.0, role.0, &mut out)
+                }
+                Factory::Old(f) => {
+                    f.get_persisted_default_audio_endpoint(pid, eCapture.0, role.0, &mut out)
+                }
             }
             .ok()?;
             // take ownership of the returned HSTRING
@@ -115,8 +137,14 @@ pub fn interface_path(endpoint_id: &str) -> String {
 
 /// Endpoint id of our virtual microphone (the capture side of the cable).
 pub fn cable_capture_id() -> Option<String> {
-    let patterns = vec!["claude talk – til discord".to_string(), "claude talk".to_string(), "cable output".to_string()];
-    devices::resolve(&DeviceSelector::FirstMatching(Flow::Capture, patterns)).ok().map(|(_, e)| e.id)
+    let patterns = vec![
+        "claude talk – til discord".to_string(),
+        "claude talk".to_string(),
+        "cable output".to_string(),
+    ];
+    devices::resolve(&DeviceSelector::FirstMatching(Flow::Capture, patterns))
+        .ok()
+        .map(|(_, e)| e.id)
 }
 
 /// Every running process of the given executables (all of Discord's
@@ -124,7 +152,11 @@ pub fn cable_capture_id() -> Option<String> {
 /// setting all is harmless and covers multi-root cases).
 pub fn pids_of(exes: &[String]) -> Vec<u32> {
     let names: Vec<String> = exes.iter().map(|e| e.to_lowercase()).collect();
-    process::snapshot().into_iter().filter(|p| names.contains(&p.exe)).map(|p| p.pid).collect()
+    process::snapshot()
+        .into_iter()
+        .filter(|p| names.contains(&p.exe))
+        .map(|p| p.pid)
+        .collect()
 }
 
 const ROLES: [ERole; 3] = [eConsole, eMultimedia, eCommunications];
@@ -132,7 +164,9 @@ const ROLES: [ERole; 3] = [eConsole, eMultimedia, eCommunications];
 /// Points Discord's microphone at our cable. Returns how many processes were
 /// updated (0 if Discord is not running – call again when it starts).
 pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
-    let Some(id) = cable_capture_id() else { return Err(windows::Win32::Foundation::E_FAIL.into()) };
+    let Some(id) = cable_capture_id() else {
+        return Err(windows::Win32::Foundation::E_FAIL.into());
+    };
     let path = HSTRING::from(interface_path(&id));
     let f = factory()?;
     let mut n = 0;
@@ -156,7 +190,11 @@ pub fn discord_routed_to_cable(exes: &[String]) -> Option<bool> {
     if pids.is_empty() {
         return None;
     }
-    Some(pids.iter().any(|&pid| f.get(pid, eConsole).map(|d| d.to_lowercase().contains(&id.to_lowercase())).unwrap_or(false)))
+    Some(pids.iter().any(|&pid| {
+        f.get(pid, eConsole)
+            .map(|d| d.to_lowercase().contains(&id.to_lowercase()))
+            .unwrap_or(false)
+    }))
 }
 
 /// Gives Discord its normal microphone back. Works while Discord runs (via
@@ -179,16 +217,27 @@ pub fn restore_discord(exes: &[String]) -> usize {
 
 /// Windows stores per-app devices under this key; each value name contains
 /// the program path and the value data the device interface path.
-const STORE: &str = r"Software\Microsoft\Internet Explorer\LowRegistry\Audio\PolicyConfig\PropertyStore";
+const STORE: &str =
+    r"Software\Microsoft\Internet Explorer\LowRegistry\Audio\PolicyConfig\PropertyStore";
 
 fn remove_stored_cable_entries() -> usize {
     use windows::Win32::System::Registry::*;
-    let Some(id) = cable_capture_id() else { return 0 };
+    let Some(id) = cable_capture_id() else {
+        return 0;
+    };
     let id = id.to_lowercase();
     let mut removed = 0;
     unsafe {
         let mut root = HKEY::default();
-        if RegOpenKeyExW(HKEY_CURRENT_USER, &HSTRING::from(STORE), None, KEY_READ | KEY_WRITE, &mut root).is_err() {
+        if RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            &HSTRING::from(STORE),
+            None,
+            KEY_READ | KEY_WRITE,
+            &mut root,
+        )
+        .is_err()
+        {
             return 0;
         }
         // subkeys are opaque ids; each has a default value + device values
@@ -197,7 +246,18 @@ fn remove_stored_cable_entries() -> usize {
         loop {
             let mut name = [0u16; 512];
             let mut len = name.len() as u32;
-            if RegEnumKeyExW(root, i, Some(windows::core::PWSTR(name.as_mut_ptr())), &mut len, None, None, None, None).is_err() {
+            if RegEnumKeyExW(
+                root,
+                i,
+                Some(windows::core::PWSTR(name.as_mut_ptr())),
+                &mut len,
+                None,
+                None,
+                None,
+                None,
+            )
+            .is_err()
+            {
                 break;
             }
             let sub = String::from_utf16_lossy(&name[..len as usize]);
@@ -209,10 +269,24 @@ fn remove_stored_cable_entries() -> usize {
                     let mut vlen = vname.len() as u32;
                     let mut data = vec![0u8; 4096];
                     let mut dlen = data.len() as u32;
-                    if RegEnumValueW(key, j, Some(windows::core::PWSTR(vname.as_mut_ptr())), &mut vlen, None, None, Some(data.as_mut_ptr()), Some(&mut dlen)).is_err() {
+                    if RegEnumValueW(
+                        key,
+                        j,
+                        Some(windows::core::PWSTR(vname.as_mut_ptr())),
+                        &mut vlen,
+                        None,
+                        None,
+                        Some(data.as_mut_ptr()),
+                        Some(&mut dlen),
+                    )
+                    .is_err()
+                    {
                         break;
                     }
-                    let words: Vec<u16> = data[..dlen as usize].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                    let words: Vec<u16> = data[..dlen as usize]
+                        .chunks_exact(2)
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .collect();
                     let text = String::from_utf16_lossy(&words).to_lowercase();
                     let vn = String::from_utf16_lossy(&vname[..vlen as usize]).to_lowercase();
                     if text.contains(&id) && (vn.contains("discord") || sub_is_discord(key)) {
@@ -240,11 +314,60 @@ unsafe fn sub_is_discord(key: windows::Win32::System::Registry::HKEY) -> bool {
     use windows::Win32::System::Registry::*;
     let mut data = vec![0u8; 2048];
     let mut dlen = data.len() as u32;
-    if unsafe { RegQueryValueExW(key, None, None, None, Some(data.as_mut_ptr()), Some(&mut dlen)) }.is_err() {
+    if unsafe {
+        RegQueryValueExW(
+            key,
+            None,
+            None,
+            None,
+            Some(data.as_mut_ptr()),
+            Some(&mut dlen),
+        )
+    }
+    .is_err()
+    {
         return false;
     }
-    let words: Vec<u16> = data[..dlen as usize].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-    String::from_utf16_lossy(&words).to_lowercase().contains("discord")
+    let words: Vec<u16> = data[..dlen as usize]
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    String::from_utf16_lossy(&words)
+        .to_lowercase()
+        .contains("discord")
+}
+
+/// `IPolicyConfig` (undocumented, used by the Sound control panel and many
+/// tools) – only `SetDefaultEndpoint` is used, to put the user's own default
+/// devices back if a driver install changed them.
+#[windows_core::interface("f8679f50-850a-41cf-9c72-430f290290c8")]
+unsafe trait IPolicyConfig: windows_core::IUnknown {
+    fn get_mix_format(&self) -> HRESULT;
+    fn get_device_format(&self) -> HRESULT;
+    fn reset_device_format(&self) -> HRESULT;
+    fn set_device_format(&self) -> HRESULT;
+    fn get_processing_period(&self) -> HRESULT;
+    fn set_processing_period(&self) -> HRESULT;
+    fn get_share_mode(&self) -> HRESULT;
+    fn set_share_mode(&self) -> HRESULT;
+    fn get_property_value(&self) -> HRESULT;
+    fn set_property_value(&self) -> HRESULT;
+    fn set_default_endpoint(&self, device_id: windows::core::PCWSTR, role: i32) -> HRESULT;
+    fn set_endpoint_visibility(&self) -> HRESULT;
+}
+
+const CLSID_POLICY_CONFIG: windows::core::GUID =
+    windows::core::GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);
+
+/// Makes `endpoint_id` the default device for all roles.
+pub fn set_default_endpoint(endpoint_id: &str) -> windows::core::Result<()> {
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+    let pc: IPolicyConfig = unsafe { CoCreateInstance(&CLSID_POLICY_CONFIG, None, CLSCTX_ALL) }?;
+    let id = HSTRING::from(endpoint_id);
+    for role in ROLES {
+        unsafe { pc.set_default_endpoint(windows::core::PCWSTR(id.as_ptr()), role.0) }.ok()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -258,4 +381,3 @@ mod tests {
         );
     }
 }
-

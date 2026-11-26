@@ -28,23 +28,38 @@
     ],
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost",
-      "capabilities": ["main-window"]
+      "capabilities": [
+        "main-window"
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
     "publisher": "Claude Talk",
     "shortDescription": "Claude i dine Discord-opkald",
     "longDescription": "Claude Talk bringer Claudes stemme ind i dine Discord-opkald – uden ekko.",
     "copyright": "MIT License",
     "windows": {
-      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
       "nsis": {
         "installMode": "perMachine",
-        "languages": ["Danish", "English"],
-        "displayLanguageSelector": false
+        "languages": [
+          "Danish",
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "installerHooks": "./installer/hooks.nsh"
       }
     }
   }

@@ -31,7 +31,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
       - name: Build test tool
-        run: cargo build -p ct-audiotest --release
+        run: cargo build -p ct-audiotest --profile ci
       - name: Install VB-CABLE (as the product does)
         shell: powershell
         run: ci/fixtures/install-vbcable.ps1
@@ -40,11 +40,11 @@ jobs:
         run: ci/fixtures/install-test-sink.ps1
       - name: Devices
         shell: powershell
-        run: target/release/ct-audiotest.exe devices | Tee-Object results/devices.json
+        run: target/ci/ct-audiotest.exe devices | Tee-Object results/devices.json
       - name: Smoke test
         shell: powershell
         run: |
-          target/release/ct-audiotest.exe smoke --cable-in 'CABLE Input' --cable-out 'Claude Talk' --sink 'Virtual Audio' --out results/smoke.json
+          target/ci/ct-audiotest.exe smoke --cable-in 'CABLE Input' --cable-out 'Claude Talk' --sink 'Virtual Audio' --out results/smoke.json
           if ($LASTEXITCODE -ne 0) { throw 'smoke test failed' }
       - name: Publish results
         if: always()

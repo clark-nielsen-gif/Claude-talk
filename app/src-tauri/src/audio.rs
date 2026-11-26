@@ -62,7 +62,9 @@ mod imp {
         // CI builds only: the "microphone" is a test program's sound.
         #[cfg(feature = "ci-testpage")]
         if let Ok(exe) = std::env::var("CLAUDE_TALK_TEST_MIC_EXE") {
-            cfg.mic = ct_engine::win::host::SourceKind::Program(ct_engine::win::stream::ProcessTarget::ExeNames(vec![exe.to_lowercase()]));
+            cfg.mic = ct_engine::win::host::SourceKind::Program(
+                ct_engine::win::stream::ProcessTarget::ExeNames(vec![exe.to_lowercase()]),
+            );
             log::warn!("TEST MODE: microphone replaced by program {exe}");
         }
         let mut host = AudioHost::standard(cfg);
@@ -82,24 +84,43 @@ mod imp {
     /// Applies config switches (big switch, mutes, push-to-talk) to the routes.
     pub fn apply_switches(app: &AppHandle) {
         let state = app.state::<AppState>();
-        let cfg = state.config.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let cfg = state
+            .config
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
         let ptt_down = state.ptt_down.load(Ordering::Relaxed);
         let mut guard = state.audio.lock().unwrap_or_else(|p| p.into_inner());
         let Some(host) = guard.as_mut() else { return };
         let on = cfg.claude_in_discord;
         host.set_source_muted(ids::MIC, cfg.mic_muted);
-        host.set_route_muted(ids::CLAUDE, ids::TO_DISCORD, !on || cfg.claude_to_discord_muted);
+        host.set_route_muted(
+            ids::CLAUDE,
+            ids::TO_DISCORD,
+            !on || cfg.claude_to_discord_muted,
+        );
         host.set_route_muted(ids::DISCORD, ids::TO_CLAUDE, !on);
         // Your microphone always reaches Discord (Discord uses our cable as
         // its microphone). To Claude it follows the big switch and, if
         // push-to-talk is on, the key.
-        host.set_route_muted(ids::MIC, ids::TO_CLAUDE, !on || (cfg.push_to_talk && !ptt_down));
+        host.set_route_muted(
+            ids::MIC,
+            ids::TO_CLAUDE,
+            !on || (cfg.push_to_talk && !ptt_down),
+        );
         host.set_route_muted(ids::MIC, ids::TO_DISCORD, false);
         // echo reduction: always, never, or automatically with speakers
         let echo = match cfg.echo {
             crate::config::EchoMode::On => true,
             crate::config::EchoMode::Off => false,
             crate::config::EchoMode::Auto => state.speakers.load(Ordering::Relaxed),
+        };
+        // CI builds only: force echo reduction on or off for the test run
+        #[cfg(feature = "ci-testpage")]
+        let echo = match std::env::var("CLAUDE_TALK_TEST_ECHO").as_deref() {
+            Ok("on") => true,
+            Ok("off") => false,
+            _ => echo,
         };
         host.set_echo_reduction(echo);
     }
@@ -111,6 +132,9 @@ mod imp {
     fn status_loop(app: AppHandle) {
         let state = app.state::<AppState>().inner().clone();
         let mut last_states: Vec<(u32, StreamState)> = Vec::new();
+        // diagnostics for the log: loudest peak per source/output over ~5 s
+        let mut peaks: std::collections::BTreeMap<String, f32> = Default::default();
+        let mut tick: u32 = 0;
         while !state.shutting_down.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_millis(33));
             let (snap, echo_active) = {
@@ -119,7 +143,52 @@ mod imp {
                 host.maintain();
                 (host.snapshot(), host.echo_reduction_active())
             };
-            let mut st = AudioStatus { engine_running: true, ..Default::default() };
+            tick += 1;
+            for s in &snap.sources {
+                let e = peaks.entry(format!("src{}", s.id)).or_insert(0.0);
+                *e = e.max(s.peak);
+            }
+            for o in &snap.outputs {
+                let e = peaks.entry(format!("out{}", o.id)).or_insert(0.0);
+                *e = e.max(o.peak);
+            }
+            if let Some((p, _)) = snap.echo {
+                let e = peaks.entry("echo".into()).or_insert(0.0);
+                *e = e.max(p);
+            }
+            if tick.is_multiple_of(150) {
+                let db = |v: f32| if v > 0.0 { 20.0 * v.log10() } else { -120.0 };
+                let levels: Vec<String> = peaks
+                    .iter()
+                    .map(|(k, v)| format!("{k}={:.0}", db(*v)))
+                    .collect();
+                let routes: Vec<String> = snap
+                    .routes
+                    .iter()
+                    .map(|r| {
+                        format!(
+                            "{}>{}{} buf={:.0}ms under={} drift={:.0}",
+                            r.source,
+                            r.output,
+                            if r.muted { "(muted)" } else { "" },
+                            r.buffered_ms,
+                            r.underrun_frames,
+                            r.drift_ppm
+                        )
+                    })
+                    .collect();
+                log::debug!(
+                    "levels dBFS [{}] routes [{}] echo {:?}",
+                    levels.join(" "),
+                    routes.join("; "),
+                    snap.echo.map(|e| e.1)
+                );
+                peaks.clear();
+            }
+            let mut st = AudioStatus {
+                engine_running: true,
+                ..Default::default()
+            };
             for s in &snap.sources {
                 let l = level(s.peak, s.rms);
                 match s.id {
@@ -128,7 +197,9 @@ mod imp {
                         st.mic_name = s.stream.device.clone();
                         st.mic_state = match s.stream.state {
                             StreamState::Running => "ok",
-                            StreamState::Failed if s.stream.last_error == E_ACCESSDENIED => "blocked",
+                            StreamState::Failed if s.stream.last_error == E_ACCESSDENIED => {
+                                "blocked"
+                            }
                             StreamState::WaitingForDevice | StreamState::Failed => "missing",
                             _ => "starting",
                         }
@@ -146,7 +217,15 @@ mod imp {
                 if !last_states.contains(&key) {
                     last_states.retain(|(id, _)| *id != s.id);
                     last_states.push(key);
-                    log::info!("source {} '{}' -> {:?} (device '{}', pid {}, hr 0x{:08X})", s.id, s.label, s.stream.state, s.stream.device, s.stream.pid, s.stream.last_error);
+                    log::info!(
+                        "source {} '{}' -> {:?} (device '{}', pid {}, hr 0x{:08X})",
+                        s.id,
+                        s.label,
+                        s.stream.state,
+                        s.stream.device,
+                        s.stream.pid,
+                        s.stream.last_error
+                    );
                 }
             }
             for o in &snap.outputs {
@@ -154,7 +233,10 @@ mod imp {
                 match o.id {
                     ids::TO_DISCORD => {
                         st.to_discord = l;
-                        st.cable_ok = o.stream.as_ref().is_some_and(|s| s.state == StreamState::Running);
+                        st.cable_ok = o
+                            .stream
+                            .as_ref()
+                            .is_some_and(|s| s.state == StreamState::Running);
                     }
                     ids::TO_CLAUDE => st.to_claude = l,
                     _ => {}

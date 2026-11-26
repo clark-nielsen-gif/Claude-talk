@@ -41,7 +41,9 @@ pub fn is_claude_host(url: &Url) -> bool {
     if url.scheme() != "https" {
         return false;
     }
-    let Some(host) = url.host_str() else { return false };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
     let host = host.to_ascii_lowercase();
     ["claude.ai", "anthropic.com", "claude.com"]
         .iter()
@@ -50,7 +52,10 @@ pub fn is_claude_host(url: &Url) -> bool {
 }
 
 fn is_google_login(url: &Url) -> bool {
-    matches!(url.host_str(), Some("accounts.google.com") | Some("accounts.youtube.com"))
+    matches!(
+        url.host_str(),
+        Some("accounts.google.com") | Some("accounts.youtube.com")
+    )
 }
 
 /// What to do with a navigation in the Claude window.
@@ -85,8 +90,16 @@ fn open_external(app: &AppHandle, url: &Url) {
 
 fn show_login_help(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(LABEL) {
-        let lang = app.state::<AppState>().config.lock().map(|c| c.language.clone()).unwrap_or_default();
-        let _ = w.eval(format!("{LOGIN_HELP_JS}\n;window.__claudeTalkLoginHelp && window.__claudeTalkLoginHelp({});", serde_json::json!(lang)));
+        let lang = app
+            .state::<AppState>()
+            .config
+            .lock()
+            .map(|c| c.language.clone())
+            .unwrap_or_default();
+        let _ = w.eval(format!(
+            "{LOGIN_HELP_JS}\n;window.__claudeTalkLoginHelp && window.__claudeTalkLoginHelp({});",
+            serde_json::json!(lang)
+        ));
     }
 }
 
@@ -183,7 +196,10 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
                     continue;
                 }
                 let bytes: Vec<u8> = buf.iter().flat_map(|v| v.to_le_bytes()).collect();
-                let msg = format!("ct:a:{}", base64::engine::general_purpose::STANDARD.encode(bytes));
+                let msg = format!(
+                    "ct:a:{}",
+                    base64::engine::general_purpose::STANDARD.encode(bytes)
+                );
                 #[cfg(windows)]
                 {
                     let _ = app.run_on_main_thread(move || win::post(&msg));
@@ -200,8 +216,8 @@ mod win {
     use super::*;
     use std::cell::RefCell;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
-        COREWEBVIEW2_PERMISSION_STATE_DENY,
+        ICoreWebView2, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+        COREWEBVIEW2_PERMISSION_STATE_ALLOW, COREWEBVIEW2_PERMISSION_STATE_DENY,
     };
     use webview2_com::{PermissionRequestedEventHandler, WebMessageReceivedEventHandler};
     use windows::core::{HSTRING, PWSTR};
@@ -244,12 +260,16 @@ mod win {
     pub fn attach(app: AppHandle, window: &tauri::WebviewWindow) {
         let app2 = app.clone();
         let _ = window.with_webview(move |pw| unsafe {
-            let Ok(core) = pw.controller().CoreWebView2() else { return };
+            let Ok(core) = pw.controller().CoreWebView2() else {
+                return;
+            };
             // The browser process of *this* WebView2 environment: process
             // loopback on it captures only Claude's voice.
             let mut pid = 0u32;
             if core.BrowserProcessId(&mut pid).is_ok() {
-                app2.state::<AppState>().claude_pid.store(pid, Ordering::Relaxed);
+                app2.state::<AppState>()
+                    .claude_pid
+                    .store(pid, Ordering::Relaxed);
                 log::info!("Claude window browser process: {pid}");
             }
             let mut token = 0i64;
@@ -262,7 +282,11 @@ mod win {
                     let mut kind = Default::default();
                     args.PermissionKind(&mut kind)?;
                     if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE {
-                        let state = if uri_allowed(&uri) { COREWEBVIEW2_PERMISSION_STATE_ALLOW } else { COREWEBVIEW2_PERMISSION_STATE_DENY };
+                        let state = if uri_allowed(&uri) {
+                            COREWEBVIEW2_PERMISSION_STATE_ALLOW
+                        } else {
+                            COREWEBVIEW2_PERMISSION_STATE_DENY
+                        };
                         args.SetState(state)?;
                     }
                     Ok(())
@@ -304,7 +328,9 @@ mod win {
 
 /// Messages from bridge.js (JSON with `ct: 1`).
 pub fn on_page_message(app: &AppHandle, text: &str) {
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else { return };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else {
+        return;
+    };
     if v.get("ct").and_then(|x| x.as_i64()) != Some(1) {
         return;
     }
@@ -313,13 +339,22 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
         Some("mic") => {
             let active = v.get("active").and_then(|a| a.as_bool()).unwrap_or(false);
             state.claude_mic_active.store(active, Ordering::Relaxed);
-            log::info!("Claude window microphone {}", if active { "in use" } else { "released" });
-            let _ = app.emit("claude-window", serde_json::json!({"open": true, "micActive": active}));
+            log::info!(
+                "Claude window microphone {}",
+                if active { "in use" } else { "released" }
+            );
+            let _ = app.emit(
+                "claude-window",
+                serde_json::json!({"open": true, "micActive": active}),
+            );
         }
         Some("ready") => {
             let _ = app.emit("claude-window", serde_json::json!({"open": true}));
         }
-        Some("source") => log::info!("bridge source mode: {}", v.get("mode").and_then(|m| m.as_str()).unwrap_or("?")),
+        Some("source") => log::info!(
+            "bridge source mode: {}",
+            v.get("mode").and_then(|m| m.as_str()).unwrap_or("?")
+        ),
         Some("stats") => log::debug!("bridge stats: {v}"),
         _ => {}
     }
@@ -333,8 +368,14 @@ mod tests {
         let d = |s: &str| decide(&Url::parse(s).unwrap());
         assert_eq!(d("https://claude.ai/new"), NavDecision::Allow);
         assert_eq!(d("https://login.anthropic.com/x"), NavDecision::Allow);
-        assert_eq!(d("https://challenges.cloudflare.com/cdn-cgi"), NavDecision::Allow);
-        assert_eq!(d("https://accounts.google.com/o/oauth2/auth"), NavDecision::GoogleLoginHelp);
+        assert_eq!(
+            d("https://challenges.cloudflare.com/cdn-cgi"),
+            NavDecision::Allow
+        );
+        assert_eq!(
+            d("https://accounts.google.com/o/oauth2/auth"),
+            NavDecision::GoogleLoginHelp
+        );
         assert_eq!(d("https://example.com/"), NavDecision::OpenInBrowser);
         assert_eq!(d("https://claude.ai.evil.com/"), NavDecision::OpenInBrowser);
         assert_eq!(d("https://evilclaude.ai/"), NavDecision::OpenInBrowser);

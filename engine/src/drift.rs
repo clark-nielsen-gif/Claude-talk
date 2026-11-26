@@ -161,7 +161,10 @@ mod tests {
             let (lo, hi, end, est) = simulate(ppm, 2.0 * 3600.0, false);
             assert!(lo > 0.0, "ran dry at {ppm} ppm (min fill {lo})");
             assert!(hi < 960.0 * 3.0, "overflowed at {ppm} ppm (max fill {hi})");
-            assert!((end - 960.0).abs() < 50.0, "did not settle at {ppm} ppm: {end}");
+            assert!(
+                (end - 960.0).abs() < 50.0,
+                "did not settle at {ppm} ppm: {end}"
+            );
             assert!((est - ppm).abs() < 5.0, "drift estimate {est} vs {ppm}");
         }
     }
@@ -192,13 +195,25 @@ mod tests {
         let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
         let max_dev = ratios.iter().map(|r| (r - mean).abs()).fold(0.0, f64::max);
         // block-to-block change: this is what would be heard as FM
-        let step = ratios.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f64::max);
-        eprintln!("bursty: mean {:.1} ppm, max dev {:.2} ppm, max step {:.4} ppm", (1.0 / mean - 1.0) * 1e6, max_dev * 1e6, step * 1e6);
+        let step = ratios
+            .windows(2)
+            .map(|w| (w[1] - w[0]).abs())
+            .fold(0.0, f64::max);
+        eprintln!(
+            "bursty: mean {:.1} ppm, max dev {:.2} ppm, max step {:.4} ppm",
+            (1.0 / mean - 1.0) * 1e6,
+            max_dev * 1e6,
+            step * 1e6
+        );
         // 200 ppm = 0.35 cent: far below audibility (the old tuning swung by
         // ±2000 ppm and smeared a 1 kHz test tone in CI).
         assert!(max_dev * 1e6 < 200.0, "ratio ripple {} ppm", max_dev * 1e6);
         assert!(step * 1e6 < 50.0, "ratio step {} ppm", step * 1e6);
-        assert!(((1.0 / mean - 1.0) * 1e6 - ppm).abs() < 5.0, "mean drift {}", (1.0 / mean - 1.0) * 1e6);
+        assert!(
+            ((1.0 / mean - 1.0) * 1e6 - ppm).abs() < 5.0,
+            "mean drift {}",
+            (1.0 / mean - 1.0) * 1e6
+        );
     }
 
     proptest! {

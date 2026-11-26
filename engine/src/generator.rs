@@ -15,7 +15,10 @@ pub struct Generator {
 
 impl Generator {
     /// `gen` fills interleaved stereo 48 kHz buffers.
-    pub fn spawn(mut fanout: SourceFanout, mut gen: impl FnMut(&mut [f32]) + Send + 'static) -> Generator {
+    pub fn spawn(
+        mut fanout: SourceFanout,
+        mut gen: impl FnMut(&mut [f32]) + Send + 'static,
+    ) -> Generator {
         let stop = Arc::new(AtomicBool::new(false));
         let s2 = stop.clone();
         let thread = std::thread::Builder::new()
@@ -37,7 +40,10 @@ impl Generator {
                 }
             })
             .expect("spawn generator");
-        Generator { stop, thread: Some(thread) }
+        Generator {
+            stop,
+            thread: Some(thread),
+        }
     }
 }
 

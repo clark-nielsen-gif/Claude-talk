@@ -14,7 +14,8 @@ pub fn tone_db(x: &[f32], freq: f64, rate: f64) -> f64 {
     let (mut s1, mut s2, mut wsum) = (0.0f64, 0.0f64, 0.0f64);
     for (i, &v) in x.iter().enumerate() {
         let t = 2.0 * std::f64::consts::PI * i as f64 / (n - 1.0);
-        let win = 0.35875 - 0.48829 * t.cos() + 0.14128 * (2.0 * t).cos() - 0.01168 * (3.0 * t).cos();
+        let win =
+            0.35875 - 0.48829 * t.cos() + 0.14128 * (2.0 * t).cos() - 0.01168 * (3.0 * t).cos();
         wsum += win;
         let s0 = v as f64 * win + c * s1 - s2;
         s2 = s1;
@@ -29,7 +30,9 @@ pub fn tone_db(x: &[f32], freq: f64, rate: f64) -> f64 {
 /// hertz). Searched in 0.1 Hz steps.
 pub fn tone_db_near(x: &[f32], freq: f64, tolerance_hz: f64, rate: f64) -> f64 {
     let steps = (tolerance_hz / 0.1).ceil() as i64;
-    (-steps..=steps).map(|k| tone_db(x, freq + k as f64 * 0.1, rate)).fold(-400.0, f64::max)
+    (-steps..=steps)
+        .map(|k| tone_db(x, freq + k as f64 * 0.1, rate))
+        .fold(-400.0, f64::max)
 }
 
 /// First channel of an interleaved buffer.
@@ -47,7 +50,11 @@ pub struct Sine {
 
 impl Sine {
     pub fn new(freq: f64, rate: f64, amplitude: f32) -> Self {
-        Sine { phase: 0.0, step: freq / rate, amplitude }
+        Sine {
+            phase: 0.0,
+            step: freq / rate,
+            amplitude,
+        }
     }
     /// Fills an interleaved buffer (all channels get the same sample).
     pub fn fill(&mut self, out: &mut [f32], channels: usize) {

@@ -8,9 +8,18 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 pub fn register(app: &AppHandle) -> Result<(), String> {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
-    let hk = app.state::<AppState>().config.lock().map(|c| c.hotkeys.clone()).unwrap_or_default();
+    let hk = app
+        .state::<AppState>()
+        .config
+        .lock()
+        .map(|c| c.hotkeys.clone())
+        .unwrap_or_default();
     let mut failed = false;
-    for (accel, action) in [(hk.mute_claude_to_discord, "muteClaude"), (hk.mute_mic, "muteMic"), (hk.push_to_talk_claude, "ptt")] {
+    for (accel, action) in [
+        (hk.mute_claude_to_discord, "muteClaude"),
+        (hk.mute_mic, "muteMic"),
+        (hk.push_to_talk_claude, "ptt"),
+    ] {
         let Ok(sc) = accel.parse::<Shortcut>() else {
             failed = true;
             continue;
@@ -44,7 +53,9 @@ fn handle(app: &AppHandle, action: &str, st: ShortcutState) {
                 c.mic_muted = !c.mic_muted;
             }
         }
-        ("ptt", s) => state.ptt_down.store(s == ShortcutState::Pressed, Ordering::Relaxed),
+        ("ptt", s) => state
+            .ptt_down
+            .store(s == ShortcutState::Pressed, Ordering::Relaxed),
         _ => return,
     }
     if action != "ptt" {

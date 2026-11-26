@@ -52,7 +52,12 @@ impl AtomicF32 {
     pub fn fetch_max(&self, v: f32) {
         let mut cur = self.0.load(Ordering::Relaxed);
         while f32::from_bits(cur) < v {
-            match self.0.compare_exchange_weak(cur, v.to_bits(), Ordering::Relaxed, Ordering::Relaxed) {
+            match self.0.compare_exchange_weak(
+                cur,
+                v.to_bits(),
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
                 Ok(_) => break,
                 Err(c) => cur = c,
             }
@@ -85,11 +90,20 @@ impl SmoothedGain {
     /// `ramp_ms` is the time a full 0→1 change takes.
     pub fn new(initial: f32, sample_rate: f32, ramp_ms: f32) -> Self {
         let ramp_samples = (sample_rate * ramp_ms / 1000.0).max(1.0);
-        SmoothedGain { current: initial, target: initial, step: 0.0, ramp_samples }
+        SmoothedGain {
+            current: initial,
+            target: initial,
+            step: 0.0,
+            ramp_samples,
+        }
     }
 
     pub fn set_target(&mut self, target: f32) {
-        let target = if target.is_finite() { target.max(0.0) } else { 0.0 };
+        let target = if target.is_finite() {
+            target.max(0.0)
+        } else {
+            0.0
+        };
         if (target - self.target).abs() > f32::EPSILON {
             self.target = target;
             self.step = (self.target - self.current) / self.ramp_samples;
@@ -108,7 +122,9 @@ impl SmoothedGain {
     fn next(&mut self) -> f32 {
         if self.current != self.target {
             self.current += self.step;
-            if (self.step > 0.0 && self.current >= self.target) || (self.step < 0.0 && self.current <= self.target) {
+            if (self.step > 0.0 && self.current >= self.target)
+                || (self.step < 0.0 && self.current <= self.target)
+            {
                 self.current = self.target;
             }
         }
@@ -122,7 +138,10 @@ impl SmoothedGain {
         if self.is_silent() {
             return;
         }
-        for (s, d) in src.chunks_exact(channels).zip(dst.chunks_exact_mut(channels)) {
+        for (s, d) in src
+            .chunks_exact(channels)
+            .zip(dst.chunks_exact_mut(channels))
+        {
             let g = self.next();
             for c in 0..channels {
                 d[c] += s[c] * g;
@@ -237,8 +256,14 @@ fn polyphase() -> [[f32; TAPS]; PHASES - 1] {
         for t in 0..TAPS {
             let x = f - (t as f64 - (half - 1.0));
             let pi_x = std::f64::consts::PI * x;
-            let sinc = if x.abs() < 1e-12 { 1.0 } else { pi_x.sin() / pi_x };
-            let w = 0.42 + 0.5 * (std::f64::consts::PI * x / half).cos() + 0.08 * (2.0 * std::f64::consts::PI * x / half).cos();
+            let sinc = if x.abs() < 1e-12 {
+                1.0
+            } else {
+                pi_x.sin() / pi_x
+            };
+            let w = 0.42
+                + 0.5 * (std::f64::consts::PI * x / half).cos()
+                + 0.08 * (2.0 * std::f64::consts::PI * x / half).cos();
             c[p - 1][t] = (sinc * w) as f32;
             sum += sinc * w;
         }
@@ -251,7 +276,13 @@ fn polyphase() -> [[f32; TAPS]; PHASES - 1] {
 
 impl TruePeakLimiter {
     /// `ceiling_db` e.g. -1.0 dBTP, `lookahead_ms` e.g. 1.5, `release_ms` e.g. 80.
-    pub fn new(channels: usize, sample_rate: f32, ceiling_db: f32, lookahead_ms: f32, release_ms: f32) -> Self {
+    pub fn new(
+        channels: usize,
+        sample_rate: f32,
+        ceiling_db: f32,
+        lookahead_ms: f32,
+        release_ms: f32,
+    ) -> Self {
         let lookahead = ((sample_rate * lookahead_ms / 1000.0) as usize).max(TAPS);
         // The peak estimate refers to the centre of the 16-sample history,
         // TAPS/2 samples back; the audio is delayed by that much extra, and the
@@ -304,7 +335,9 @@ impl TruePeakLimiter {
             for c in 0..ch {
                 let h = &self.hist[c * TAPS..(c + 1) * TAPS];
                 // the two centre samples…
-                peak = peak.max(h[(oldest + TAPS / 2 - 1) % TAPS].abs()).max(h[(oldest + TAPS / 2) % TAPS].abs());
+                peak = peak
+                    .max(h[(oldest + TAPS / 2 - 1) % TAPS].abs())
+                    .max(h[(oldest + TAPS / 2) % TAPS].abs());
                 // …and the three points between them
                 for p in 0..PHASES - 1 {
                     let mut acc = 0f32;
@@ -315,7 +348,11 @@ impl TruePeakLimiter {
                 }
             }
             self.hist_pos = (self.hist_pos + 1) % TAPS;
-            let target = if peak > self.ceiling { self.ceiling / peak } else { 1.0 };
+            let target = if peak > self.ceiling {
+                self.ceiling / peak
+            } else {
+                1.0
+            };
 
             // 2. sliding minimum over the last lookahead+1 targets
             while self.dq_len > 0 {
@@ -337,7 +374,11 @@ impl TruePeakLimiter {
             let m = self.dq_val[self.dq_head];
 
             // 3. release (only slows rising gain, so it never breaks the guarantee)
-            self.released = if m < self.released { m } else { m + (self.released - m) * self.release_coeff };
+            self.released = if m < self.released {
+                m
+            } else {
+                m + (self.released - m) * self.release_coeff
+            };
 
             // 4. box filter of length lookahead
             self.box_sum += self.released as f64 - self.box_buf[self.box_pos] as f64;
@@ -401,7 +442,9 @@ mod tests {
         if x.len() <= 2 * half + 2 {
             return x.iter().fold(0f32, |m, v| m.max(v.abs()));
         }
-        let mut peak = x[half..x.len() - half].iter().fold(0f32, |m, v| m.max(v.abs())) as f64;
+        let mut peak = x[half..x.len() - half]
+            .iter()
+            .fold(0f32, |m, v| m.max(v.abs())) as f64;
         let beta = 7.0;
         let norm = bessel_i0(beta);
         let mut coeffs = vec![0f64; 2 * half + 2];
@@ -421,7 +464,11 @@ mod tests {
                 *c /= sum;
             }
             for i in half..x.len() - half - 1 {
-                let acc: f64 = coeffs.iter().enumerate().map(|(m, c)| x[i - half + m] as f64 * c).sum();
+                let acc: f64 = coeffs
+                    .iter()
+                    .enumerate()
+                    .map(|(m, c)| x[i - half + m] as f64 * c)
+                    .sum();
                 peak = peak.max(acc.abs());
             }
         }
@@ -431,7 +478,11 @@ mod tests {
     #[test]
     fn reference_meter_is_accurate() {
         for f in [1000.0f64, 8184.0, 12728.0, 16000.0, 18000.0] {
-            let x: Vec<f32> = (0..800).map(|i| (0.5 * (2.0 * std::f64::consts::PI * f * i as f64 / 48000.0 + 0.3).sin()) as f32).collect();
+            let x: Vec<f32> = (0..800)
+                .map(|i| {
+                    (0.5 * (2.0 * std::f64::consts::PI * f * i as f64 / 48000.0 + 0.3).sin()) as f32
+                })
+                .collect();
             let err = lin_to_db(reference_true_peak(&x) / 0.5);
             assert!(err.abs() < 0.02, "{f} Hz: {err} dB");
         }
@@ -458,7 +509,9 @@ mod tests {
     fn limiter_is_transparent_below_ceiling() {
         let mut l = TruePeakLimiter::new(2, 48000.0, -1.0, 1.5, 80.0);
         let lat = l.latency();
-        let input: Vec<f32> = (0..9600).map(|i| 0.5 * ((i / 2) as f32 * 0.05).sin()).collect();
+        let input: Vec<f32> = (0..9600)
+            .map(|i| 0.5 * ((i / 2) as f32 * 0.05).sin())
+            .collect();
         let mut out = input.clone();
         l.process(&mut out);
         for i in (lat * 2)..input.len() {
@@ -470,13 +523,21 @@ mod tests {
     fn limiter_catches_intersample_peaks() {
         // fs/4 sine at 45° phase: samples are ±0.707·A, true peak is A.
         let a = 1.0f32;
-        let input: Vec<f32> = (0..4800).map(|i| a * (std::f32::consts::FRAC_PI_2 * i as f32 + std::f32::consts::FRAC_PI_4).sin()).collect();
+        let input: Vec<f32> = (0..4800)
+            .map(|i| {
+                a * (std::f32::consts::FRAC_PI_2 * i as f32 + std::f32::consts::FRAC_PI_4).sin()
+            })
+            .collect();
         assert!(input.iter().fold(0f32, |m, v| m.max(v.abs())) < 0.75);
         let mut l = TruePeakLimiter::new(1, 48000.0, -1.0, 1.5, 80.0);
         let mut out = input.clone();
         l.process(&mut out);
         let tp = reference_true_peak(&out[200..]);
-        assert!(lin_to_db(tp) <= -1.0 + 0.02, "true peak {} dB", lin_to_db(tp));
+        assert!(
+            lin_to_db(tp) <= -1.0 + 0.02,
+            "true peak {} dB",
+            lin_to_db(tp)
+        );
     }
 
     proptest! {
@@ -537,4 +598,3 @@ mod tests {
         }
     }
 }
-

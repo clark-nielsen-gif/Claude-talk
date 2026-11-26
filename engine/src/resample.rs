@@ -47,10 +47,23 @@ impl AdaptiveResampler {
     /// * `out_rate` – the output's sample rate (48 000 inside the engine).
     /// * `target_ms` – how much audio to keep buffered (latency vs. safety).
     /// * `blocks_per_second` – how often `pull` is called.
-    pub fn new(channels: usize, in_rate: u32, out_rate: u32, target_ms: f64, blocks_per_second: f64) -> Self {
+    pub fn new(
+        channels: usize,
+        in_rate: u32,
+        out_rate: u32,
+        target_ms: f64,
+        blocks_per_second: f64,
+    ) -> Self {
         let nominal = out_rate as f64 / in_rate as f64;
-        let inner = Async::<f32>::new_poly(nominal, 1.0 + 0.01, PolynomialDegree::Cubic, CHUNK, channels, FixedAsync::Output)
-            .expect("valid resampler parameters");
+        let inner = Async::<f32>::new_poly(
+            nominal,
+            1.0 + 0.01,
+            PolynomialDegree::Cubic,
+            CHUNK,
+            channels,
+            FixedAsync::Output,
+        )
+        .expect("valid resampler parameters");
         let target_frames = ((in_rate as f64) * target_ms / 1000.0).round().max(1.0) as usize;
         let in_max = inner.input_frames_max();
         AdaptiveResampler {
@@ -89,8 +102,11 @@ impl AdaptiveResampler {
     fn adapt_when_stable(&mut self) {
         // After a minute without trouble, win back 1 ms of latency.
         self.blocks_since_underrun += 1;
-        if self.target_frames > self.min_target && self.blocks_since_underrun as f64 > 60.0 * self.blocks_per_second {
-            self.target_frames = (self.target_frames - (self.in_rate as usize / 1000)).max(self.min_target);
+        if self.target_frames > self.min_target
+            && self.blocks_since_underrun as f64 > 60.0 * self.blocks_per_second
+        {
+            self.target_frames =
+                (self.target_frames - (self.in_rate as usize / 1000)).max(self.min_target);
             self.drift.set_target(self.target_frames as f64);
             self.blocks_since_underrun = 0;
         }
@@ -166,9 +182,14 @@ impl AdaptiveResampler {
                 self.in_buf[a.len()..a.len() + b.len()].copy_from_slice(b);
                 chunk.commit_all();
                 let out_frames = self.out_buf.len() / ch;
-                let input = InterleavedSlice::new(&self.in_buf[..need * ch], ch, need).expect("in adapter");
-                let mut output = InterleavedSlice::new_mut(&mut self.out_buf, ch, out_frames).expect("out adapter");
-                let (_, produced) = self.inner.process_into_buffer(&input, &mut output, None).unwrap_or_default();
+                let input =
+                    InterleavedSlice::new(&self.in_buf[..need * ch], ch, need).expect("in adapter");
+                let mut output = InterleavedSlice::new_mut(&mut self.out_buf, ch, out_frames)
+                    .expect("out adapter");
+                let (_, produced) = self
+                    .inner
+                    .process_into_buffer(&input, &mut output, None)
+                    .unwrap_or_default();
                 self.out_len = produced * ch;
                 self.out_pos = 0;
                 if produced == 0 {
@@ -177,7 +198,8 @@ impl AdaptiveResampler {
                 }
             }
             let n = (self.out_len - self.out_pos).min(wanted - written);
-            out[written..written + n].copy_from_slice(&self.out_buf[self.out_pos..self.out_pos + n]);
+            out[written..written + n]
+                .copy_from_slice(&self.out_buf[self.out_pos..self.out_pos + n]);
             self.out_pos += n;
             written += n;
         }
@@ -243,12 +265,20 @@ mod tests {
         // after a 10 ms pull, about (15 - 10) ms of margin remains buffered
         let fill_ms = cons.slots() as f64 / 44.1;
         assert!(fill_ms > 1.0 && fill_ms < 30.0, "fill {fill_ms} ms");
-        assert!((r.drift().drift_ppm() - 300.0).abs() < 30.0, "ppm {}", r.drift().drift_ppm());
+        assert!(
+            (r.drift().drift_ppm() - 300.0).abs() < 30.0,
+            "ppm {}",
+            r.drift().drift_ppm()
+        );
         // the tone is still a clean 1 kHz (other bins far below)
         let main = tone_level(&last, 1000.0 * (1.0 + 300e-6), 48000.0);
         let off = tone_level(&last, 1500.0, 48000.0);
         assert!(main > 0.4, "main {main}");
-        assert!(20.0 * (off / main).log10() < -60.0, "spur {} dB", 20.0 * (off / main).log10());
+        assert!(
+            20.0 * (off / main).log10() < -60.0,
+            "spur {} dB",
+            20.0 * (off / main).log10()
+        );
     }
 
     /// The CI failure scenario: a device that delivers 22 ms packets and
@@ -289,7 +319,10 @@ mod tests {
         let f = 1000.0 * (1.0 - 557e-6);
         assert_eq!(skipped, 0);
         let main = 20.0 * tone_level(&tail, f, 48000.0).log10();
-        assert!(main > -6.5 && main < -5.5, "level {main} dB (expected -6.0)");
+        assert!(
+            main > -6.5 && main < -5.5,
+            "level {main} dB (expected -6.0)"
+        );
     }
 
     #[test]
@@ -311,14 +344,22 @@ mod tests {
                 let _ = prod.push(v);
             }
             r.pull(&mut cons, &mut out);
-            assert!(cons.slots() < 48 * 40, "buffered {} ms at block {i}", cons.slots() / 48);
+            assert!(
+                cons.slots() < 48 * 40,
+                "buffered {} ms at block {i}",
+                cons.slots() / 48
+            );
             if i >= 1900 {
                 last.extend_from_slice(&out);
             }
         }
         // pitch is right: the tone sits at 1000 Hz
         assert!(tone_level(&last, 1000.0, 48000.0) > 0.4);
-        assert!(r.drift().drift_ppm().abs() < 100.0, "ppm {}", r.drift().drift_ppm());
+        assert!(
+            r.drift().drift_ppm().abs() < 100.0,
+            "ppm {}",
+            r.drift().drift_ppm()
+        );
     }
 
     #[test]

@@ -38,10 +38,10 @@ jobs:
           npm run build
       - name: Build app (CI test mode) and test tool
         run: |
-          cargo build -p claude-talk --release --no-default-features --features "ci-testpage custom-protocol"
-          cargo build -p ct-audiotest --release
+          cargo build -p claude-talk --profile ci --no-default-features --features "ci-testpage custom-protocol"
+          cargo build -p ct-audiotest --profile ci
       - name: App unit tests
-        run: cargo test -p claude-talk --release --no-default-features --features ci-testpage
+        run: cargo test -p claude-talk --profile ci --no-default-features --features ci-testpage
       - name: Install VB-CABLE (as the product does)
         shell: powershell
         run: ci/fixtures/install-vbcable.ps1
@@ -51,7 +51,7 @@ jobs:
       - name: End-to-end test
         shell: powershell
         run: |
-          target/release/ct-audiotest.exe e2e --app target/release/claude-talk.exe --sink 'Virtual Audio' --out results
+          target/ci/ct-audiotest.exe e2e --app target/ci/claude-talk.exe --sink 'Virtual Audio' --out results
           if ($LASTEXITCODE -ne 0) { throw 'end-to-end test failed' }
       - name: Publish results
         if: always()

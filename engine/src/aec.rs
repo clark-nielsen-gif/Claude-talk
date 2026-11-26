@@ -25,7 +25,10 @@ impl EchoReducer {
             .enable_high_pass_filter(true)
             .build()
             .map_err(|e| format!("{e:?}"))?;
-        Ok(EchoReducer { pipeline, out: vec![0.0; FRAME] })
+        Ok(EchoReducer {
+            pipeline,
+            out: vec![0.0; FRAME],
+        })
     }
 
     /// `reference`: what is being played (10 ms); `mic`: what was recorded
@@ -95,7 +98,49 @@ mod tests {
         let near_before = tone_db(&mic_tail, 2500.0, 48000.0);
         let near_after = tone_db(&out_tail, 2500.0, 48000.0);
         eprintln!("echo 440 Hz: {before:.1} → {after:.1} dB; near end 2500 Hz: {near_before:.1} → {near_after:.1} dB");
-        assert!(after < before - 15.0, "echo only reduced from {before:.1} to {after:.1} dB");
-        assert!(near_after > near_before - 6.0, "near-end voice damaged: {near_before:.1} → {near_after:.1} dB");
+        assert!(
+            after < before - 15.0,
+            "echo only reduced from {before:.1} to {after:.1} dB"
+        );
+        assert!(
+            near_after > near_before - 6.0,
+            "near-end voice damaged: {near_before:.1} → {near_after:.1} dB"
+        );
+    }
+}
+
+#[cfg(test)]
+mod passthrough_tests {
+    use super::*;
+    use crate::analysis::{tone_db, Sine};
+
+    /// Steady far-end tones that never reach the microphone must not make
+    /// the reducer swallow the user's (steady) voice.
+    #[test]
+    fn keeps_the_user_when_there_is_no_echo() {
+        let mut aec = EchoReducer::new().expect("aec");
+        let mut f1 = Sine::new(440.0, 48000.0, 0.3);
+        let mut f2 = Sine::new(1000.0, 48000.0, 0.3);
+        let mut near = Sine::new(2500.0, 48000.0, 0.3);
+        let mut mic_tail = Vec::new();
+        let mut out_tail = Vec::new();
+        for i in 0..800 {
+            let mut a = vec![0f32; FRAME];
+            let mut b = vec![0f32; FRAME];
+            f1.fill(&mut a, 1);
+            f2.fill(&mut b, 1);
+            let r: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x + y).collect();
+            let mut m = vec![0f32; FRAME];
+            near.fill(&mut m, 1);
+            let out = aec.process(&r, &m).to_vec();
+            if i >= 600 {
+                mic_tail.extend_from_slice(&m);
+                out_tail.extend_from_slice(&out);
+            }
+        }
+        let b = tone_db(&mic_tail, 2500.0, 48000.0);
+        let a = tone_db(&out_tail, 2500.0, 48000.0);
+        eprintln!("user 2500 Hz: {b:.1} → {a:.1} dB");
+        assert!(a > b - 6.0, "user's voice removed: {b:.1} → {a:.1} dB");
     }
 }

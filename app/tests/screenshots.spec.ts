@@ -6,7 +6,7 @@ import { test } from '@playwright/test';
 const scenarios = [
   'onboarding-welcome', 'onboarding-setup', 'onboarding-ready',
   'main-ok', 'main-off', 'main-muted', 'main-claude-closed', 'main-claude-not-listening',
-  'main-discord-closed', 'main-discord-wrong-mic', 'main-discord-restart', 'main-speakers',
+  'main-discord-closed', 'main-discord-wrong-mic', 'main-discord-restart', 'main-speakers', 'main-update',
   'error-mic-blocked', 'error-mic-missing', 'error-cable-missing', 'error-unsupported',
   'advanced', 'settings', 'help',
 ];

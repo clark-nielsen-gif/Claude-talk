@@ -19,8 +19,10 @@ function useSpeaking(rms: number): boolean {
 
 export function Home({ info }: { info: AppInfo }) {
   const t = useT();
-  const { config, status, update } = useApp();
+  const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
+  const [update, setUpdate] = useState<string | null>(null);
+  useEffect(() => api.onUpdate(setUpdate), []);
   const s = status;
   const quiet = { peak: 0, rms: 0 };
   const speaking = useSpeaking(s?.mic.rms ?? 0);
@@ -34,6 +36,7 @@ export function Home({ info }: { info: AppInfo }) {
   }
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
+  if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} />);
 
   // --- Discord card state
@@ -58,7 +61,7 @@ export function Home({ info }: { info: AppInfo }) {
           <h1 id="switch-title">{t.main.switchTitle}</h1>
           <p className="muted">{on ? t.main.switchOn : t.main.switchOff}</p>
         </div>
-        <Switch on={on} label={t.main.switchTitle} onChange={(v) => update({ claudeInDiscord: v })} />
+        <Switch on={on} label={t.main.switchTitle} onChange={(v) => updateConfig({ claudeInDiscord: v })} />
       </section>
 
       {errors}
@@ -72,7 +75,7 @@ export function Home({ info }: { info: AppInfo }) {
             ? <Check state="warn">{t.main.micMuted}</Check>
             : speaking ? <Check state="ok">{t.main.weHearYou}</Check> : <Check state="wait">{t.main.speakToTest}</Check>}
           <div className="actions">
-            <button className="iconbtn" aria-pressed={config.micMuted} onClick={() => update({ micMuted: !config.micMuted })}>
+            <button className="iconbtn" aria-pressed={config.micMuted} onClick={() => updateConfig({ micMuted: !config.micMuted })}>
               {config.micMuted ? Icon.micOff() : Icon.mic()} {config.micMuted ? t.main.unmuteMe : t.main.muteMe}
             </button>
           </div>
@@ -86,7 +89,7 @@ export function Home({ info }: { info: AppInfo }) {
           <div className="actions">
             {!s?.claudeWindowOpen
               ? <button className="btn primary" onClick={() => api.openClaude()}>{t.main.openClaude}</button>
-              : <button className="iconbtn" title={t.main.muteClaudeHint} aria-pressed={config.claudeToDiscordMuted} disabled={!on} onClick={() => update({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
+              : <button className="iconbtn" title={t.main.muteClaudeHint} aria-pressed={config.claudeToDiscordMuted} disabled={!on} onClick={() => updateConfig({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
                   {config.claudeToDiscordMuted ? Icon.speakerOff() : Icon.speaker()} {config.claudeToDiscordMuted ? t.main.unmuteClaude : t.main.muteClaude}
                 </button>}
           </div>

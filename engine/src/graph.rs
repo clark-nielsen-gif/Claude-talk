@@ -74,7 +74,10 @@ pub struct Route {
 
 impl Default for Route {
     fn default() -> Self {
-        Route { gain_db: 0.0, muted: false }
+        Route {
+            gain_db: 0.0,
+            muted: false,
+        }
     }
 }
 
@@ -85,9 +88,14 @@ pub enum Rejection {
     UnknownSource(SourceId),
     UnknownOutput(OutputId),
     /// The party would hear itself.
-    SelfHearing { party: Party, locked: bool },
+    SelfHearing {
+        party: Party,
+        locked: bool,
+    },
     /// The route would close a loop; the path is listed by labels.
-    Feedback { path: Vec<String> },
+    Feedback {
+        path: Vec<String>,
+    },
 }
 
 impl Rejection {
@@ -109,7 +117,11 @@ impl fmt::Display for Rejection {
             Rejection::SelfHearing { party, locked } => write!(
                 f,
                 "{party} would hear itself{}",
-                if *locked { " (locked; unlock in advanced mode)" } else { "" }
+                if *locked {
+                    " (locked; unlock in advanced mode)"
+                } else {
+                    ""
+                }
             ),
             Rejection::Feedback { path } => write!(f, "feedback loop: {}", path.join(" -> ")),
         }
@@ -191,7 +203,12 @@ impl RoutingGraph {
         }
         let mut next = self.clone();
         next.sources.insert(source.id, source.clone());
-        let ids: Vec<_> = next.routes.keys().copied().filter(|&(s, _)| s == source.id).collect();
+        let ids: Vec<_> = next
+            .routes
+            .keys()
+            .copied()
+            .filter(|&(s, _)| s == source.id)
+            .collect();
         for (s, o) in ids {
             next.check_self_hearing(s, o)?;
         }
@@ -223,7 +240,10 @@ impl RoutingGraph {
 
     fn check_self_hearing(&self, s: SourceId, o: OutputId) -> Result<(), Rejection> {
         match self.self_hearing_party(s, o) {
-            Some(party) if !self.self_hearing_unlocked => Err(Rejection::SelfHearing { party, locked: true }),
+            Some(party) if !self.self_hearing_unlocked => Err(Rejection::SelfHearing {
+                party,
+                locked: true,
+            }),
             _ => Ok(()),
         }
     }
@@ -249,7 +269,12 @@ impl RoutingGraph {
         Ok(self.self_hearing_party(s, o))
     }
 
-    pub fn set_route(&mut self, s: SourceId, o: OutputId, route: Route) -> Result<Option<Party>, Rejection> {
+    pub fn set_route(
+        &mut self,
+        s: SourceId,
+        o: OutputId,
+        route: Route,
+    ) -> Result<Option<Party>, Rejection> {
         let warn = self.check_route(s, o)?;
         self.routes.insert((s, o), route);
         Ok(warn)
@@ -261,14 +286,27 @@ impl RoutingGraph {
 
     fn label(&self, n: Node) -> String {
         match n {
-            Node::S(id) => self.sources.get(&id).map(|s| s.label.clone()).unwrap_or_default(),
-            Node::O(id) => self.outputs.get(&id).map(|o| o.label.clone()).unwrap_or_default(),
+            Node::S(id) => self
+                .sources
+                .get(&id)
+                .map(|s| s.label.clone())
+                .unwrap_or_default(),
+            Node::O(id) => self
+                .outputs
+                .get(&id)
+                .map(|o| o.label.clone())
+                .unwrap_or_default(),
         }
     }
 
     fn successors(&self, n: Node) -> Vec<Node> {
         match n {
-            Node::S(s) => self.routes.keys().filter(|(rs, _)| *rs == s).map(|&(_, o)| Node::O(o)).collect(),
+            Node::S(s) => self
+                .routes
+                .keys()
+                .filter(|(rs, _)| *rs == s)
+                .map(|&(_, o)| Node::O(o))
+                .collect(),
             Node::O(o) => self
                 .sources
                 .values()
@@ -328,7 +366,10 @@ impl RoutingGraph {
             return false;
         }
         self.self_hearing_unlocked
-            || self.routes.keys().all(|&(s, o)| self.self_hearing_party(s, o).is_none())
+            || self
+                .routes
+                .keys()
+                .all(|&(s, o)| self.self_hearing_party(s, o).is_none())
     }
 }
 
@@ -351,17 +392,49 @@ impl RoutingGraph {
         use ids::*;
         let mut g = RoutingGraph::new();
         let set = |p: &[Party]| p.iter().cloned().collect::<BTreeSet<_>>();
-        g.add_output(Output { id: TO_DISCORD, label: "Til Discord".into(), heard_by: set(&[Party::Discord]) });
-        g.add_output(Output { id: TO_CLAUDE, label: "Til Claude".into(), heard_by: set(&[Party::Claude]) });
-        g.add_output(Output { id: MONITOR, label: "Lyt med".into(), heard_by: set(&[Party::User]) });
+        g.add_output(Output {
+            id: TO_DISCORD,
+            label: "Til Discord".into(),
+            heard_by: set(&[Party::Discord]),
+        });
+        g.add_output(Output {
+            id: TO_CLAUDE,
+            label: "Til Claude".into(),
+            heard_by: set(&[Party::Claude]),
+        });
+        g.add_output(Output {
+            id: MONITOR,
+            label: "Lyt med".into(),
+            heard_by: set(&[Party::User]),
+        });
         let none = BTreeSet::new;
-        g.add_source(Source { id: MIC, label: "Mikrofon".into(), parties: set(&[Party::User]), contains_outputs: none() })
-            .expect("mic");
-        g.add_source(Source { id: CLAUDE, label: "Claude".into(), parties: set(&[Party::Claude]), contains_outputs: none() })
-            .expect("claude");
-        g.add_source(Source { id: DISCORD, label: "Discord".into(), parties: set(&[Party::Discord]), contains_outputs: none() })
-            .expect("discord");
-        for (s, o) in [(MIC, TO_DISCORD), (CLAUDE, TO_DISCORD), (MIC, TO_CLAUDE), (DISCORD, TO_CLAUDE)] {
+        g.add_source(Source {
+            id: MIC,
+            label: "Mikrofon".into(),
+            parties: set(&[Party::User]),
+            contains_outputs: none(),
+        })
+        .expect("mic");
+        g.add_source(Source {
+            id: CLAUDE,
+            label: "Claude".into(),
+            parties: set(&[Party::Claude]),
+            contains_outputs: none(),
+        })
+        .expect("claude");
+        g.add_source(Source {
+            id: DISCORD,
+            label: "Discord".into(),
+            parties: set(&[Party::Discord]),
+            contains_outputs: none(),
+        })
+        .expect("discord");
+        for (s, o) in [
+            (MIC, TO_DISCORD),
+            (CLAUDE, TO_DISCORD),
+            (MIC, TO_CLAUDE),
+            (DISCORD, TO_CLAUDE),
+        ] {
             g.set_route(s, o, Route::default()).expect("default route");
         }
         g
@@ -388,18 +461,37 @@ mod tests {
     #[test]
     fn claude_to_claude_and_discord_to_discord_are_locked() {
         let mut g = RoutingGraph::claude_talk_default();
-        let e = g.set_route(CLAUDE, TO_CLAUDE, Route::default()).unwrap_err();
-        assert_eq!(e, Rejection::SelfHearing { party: Party::Claude, locked: true });
+        let e = g
+            .set_route(CLAUDE, TO_CLAUDE, Route::default())
+            .unwrap_err();
+        assert_eq!(
+            e,
+            Rejection::SelfHearing {
+                party: Party::Claude,
+                locked: true
+            }
+        );
         assert_eq!(e.key(), "route.selfHearingLocked");
-        let e = g.set_route(DISCORD, TO_DISCORD, Route::default()).unwrap_err();
-        assert_eq!(e, Rejection::SelfHearing { party: Party::Discord, locked: true });
+        let e = g
+            .set_route(DISCORD, TO_DISCORD, Route::default())
+            .unwrap_err();
+        assert_eq!(
+            e,
+            Rejection::SelfHearing {
+                party: Party::Discord,
+                locked: true
+            }
+        );
     }
 
     #[test]
     fn unlock_allows_with_warning_and_relock_removes() {
         let mut g = RoutingGraph::claude_talk_default();
         g.set_self_hearing_unlocked(true);
-        assert_eq!(g.set_route(CLAUDE, TO_CLAUDE, Route::default()), Ok(Some(Party::Claude)));
+        assert_eq!(
+            g.set_route(CLAUDE, TO_CLAUDE, Route::default()),
+            Ok(Some(Party::Claude))
+        );
         g.set_self_hearing_unlocked(false);
         assert!(g.route(CLAUDE, TO_CLAUDE).is_none());
         assert!(g.is_valid());
@@ -435,7 +527,10 @@ mod tests {
             contains_outputs: BTreeSet::from([TO_CLAUDE]),
         })
         .unwrap();
-        assert!(matches!(g.set_route(11, TO_DISCORD, Route::default()), Err(Rejection::Feedback { .. })));
+        assert!(matches!(
+            g.set_route(11, TO_DISCORD, Route::default()),
+            Err(Rejection::Feedback { .. })
+        ));
         assert!(g.is_valid());
     }
 
@@ -449,9 +544,18 @@ mod tests {
             contains_outputs: BTreeSet::from([MONITOR]),
         })
         .unwrap();
-        assert!(matches!(g.set_route(20, TO_CLAUDE, Route::default()), Err(Rejection::SelfHearing { .. })));
-        assert!(matches!(g.set_route(20, TO_DISCORD, Route::default()), Err(Rejection::SelfHearing { .. })));
-        assert!(matches!(g.set_route(20, MONITOR, Route::default()), Err(Rejection::Feedback { .. })));
+        assert!(matches!(
+            g.set_route(20, TO_CLAUDE, Route::default()),
+            Err(Rejection::SelfHearing { .. })
+        ));
+        assert!(matches!(
+            g.set_route(20, TO_DISCORD, Route::default()),
+            Err(Rejection::SelfHearing { .. })
+        ));
+        assert!(matches!(
+            g.set_route(20, MONITOR, Route::default()),
+            Err(Rejection::Feedback { .. })
+        ));
     }
 
     #[test]
@@ -473,8 +577,8 @@ mod tests {
 
     mod props {
         use super::*;
-        use proptest::prelude::*;
         use proptest::prelude::prop;
+        use proptest::prelude::*;
 
         #[derive(Clone, Debug)]
         enum Op {
@@ -488,7 +592,11 @@ mod tests {
             prop_oneof![
                 (0u32..6, 0u32..4).prop_map(|(s, o)| Op::Route(s, o)),
                 (0u32..6, 0u32..4).prop_map(|(s, o)| Op::Unroute(s, o)),
-                (0u32..6, prop::collection::vec(0u32..4, 0..3), prop::collection::vec(0u8..4, 0..3))
+                (
+                    0u32..6,
+                    prop::collection::vec(0u32..4, 0..3),
+                    prop::collection::vec(0u8..4, 0..3)
+                )
                     .prop_map(|(s, c, p)| Op::AddSource(s, c, p)),
                 any::<bool>().prop_map(Op::Unlock),
             ]

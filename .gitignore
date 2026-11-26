@@ -1,0 +1,10 @@
+/target/
+**/target/
+node_modules/
+/app/dist/
+/app/test-results/
+/app/playwright-report/
+/dist-release/
+*.key
+*.pem
+.env

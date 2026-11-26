@@ -2,9 +2,15 @@
 //! [`RoutingGraph`] rules. Used by the app and by the CI test tool.
 
 use super::devices::{self, DeviceSelector, Flow, OWN_VIRTUAL_DEVICES};
-use super::stream::{spawn_capture, spawn_render, CaptureTarget, ProcessTarget, StreamHandle, StreamState};
-use crate::graph::{ids, Output, OutputId, Party, Rejection, Route, RoutingGraph, Source, SourceId};
-use crate::mixer::{connect, disconnect, FanoutHandle, GainParams, MixerHandle, OutputMixer, SourceFanout, TapStats};
+use super::stream::{
+    spawn_capture, spawn_render, CaptureTarget, ProcessTarget, StreamHandle, StreamState,
+};
+use crate::graph::{
+    ids, Output, OutputId, Party, Rejection, Route, RoutingGraph, Source, SourceId,
+};
+use crate::mixer::{
+    connect, disconnect, FanoutHandle, GainParams, MixerHandle, OutputMixer, SourceFanout, TapStats,
+};
 use crate::{ENGINE_CHANNELS, ENGINE_RATE};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -17,12 +23,27 @@ pub const ROUTE_BUFFER_MS: f64 = 20.0;
 
 /// Executables whose sound is "Discord".
 pub fn discord_executables() -> Vec<String> {
-    ["discord.exe", "discordptb.exe", "discordcanary.exe", "discorddevelopment.exe"].iter().map(|s| s.to_string()).collect()
+    [
+        "discord.exe",
+        "discordptb.exe",
+        "discordcanary.exe",
+        "discorddevelopment.exe",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 /// Render endpoint names of the virtual cable, most preferred first.
 pub fn cable_render_patterns() -> Vec<String> {
-    ["claude talk – intern", "cable input", "vb-audio virtual cable"].iter().map(|s| s.to_string()).collect()
+    [
+        "claude talk – intern",
+        "cable input",
+        "vb-audio virtual cable",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -126,6 +147,8 @@ pub struct HostSnapshot {
     pub sources: Vec<SourceSnapshot>,
     pub outputs: Vec<OutputSnapshot>,
     pub routes: Vec<RouteSnapshot>,
+    /// Echo reduction's output (peak since last call, frames produced).
+    pub echo: Option<(f32, u64)>,
 }
 
 pub struct AudioHost {
@@ -164,7 +187,12 @@ impl Drop for AecStage {
 fn info(s: &StreamHandle) -> StreamInfo {
     StreamInfo {
         state: s.status.state(),
-        device: s.status.device_name.lock().map(|n| n.clone()).unwrap_or_default(),
+        device: s
+            .status
+            .device_name
+            .lock()
+            .map(|n| n.clone())
+            .unwrap_or_default(),
         pid: s.status.pid.load(Ordering::Relaxed),
         last_error: s.status.last_error.load(Ordering::Relaxed) as u32,
         restarts: s.status.restarts.load(Ordering::Relaxed),
@@ -188,19 +216,56 @@ impl AudioHost {
     pub fn standard(cfg: HostConfig) -> Self {
         let mut h = AudioHost::empty();
         let set = |p: &[Party]| p.iter().cloned().collect::<BTreeSet<_>>();
-        h.add_output(Output { id: ids::TO_DISCORD, label: "Til Discord".into(), heard_by: set(&[Party::Discord]) }, OutputKind::Device(cfg.to_discord));
-        h.add_output(Output { id: ids::TO_CLAUDE, label: "Til Claude".into(), heard_by: set(&[Party::Claude]) }, OutputKind::Pulled { channels: 1 });
+        h.add_output(
+            Output {
+                id: ids::TO_DISCORD,
+                label: "Til Discord".into(),
+                heard_by: set(&[Party::Discord]),
+            },
+            OutputKind::Device(cfg.to_discord),
+        );
+        h.add_output(
+            Output {
+                id: ids::TO_CLAUDE,
+                label: "Til Claude".into(),
+                heard_by: set(&[Party::Claude]),
+            },
+            OutputKind::Pulled { channels: 1 },
+        );
         let none = BTreeSet::new;
-        let _ = h.add_source(Source { id: ids::MIC, label: "Mikrofon".into(), parties: set(&[Party::User]), contains_outputs: none() }, cfg.mic);
         let _ = h.add_source(
-            Source { id: ids::CLAUDE, label: "Claude".into(), parties: set(&[Party::Claude]), contains_outputs: none() },
+            Source {
+                id: ids::MIC,
+                label: "Mikrofon".into(),
+                parties: set(&[Party::User]),
+                contains_outputs: none(),
+            },
+            cfg.mic,
+        );
+        let _ = h.add_source(
+            Source {
+                id: ids::CLAUDE,
+                label: "Claude".into(),
+                parties: set(&[Party::Claude]),
+                contains_outputs: none(),
+            },
             SourceKind::Program(ProcessTarget::Pid(cfg.claude_pid)),
         );
         let _ = h.add_source(
-            Source { id: ids::DISCORD, label: "Discord".into(), parties: set(&[Party::Discord]), contains_outputs: none() },
+            Source {
+                id: ids::DISCORD,
+                label: "Discord".into(),
+                parties: set(&[Party::Discord]),
+                contains_outputs: none(),
+            },
             SourceKind::Program(cfg.discord),
         );
-        for (s, o) in [(ids::MIC, ids::TO_DISCORD), (ids::CLAUDE, ids::TO_DISCORD), (ids::MIC, ids::TO_CLAUDE), (ids::DISCORD, ids::TO_CLAUDE)] {
+        for (s, o) in [
+            (ids::MIC, ids::TO_DISCORD),
+            (ids::CLAUDE, ids::TO_DISCORD),
+            (ids::MIC, ids::TO_CLAUDE),
+            (ids::DISCORD, ids::TO_CLAUDE),
+        ] {
             let _ = h.set_route(s, o, Route::default());
         }
         h
@@ -218,12 +283,24 @@ impl AudioHost {
             OutputKind::Device(sel) => {
                 let (mixer, handle) = OutputMixer::new(id, ENGINE_CHANNELS, 480);
                 let stream = spawn_render("out", sel, mixer);
-                self.outputs.insert(id, OutputEntry { handle, stream: Some(stream) });
+                self.outputs.insert(
+                    id,
+                    OutputEntry {
+                        handle,
+                        stream: Some(stream),
+                    },
+                );
             }
             OutputKind::Pulled { channels } => {
                 let (mixer, handle) = OutputMixer::new(id, channels, 480);
                 self.pulled.insert(id, mixer);
-                self.outputs.insert(id, OutputEntry { handle, stream: None });
+                self.outputs.insert(
+                    id,
+                    OutputEntry {
+                        handle,
+                        stream: None,
+                    },
+                );
             }
         }
     }
@@ -247,9 +324,21 @@ impl AudioHost {
             SourceKind::Program(p) => CaptureTarget::Process(p),
         };
         let stream = spawn_capture("src", target, fanout);
-        self.sources.insert(id, SourceEntry { handle, stream: Some(stream), _generator: None });
+        self.sources.insert(
+            id,
+            SourceEntry {
+                handle,
+                stream: Some(stream),
+                _generator: None,
+            },
+        );
         // re-wire existing routes of this source
-        let routes: Vec<(OutputId, Route)> = self.graph.routes().filter(|(s, _, _)| *s == id).map(|(_, o, r)| (o, r)).collect();
+        let routes: Vec<(OutputId, Route)> = self
+            .graph
+            .routes()
+            .filter(|(s, _, _)| *s == id)
+            .map(|(_, o, r)| (o, r))
+            .collect();
         for (o, r) in routes {
             self.wire(id, o, r);
         }
@@ -258,13 +347,24 @@ impl AudioHost {
 
     /// A source that generates audio itself (self-test tones). `gen` fills
     /// interleaved stereo 48 kHz.
-    pub fn add_generated_source(&mut self, spec: Source, gen: impl FnMut(&mut [f32]) + Send + 'static) -> Result<(), Rejection> {
+    pub fn add_generated_source(
+        &mut self,
+        spec: Source,
+        gen: impl FnMut(&mut [f32]) + Send + 'static,
+    ) -> Result<(), Rejection> {
         let id = spec.id;
         self.graph.add_source(spec)?;
         self.sources.remove(&id);
         let (fanout, handle) = SourceFanout::new(id, ENGINE_RATE);
         let g = crate::generator::Generator::spawn(fanout, gen);
-        self.sources.insert(id, SourceEntry { handle, stream: None, _generator: Some(g) });
+        self.sources.insert(
+            id,
+            SourceEntry {
+                handle,
+                stream: None,
+                _generator: Some(g),
+            },
+        );
         Ok(())
     }
 
@@ -272,7 +372,12 @@ impl AudioHost {
         if id == ids::MIC || id == ids::CLAUDE || id == ids::DISCORD {
             self.set_echo_reduction(false);
         }
-        let outs: Vec<OutputId> = self.routes.keys().filter(|(s, _)| *s == id).map(|&(_, o)| o).collect();
+        let outs: Vec<OutputId> = self
+            .routes
+            .keys()
+            .filter(|(s, _)| *s == id)
+            .map(|&(_, o)| o)
+            .collect();
         for o in outs {
             self.unwire(id, o);
         }
@@ -281,7 +386,12 @@ impl AudioHost {
     }
 
     pub fn remove_output(&mut self, id: OutputId) {
-        let srcs: Vec<SourceId> = self.routes.keys().filter(|(_, o)| *o == id).map(|&(s, _)| s).collect();
+        let srcs: Vec<SourceId> = self
+            .routes
+            .keys()
+            .filter(|(_, o)| *o == id)
+            .map(|&(s, _)| s)
+            .collect();
         for s in srcs {
             self.unwire(s, id);
         }
@@ -303,8 +413,12 @@ impl AudioHost {
 
     fn wire(&mut self, s: SourceId, o: OutputId, r: Route) {
         let params = GainParams::new(r.gain_db, r.muted);
-        let Some(mut out) = self.outputs.remove(&o) else { return };
-        let stats = self.route_source(s).map(|src| connect(src, &mut out.handle, params.clone(), ROUTE_BUFFER_MS));
+        let Some(mut out) = self.outputs.remove(&o) else {
+            return;
+        };
+        let stats = self
+            .route_source(s)
+            .map(|src| connect(src, &mut out.handle, params.clone(), ROUTE_BUFFER_MS));
         self.outputs.insert(o, out);
         if let Some(stats) = stats {
             self.routes.insert((s, o), RouteEntry { params, stats });
@@ -313,7 +427,9 @@ impl AudioHost {
 
     fn unwire(&mut self, s: SourceId, o: OutputId) {
         if self.routes.remove(&(s, o)).is_some() {
-            let Some(mut out) = self.outputs.remove(&o) else { return };
+            let Some(mut out) = self.outputs.remove(&o) else {
+                return;
+            };
             if let Some(src) = self.route_source(s) {
                 disconnect(src, &mut out.handle);
             }
@@ -331,7 +447,12 @@ impl AudioHost {
             return;
         }
         // the microphone's current routes move between raw and processed
-        let mic_routes: Vec<(OutputId, Route)> = self.graph.routes().filter(|(s, _, _)| *s == ids::MIC).map(|(_, o, r)| (o, r)).collect();
+        let mic_routes: Vec<(OutputId, Route)> = self
+            .graph
+            .routes()
+            .filter(|(s, _, _)| *s == ids::MIC)
+            .map(|(_, o, r)| (o, r))
+            .collect();
         for (o, _) in &mic_routes {
             self.unwire(ids::MIC, *o);
         }
@@ -362,11 +483,21 @@ impl AudioHost {
         let (mut ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
         let (mut fanout, processed) = SourceFanout::new(ids::MIC, ENGINE_RATE);
         if let Some(mic) = self.sources.get_mut(&ids::MIC) {
-            connect(&mut mic.handle, &mut mic_in, GainParams::new(0.0, false), ROUTE_BUFFER_MS);
+            connect(
+                &mut mic.handle,
+                &mut mic_in,
+                GainParams::new(0.0, false),
+                ROUTE_BUFFER_MS,
+            );
         }
         for s in [ids::CLAUDE, ids::DISCORD] {
             if let Some(src) = self.sources.get_mut(&s) {
-                connect(&mut src.handle, &mut ref_in, GainParams::new(0.0, false), ROUTE_BUFFER_MS);
+                connect(
+                    &mut src.handle,
+                    &mut ref_in,
+                    GainParams::new(0.0, false),
+                    ROUTE_BUFFER_MS,
+                );
             }
         }
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -379,7 +510,9 @@ impl AudioHost {
                 let mut reducer = match EchoReducer::new() {
                     Ok(r) => Some(r),
                     Err(e) => {
-                        log::warn!("echo reduction could not start ({e}); microphone passes through");
+                        log::warn!(
+                            "echo reduction could not start ({e}); microphone passes through"
+                        );
                         None
                     }
                 };
@@ -408,11 +541,22 @@ impl AudioHost {
             })
             .map_err(|e| e.to_string())?;
         log::info!("echo reduction on");
-        Ok(AecStage { processed, mic_in, ref_in, stop, thread: Some(thread) })
+        Ok(AecStage {
+            processed,
+            mic_in,
+            ref_in,
+            stop,
+            thread: Some(thread),
+        })
     }
 
     /// Adds or updates a route (refused if it breaks the echo/feedback rules).
-    pub fn set_route(&mut self, s: SourceId, o: OutputId, r: Route) -> Result<Option<Party>, Rejection> {
+    pub fn set_route(
+        &mut self,
+        s: SourceId,
+        o: OutputId,
+        r: Route,
+    ) -> Result<Option<Party>, Rejection> {
         let warn = self.graph.set_route(s, o, r)?;
         if let Some(e) = self.routes.get(&(s, o)) {
             e.params.gain_db.store(r.gain_db);
@@ -504,20 +648,34 @@ impl AudioHost {
             let (peak, rms) = s.handle.stats.meter.read();
             snap.sources.push(SourceSnapshot {
                 id: *id,
-                label: self.graph.source(*id).map(|x| x.label.clone()).unwrap_or_default(),
+                label: self
+                    .graph
+                    .source(*id)
+                    .map(|x| x.label.clone())
+                    .unwrap_or_default(),
                 peak,
                 rms,
                 muted: s.handle.params.muted.load(Ordering::Relaxed),
                 gain_db: s.handle.params.gain_db.load(),
                 overflow_frames: s.handle.stats.overflow_frames.load(Ordering::Relaxed),
-                stream: s.stream.as_ref().map(info).unwrap_or(StreamInfo { state: StreamState::Running, device: String::new(), pid: 0, last_error: 0, restarts: 0 }),
+                stream: s.stream.as_ref().map(info).unwrap_or(StreamInfo {
+                    state: StreamState::Running,
+                    device: String::new(),
+                    pid: 0,
+                    last_error: 0,
+                    restarts: 0,
+                }),
             });
         }
         for (id, o) in &self.outputs {
             let (peak, rms) = o.handle.stats.meter.read();
             snap.outputs.push(OutputSnapshot {
                 id: *id,
-                label: self.graph.output(*id).map(|x| x.label.clone()).unwrap_or_default(),
+                label: self
+                    .graph
+                    .output(*id)
+                    .map(|x| x.label.clone())
+                    .unwrap_or_default(),
                 peak,
                 rms,
                 muted: o.handle.params.muted.load(Ordering::Relaxed),
@@ -537,6 +695,12 @@ impl AudioHost {
                 buffered_ms: r.stats.buffered_ms.load(),
             });
         }
+        snap.echo = self.aec.as_ref().map(|a| {
+            (
+                a.processed.stats.meter.read().0,
+                a.processed.stats.captured_frames.load(Ordering::Relaxed),
+            )
+        });
         snap
     }
 }
@@ -549,5 +713,9 @@ pub fn is_own_device(name: &str) -> bool {
 
 /// Whether the virtual cable is installed (render side found).
 pub fn cable_installed() -> bool {
-    devices::resolve(&DeviceSelector::FirstMatching(Flow::Render, cable_render_patterns())).is_ok()
+    devices::resolve(&DeviceSelector::FirstMatching(
+        Flow::Render,
+        cable_render_patterns(),
+    ))
+    .is_ok()
 }

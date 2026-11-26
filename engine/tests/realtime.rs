@@ -81,7 +81,10 @@ fn audio_thread_paths_do_not_allocate() {
             out.render(&mut o);
         }
     });
-    assert_eq!(n, 0, "removing a route allocated/freed on the audio thread ({n})");
+    assert_eq!(
+        n, 0,
+        "removing a route allocated/freed on the audio thread ({n})"
+    );
     out_h.collect_garbage();
     cl_h.collect_garbage();
     connect(&mut cl_h, &mut out_h, GainParams::new(0.0, false), 20.0);

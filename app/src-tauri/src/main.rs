@@ -8,12 +8,14 @@ mod commands;
 mod config;
 mod discord;
 mod hotkeys;
+mod installer;
 mod logging;
 mod paths;
 mod report;
 mod selftest;
 mod state;
 mod tray;
+mod updates;
 
 use state::{AppState, Inner};
 use std::sync::atomic::Ordering;
@@ -42,6 +44,18 @@ fn main() {
         log::logger().flush();
         return;
     }
+    // Run elevated by the NSIS installer / uninstaller.
+    #[cfg(windows)]
+    for (flag, f) in [
+        ("--install-cable", installer::install_cable as fn() -> i32),
+        ("--uninstall-cleanup", installer::uninstall_cleanup),
+    ] {
+        if std::env::args().any(|a| a == flag) {
+            let code = f();
+            log::logger().flush();
+            std::process::exit(code);
+        }
+    }
     let config = config::Config::load(&paths::config_file());
     let started_minimized = std::env::args().any(|a| a == "--minimized");
     let state = Inner::new(config);
@@ -51,7 +65,10 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             commands::show_main(app.clone());
         }))
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(state);
@@ -73,6 +90,7 @@ fn main() {
             commands::set_route,
             commands::set_unlocked,
             commands::self_test,
+            updates::install_update,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -87,6 +105,7 @@ fn main() {
             if let Err(e) = hotkeys::register(&handle) {
                 log::warn!("hotkeys: {e}");
             }
+            updates::check_in_background(handle.clone());
             let autostart = handle.state::<AppState>().config.lock().map(|c| c.autostart).unwrap_or(true);
             autostart::apply(&handle, autostart);
             #[cfg(feature = "ci-testpage")]

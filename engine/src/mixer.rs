@@ -41,7 +41,10 @@ pub struct GainParams {
 
 impl GainParams {
     pub fn new(gain_db: f32, muted: bool) -> Arc<Self> {
-        Arc::new(GainParams { gain_db: AtomicF32::new(gain_db), muted: AtomicBool::new(muted) })
+        Arc::new(GainParams {
+            gain_db: AtomicF32::new(gain_db),
+            muted: AtomicBool::new(muted),
+        })
     }
     #[inline]
     fn linear(&self) -> f32 {
@@ -128,7 +131,11 @@ pub struct MixerHandle {
 impl OutputMixer {
     /// `channels` is the device's channel count; `block_frames` its typical
     /// period (used to tune drift control and buffer targets).
-    pub fn new(output: OutputId, channels: usize, block_frames: usize) -> (OutputMixer, MixerHandle) {
+    pub fn new(
+        output: OutputId,
+        channels: usize,
+        block_frames: usize,
+    ) -> (OutputMixer, MixerHandle) {
         TruePeakLimiter::warm_up();
         let (cmd_tx, cmd_rx) = rtrb::RingBuffer::new(64);
         let (gb_tx, gb_rx) = rtrb::RingBuffer::new(64);
@@ -148,7 +155,14 @@ impl OutputMixer {
             garbage: gb_tx,
             blocks_per_second: bps,
         };
-        let handle = MixerHandle { output, params, stats, commands: cmd_tx, garbage: gb_rx, blocks_per_second: bps };
+        let handle = MixerHandle {
+            output,
+            params,
+            stats,
+            commands: cmd_tx,
+            garbage: gb_rx,
+            blocks_per_second: bps,
+        };
         (mixer, handle)
     }
 
@@ -166,7 +180,11 @@ impl OutputMixer {
                 MixerCommand::AddTap(tap) => {
                     let src = tap.source;
                     // replace an existing tap for the same source
-                    if let Some(slot) = self.taps.iter_mut().find(|t| t.as_ref().is_some_and(|t| t.source == src)) {
+                    if let Some(slot) = self
+                        .taps
+                        .iter_mut()
+                        .find(|t| t.as_ref().is_some_and(|t| t.source == src))
+                    {
                         let old = slot.replace(tap);
                         self.discard(old);
                     } else if let Some(slot) = self.taps.iter_mut().find(|t| t.is_none()) {
@@ -177,7 +195,11 @@ impl OutputMixer {
                     }
                 }
                 MixerCommand::RemoveTap(src) => {
-                    if let Some(slot) = self.taps.iter_mut().find(|t| t.as_ref().is_some_and(|t| t.source == src)) {
+                    if let Some(slot) = self
+                        .taps
+                        .iter_mut()
+                        .find(|t| t.as_ref().is_some_and(|t| t.source == src))
+                    {
                         let old = slot.take();
                         self.discard(old);
                     }
@@ -227,7 +249,9 @@ impl OutputMixer {
             }
             done += frames;
         }
-        self.stats.rendered_frames.fetch_add(total as u64, Ordering::Relaxed);
+        self.stats
+            .rendered_frames
+            .fetch_add(total as u64, Ordering::Relaxed);
     }
 
     fn render_block(&mut self, frames: usize) {
@@ -238,14 +262,22 @@ impl OutputMixer {
             let scratch = &mut self.scratch[..n];
             let st = tap.resampler.pull(&mut tap.ring, scratch);
             if st.underrun_frames > 0 {
-                tap.stats.underrun_frames.fetch_add(st.underrun_frames as u64, Ordering::Relaxed);
+                tap.stats
+                    .underrun_frames
+                    .fetch_add(st.underrun_frames as u64, Ordering::Relaxed);
             }
             if st.skipped_frames > 0 {
-                tap.stats.skipped_frames.fetch_add(st.skipped_frames as u64, Ordering::Relaxed);
+                tap.stats
+                    .skipped_frames
+                    .fetch_add(st.skipped_frames as u64, Ordering::Relaxed);
             }
-            tap.stats.drift_ppm.store(tap.resampler.drift().drift_ppm() as f32);
+            tap.stats
+                .drift_ppm
+                .store(tap.resampler.drift().drift_ppm() as f32);
             tap.stats.target_ms.store(tap.resampler.target_ms());
-            tap.stats.buffered_ms.store(tap.ring.slots() as f32 / ENGINE_CHANNELS as f32 / tap.in_rate as f32 * 1000.0);
+            tap.stats.buffered_ms.store(
+                tap.ring.slots() as f32 / ENGINE_CHANNELS as f32 / tap.in_rate as f32 * 1000.0,
+            );
             tap.gain.set_target(tap.params.linear());
             tap.gain.mix_into(scratch, mix, ENGINE_CHANNELS);
         }
@@ -316,7 +348,14 @@ impl SourceFanout {
                 commands: cmd_rx,
                 garbage: gb_tx,
             },
-            FanoutHandle { source, rate, params, stats, commands: cmd_tx, garbage: gb_rx },
+            FanoutHandle {
+                source,
+                rate,
+                params,
+                stats,
+                commands: cmd_tx,
+                garbage: gb_rx,
+            },
         )
     }
 
@@ -328,7 +367,11 @@ impl SourceFanout {
         while let Ok(cmd) = self.commands.pop() {
             match cmd {
                 FanoutCommand::AddOutput(o, prod) => {
-                    if let Some(slot) = self.outputs.iter_mut().find(|s| s.as_ref().is_some_and(|(id, _)| *id == o)) {
+                    if let Some(slot) = self
+                        .outputs
+                        .iter_mut()
+                        .find(|s| s.as_ref().is_some_and(|(id, _)| *id == o))
+                    {
                         let old = slot.replace((o, prod));
                         if let Some((_, p)) = old {
                             Self::discard(&mut self.garbage, p);
@@ -340,7 +383,11 @@ impl SourceFanout {
                     }
                 }
                 FanoutCommand::RemoveOutput(o) => {
-                    if let Some(slot) = self.outputs.iter_mut().find(|s| s.as_ref().is_some_and(|(id, _)| *id == o)) {
+                    if let Some(slot) = self
+                        .outputs
+                        .iter_mut()
+                        .find(|s| s.as_ref().is_some_and(|(id, _)| *id == o))
+                    {
                         if let Some((_, p)) = slot.take() {
                             Self::discard(&mut self.garbage, p);
                         }
@@ -350,7 +397,10 @@ impl SourceFanout {
         }
     }
 
-    fn discard(garbage: &mut rtrb::Producer<Box<rtrb::Producer<f32>>>, p: Box<rtrb::Producer<f32>>) {
+    fn discard(
+        garbage: &mut rtrb::Producer<Box<rtrb::Producer<f32>>>,
+        p: Box<rtrb::Producer<f32>>,
+    ) {
         if let Err(rtrb::PushError::Full(p)) = garbage.push(p) {
             std::mem::forget(p);
         }
@@ -398,12 +448,16 @@ impl SourceFanout {
                         chunk.commit_all();
                     }
                 } else {
-                    self.stats.overflow_frames.fetch_add(n as u64, Ordering::Relaxed);
+                    self.stats
+                        .overflow_frames
+                        .fetch_add(n as u64, Ordering::Relaxed);
                 }
             }
             done += n;
         }
-        self.stats.captured_frames.fetch_add(frames as u64, Ordering::Relaxed);
+        self.stats
+            .captured_frames
+            .fetch_add(frames as u64, Ordering::Relaxed);
     }
 }
 
@@ -412,7 +466,9 @@ impl FanoutHandle {
         while self.garbage.pop().is_ok() {}
     }
     pub fn remove_output(&mut self, output: OutputId) -> bool {
-        self.commands.push(FanoutCommand::RemoveOutput(output)).is_ok()
+        self.commands
+            .push(FanoutCommand::RemoveOutput(output))
+            .is_ok()
     }
 }
 
@@ -434,14 +490,22 @@ pub fn connect(
     let tap = Box::new(SourceTap {
         source: source.source,
         ring: cons,
-        resampler: AdaptiveResampler::new(ENGINE_CHANNELS, source.rate, ENGINE_RATE, target_ms, output.blocks_per_second),
+        resampler: AdaptiveResampler::new(
+            ENGINE_CHANNELS,
+            source.rate,
+            ENGINE_RATE,
+            target_ms,
+            output.blocks_per_second,
+        ),
         gain: SmoothedGain::new(0.0, ENGINE_RATE as f32, RAMP_MS),
         params: route,
         stats: stats.clone(),
         in_rate: source.rate,
     });
     output.add_tap(tap);
-    let _ = source.commands.push(FanoutCommand::AddOutput(output.output, Box::new(prod)));
+    let _ = source
+        .commands
+        .push(FanoutCommand::AddOutput(output.output, Box::new(prod)));
     stats
 }
 
@@ -530,7 +594,10 @@ mod tests {
         assert!((l(&tail1, 2, 2500.0) - l(&tail1, 2, 440.0)).abs() < 1.0);
         assert!(l(&tail1, 2, 2500.0) > -15.0);
         assert!(l(&tail2, 1, 2500.0) - l(&tail1, 2, 2500.0) < -5.0);
-        assert!(l(&tail2, 1, 440.0) - l(&tail2, 1, 2500.0) < -60.0, "claude leaked into out2");
+        assert!(
+            l(&tail2, 1, 440.0) - l(&tail2, 1, 2500.0) < -60.0,
+            "claude leaked into out2"
+        );
         assert_eq!(cl_stats.underrun_frames.load(Ordering::Relaxed), 0);
         assert_eq!(mic2.underrun_frames.load(Ordering::Relaxed), 0);
         assert_eq!(mic_h.stats.overflow_frames.load(Ordering::Relaxed), 0);

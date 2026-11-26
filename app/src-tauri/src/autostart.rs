@@ -6,6 +6,9 @@ pub fn apply(app: &AppHandle, enabled: bool) {
     let al = app.autolaunch();
     let r = if enabled { al.enable() } else { al.disable() };
     if let Err(e) = r {
-        log::warn!("autostart {}: {e}", if enabled { "enable" } else { "disable" });
+        log::warn!(
+            "autostart {}: {e}",
+            if enabled { "enable" } else { "disable" }
+        );
     }
 }

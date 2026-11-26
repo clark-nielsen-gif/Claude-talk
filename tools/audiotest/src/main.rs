@@ -45,7 +45,12 @@ mod serve {
     const PAGE: &str = include_str!("../testpage/test.html");
 
     pub fn run(args: &[String]) -> i32 {
-        let arg = |n: &str| args.iter().position(|a| a == n).and_then(|i| args.get(i + 1)).cloned();
+        let arg = |n: &str| {
+            args.iter()
+                .position(|a| a == n)
+                .and_then(|i| args.get(i + 1))
+                .cloned()
+        };
         let port = arg("--port").unwrap_or_else(|| "8765".into());
         let out = arg("--out").unwrap_or_else(|| "page-report.json".into());
         let listener = match TcpListener::bind(format!("127.0.0.1:{port}")) {
@@ -95,7 +100,9 @@ mod serve {
                 let _ = w.write_all(head.as_bytes());
                 let _ = w.write_all(html.as_bytes());
             } else {
-                let _ = w.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                let _ = w.write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                );
             }
         }
         0
@@ -108,7 +115,9 @@ mod imp {
     use ct_engine::graph::{OutputId, SourceId};
     use ct_engine::mixer::{connect, GainParams, OutputMixer, SourceFanout};
     use ct_engine::win::devices::{self, DeviceSelector, Flow};
-    use ct_engine::win::stream::{spawn_capture, spawn_render, CaptureTarget, ProcessTarget, StreamHandle, StreamState};
+    use ct_engine::win::stream::{
+        spawn_capture, spawn_render, CaptureTarget, ProcessTarget, StreamHandle, StreamState,
+    };
     use ct_engine::win::ComGuard;
     use ct_engine::{ENGINE_CHANNELS, ENGINE_RATE};
     use serde_json::{json, Value};
@@ -118,7 +127,10 @@ mod imp {
     use std::time::{Duration, Instant};
 
     fn arg<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
-        args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(String::as_str)
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .map(String::as_str)
     }
 
     pub fn devices() -> i32 {
@@ -134,7 +146,11 @@ mod imp {
     }
 
     /// Pushes generated audio into a fanout in real time (wall clock).
-    fn clocked_source(mut fanout: SourceFanout, mut gen: impl FnMut(&mut [f32]) + Send + 'static, stop: Arc<AtomicBool>) -> JoinHandle<()> {
+    fn clocked_source(
+        mut fanout: SourceFanout,
+        mut gen: impl FnMut(&mut [f32]) + Send + 'static,
+        stop: Arc<AtomicBool>,
+    ) -> JoinHandle<()> {
         std::thread::spawn(move || {
             let start = Instant::now();
             let mut sent: u64 = 0;
@@ -154,7 +170,11 @@ mod imp {
     }
 
     /// Pulls an output mixer in real time and records what comes out.
-    fn clocked_sink(mut mixer: OutputMixer, rec: Arc<Mutex<Vec<f32>>>, stop: Arc<AtomicBool>) -> JoinHandle<()> {
+    fn clocked_sink(
+        mut mixer: OutputMixer,
+        rec: Arc<Mutex<Vec<f32>>>,
+        stop: Arc<AtomicBool>,
+    ) -> JoinHandle<()> {
         std::thread::spawn(move || {
             let start = Instant::now();
             let mut pulled: u64 = 0;
@@ -215,14 +235,27 @@ mod imp {
         let mut sine = Sine::new(freq, ENGINE_RATE as f64, amp);
         let gen = clocked_source(fan, move |b| sine.fill(b, ENGINE_CHANNELS), stop.clone());
         let render = spawn_render("tone", device, mix);
-        Player { stop, gen: Some(gen), render, fan_h, mix_h, tap }
+        Player {
+            stop,
+            gen: Some(gen),
+            render,
+            fan_h,
+            mix_h,
+            tap,
+        }
     }
 
     pub fn tone(args: &[String]) -> i32 {
         let _com = ComGuard::new();
-        let freq: f64 = arg(args, "--freq").and_then(|v| v.parse().ok()).unwrap_or(1000.0);
-        let amp: f32 = arg(args, "--amp").and_then(|v| v.parse().ok()).unwrap_or(0.3);
-        let secs: f64 = arg(args, "--seconds").and_then(|v| v.parse().ok()).unwrap_or(3600.0);
+        let freq: f64 = arg(args, "--freq")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1000.0);
+        let amp: f32 = arg(args, "--amp")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.3);
+        let secs: f64 = arg(args, "--seconds")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3600.0);
         let dev = match arg(args, "--device") {
             Some(name) => DeviceSelector::NameContains(Flow::Render, name.to_string()),
             None => DeviceSelector::Default(Flow::Render),
@@ -275,7 +308,10 @@ mod imp {
             diag,
             samples,
             state: cap.status.state(),
-            hr: format!("0x{:08X}", cap.status.last_error.load(Ordering::Relaxed) as u32),
+            hr: format!(
+                "0x{:08X}",
+                cap.status.last_error.load(Ordering::Relaxed) as u32
+            ),
             device: cap.status.device_name.lock().unwrap().clone(),
             pid: cap.status.pid.load(Ordering::Relaxed),
             restarts: cap.status.restarts.load(Ordering::Relaxed),
@@ -293,7 +329,10 @@ mod imp {
         let tail = &m[m.len() - n..];
         let mut v = serde_json::Map::new();
         for f in freqs {
-            v.insert(format!("{f}"), json!((tone_db_near(tail, *f, 2.0, ENGINE_RATE as f64) * 10.0).round() / 10.0));
+            v.insert(
+                format!("{f}"),
+                json!((tone_db_near(tail, *f, 2.0, ENGINE_RATE as f64) * 10.0).round() / 10.0),
+            );
         }
         Value::Object(v)
     }
@@ -304,7 +343,15 @@ mod imp {
 
     fn spawn_tone_process(exe: &std::path::Path, freq: f64, device: &str) -> std::process::Child {
         std::process::Command::new(exe)
-            .args(["tone", "--freq", &freq.to_string(), "--device", device, "--seconds", "120"])
+            .args([
+                "tone",
+                "--freq",
+                &freq.to_string(),
+                "--device",
+                device,
+                "--seconds",
+                "120",
+            ])
             .spawn()
             .expect("start tone process")
     }
@@ -329,60 +376,106 @@ mod imp {
 
         // test page server
         let srv_out = page_report.to_string_lossy().into_owned();
-        std::thread::spawn(move || super::serve::run(&["--port".into(), "8765".into(), "--out".into(), srv_out]));
+        std::thread::spawn(move || {
+            super::serve::run(&["--port".into(), "8765".into(), "--out".into(), srv_out])
+        });
 
         // fake programs: copies of this tool under the names the app looks for
         let me = std::env::current_exe().expect("exe");
         let dir = std::env::temp_dir().join("ct-e2e");
         let _ = std::fs::create_dir_all(&dir);
         let mut kids = Vec::new();
-        for (name, freq) in [("Discord.exe", 1000.0), ("fakemic.exe", 2500.0), ("background.exe", 3000.0)] {
+        for (name, freq) in [
+            ("Discord.exe", 1000.0),
+            ("fakemic.exe", 2500.0),
+            ("background.exe", 3000.0),
+        ] {
             let p = dir.join(name);
             let _ = std::fs::copy(&me, &p);
             kids.push(spawn_tone_process(&p, freq, &sink));
         }
         std::thread::sleep(Duration::from_millis(1500));
 
-        // the app in test mode
-        let log_dir = std::env::var("APPDATA").map(|a| std::path::PathBuf::from(a).join("Claude Talk").join("logs")).ok();
-        let mut app_proc = std::process::Command::new(&app)
-            .env("CLAUDE_TALK_TEST_URL", "http://127.0.0.1:8765/test.html")
-            .env("CLAUDE_TALK_TEST_OPEN_CLAUDE", "1")
-            .env("CLAUDE_TALK_TEST_MIC_EXE", "fakemic.exe")
-            .spawn()
-            .expect("start app");
+        // The app runs twice: headset mode (echo reduction off) and speaker
+        // mode (echo reduction on), with the same expectations.
+        let log_dir = std::env::var("APPDATA")
+            .map(|a| std::path::PathBuf::from(a).join("Claude Talk").join("logs"))
+            .ok();
+        for echo in ["off", "on"] {
+            let _ = std::fs::remove_file(&page_report);
+            let mut phase = serde_json::Map::new();
+            let mut app_proc = std::process::Command::new(&app)
+                .env("CLAUDE_TALK_TEST_URL", "http://127.0.0.1:8765/test.html")
+                .env("CLAUDE_TALK_TEST_OPEN_CLAUDE", "1")
+                .env("CLAUDE_TALK_TEST_MIC_EXE", "fakemic.exe")
+                .env("CLAUDE_TALK_TEST_ECHO", echo)
+                .spawn()
+                .expect("start app");
 
-        // what Discord hears: record our virtual microphone while the page runs
-        std::thread::sleep(Duration::from_secs(8));
-        let cable = record(
-            CaptureTarget::Device(DeviceSelector::FirstMatching(Flow::Capture, vec!["claude talk – til discord".into(), "claude talk".into()])),
-            4.0,
-            |_| {},
-        );
-        let l = levels(&cable, 3.0, &[440.0, 2500.0, 1000.0, 3000.0]);
-        let (claude, mic, discord, bg) = (lv(&l, 440.0), lv(&l, 2500.0), lv(&l, 1000.0), lv(&l, 3000.0));
-        let pass = claude > -30.0 && mic > -30.0 && discord < claude.min(mic) - 60.0 && bg < claude.min(mic) - 60.0;
-        println!("[{}] to_discord: {l}", if pass { "PASS" } else { "FAIL" });
-        report.insert("to_discord".into(), json!({"pass": pass, "levels_db": l, "diag": cable.diag, "device": cable.device}));
-        ok &= pass;
+            // what Discord hears: record our virtual microphone while the page runs
+            std::thread::sleep(Duration::from_secs(8));
+            let cable = record(
+                CaptureTarget::Device(DeviceSelector::FirstMatching(
+                    Flow::Capture,
+                    vec!["claude talk – til discord".into(), "claude talk".into()],
+                )),
+                4.0,
+                |_| {},
+            );
+            let l = levels(&cable, 3.0, &[440.0, 2500.0, 1000.0, 3000.0]);
+            let (claude, mic, discord, bg) = (
+                lv(&l, 440.0),
+                lv(&l, 2500.0),
+                lv(&l, 1000.0),
+                lv(&l, 3000.0),
+            );
+            let pass = claude > -30.0
+                && mic > -30.0
+                && discord < claude.min(mic) - 60.0
+                && bg < claude.min(mic) - 60.0;
+            println!(
+                "[{}] echo {echo}: to_discord: {l}",
+                if pass { "PASS" } else { "FAIL" }
+            );
+            phase.insert(
+                "to_discord".into(),
+                json!({"pass": pass, "levels_db": l, "diag": cable.diag, "device": cable.device}),
+            );
+            ok &= pass;
 
-        // what Claude hears: the page reports what getUserMedia delivered
-        let t0 = Instant::now();
-        while !page_report.exists() && t0.elapsed() < Duration::from_secs(60) {
-            std::thread::sleep(Duration::from_millis(500));
+            // what Claude hears: the page reports what getUserMedia delivered
+            let t0 = Instant::now();
+            while !page_report.exists() && t0.elapsed() < Duration::from_secs(60) {
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            std::thread::sleep(Duration::from_millis(300));
+            let page: Value = std::fs::read(&page_report)
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or(Value::Null);
+            let pl = |f: &str| page["levels"][f].as_f64().unwrap_or(-400.0);
+            let (p_discord, p_mic, p_claude, p_bg) =
+                (pl("1000"), pl("2500"), pl("440"), pl("3000"));
+            let errors = page["errors"].as_array().map(|a| a.len()).unwrap_or(1);
+            let pass = errors == 0
+                && p_discord > -30.0
+                && p_mic > -30.0
+                && p_claude < p_discord.min(p_mic) - 60.0
+                && p_bg < p_discord.min(p_mic) - 60.0;
+            println!(
+                "[{}] echo {echo}: to_claude (page): {}",
+                if pass { "PASS" } else { "FAIL" },
+                page["levels"]
+            );
+            phase.insert("to_claude".into(), json!({"pass": pass, "page": page}));
+            ok &= pass;
+            let _ = app_proc.kill();
+            let _ = app_proc.wait();
+            report.insert(format!("echo_{echo}"), Value::Object(phase));
+            std::thread::sleep(Duration::from_secs(2)); // WebView2 releases its profile
         }
-        let page: Value = std::fs::read(&page_report).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
-        let pl = |f: &str| page["levels"][f].as_f64().unwrap_or(-400.0);
-        let (p_discord, p_mic, p_claude, p_bg) = (pl("1000"), pl("2500"), pl("440"), pl("3000"));
-        let errors = page["errors"].as_array().map(|a| a.len()).unwrap_or(1);
-        let pass = errors == 0 && p_discord > -30.0 && p_mic > -30.0 && p_claude < p_discord.min(p_mic) - 60.0 && p_bg < p_discord.min(p_mic) - 60.0;
-        println!("[{}] to_claude (page): {}", if pass { "PASS" } else { "FAIL" }, page["levels"]);
-        report.insert("to_claude".into(), json!({"pass": pass, "page": page}));
-        ok &= pass;
 
         // tidy up
-        let _ = app_proc.kill();
-        let _ = app_proc.wait();
         for mut k in kids {
             let _ = k.kill();
             let _ = k.wait();
@@ -395,7 +488,10 @@ mod imp {
             }
         }
         report.insert("pass".into(), json!(ok));
-        let _ = std::fs::write(out.join("e2e.json"), serde_json::to_string_pretty(&Value::Object(report)).unwrap_or_default());
+        let _ = std::fs::write(
+            out.join("e2e.json"),
+            serde_json::to_string_pretty(&Value::Object(report)).unwrap_or_default(),
+        );
         if ok {
             0
         } else {
@@ -407,30 +503,70 @@ mod imp {
         std::panic::set_hook(Box::new(|info| eprintln!("PANIC: {info}")));
         let _com = ComGuard::new();
         let cable_in = arg(args, "--cable-in").unwrap_or("CABLE Input").to_string();
-        let cable_out = arg(args, "--cable-out").unwrap_or("CABLE Output").to_string();
+        let cable_out = arg(args, "--cable-out")
+            .unwrap_or("CABLE Output")
+            .to_string();
         let sink = arg(args, "--sink").unwrap_or("Virtual Audio").to_string();
-        let out = arg(args, "--out").unwrap_or("smoke-report.json").to_string();
+        let out = arg(args, "--out")
+            .unwrap_or("smoke-report.json")
+            .to_string();
         let mut report = serde_json::Map::new();
         let mut ok = true;
-        let mut check = |name: &str, pass: bool, detail: Value, report: &mut serde_json::Map<String, Value>| {
-            println!("[{}] {name}: {detail}", if pass { "PASS" } else { "FAIL" });
-            report.insert(name.to_string(), json!({"pass": pass, "detail": detail}));
-            ok &= pass;
-        };
-        report.insert("windows_build".into(), json!(ct_engine::win::windows_build()));
-        report.insert("devices_render".into(), json!(devices::list(Flow::Render).unwrap_or_default().iter().map(|e| e.name.clone()).collect::<Vec<_>>()));
-        report.insert("devices_capture".into(), json!(devices::list(Flow::Capture).unwrap_or_default().iter().map(|e| e.name.clone()).collect::<Vec<_>>()));
+        let mut check =
+            |name: &str, pass: bool, detail: Value, report: &mut serde_json::Map<String, Value>| {
+                println!("[{}] {name}: {detail}", if pass { "PASS" } else { "FAIL" });
+                report.insert(name.to_string(), json!({"pass": pass, "detail": detail}));
+                ok &= pass;
+            };
+        report.insert(
+            "windows_build".into(),
+            json!(ct_engine::win::windows_build()),
+        );
+        report.insert(
+            "devices_render".into(),
+            json!(devices::list(Flow::Render)
+                .unwrap_or_default()
+                .iter()
+                .map(|e| e.name.clone())
+                .collect::<Vec<_>>()),
+        );
+        report.insert(
+            "devices_capture".into(),
+            json!(devices::list(Flow::Capture)
+                .unwrap_or_default()
+                .iter()
+                .map(|e| e.name.clone())
+                .collect::<Vec<_>>()),
+        );
 
         // A. engine render → virtual cable → engine capture
         {
-            let player = play(1000.0, 0.3, DeviceSelector::NameContains(Flow::Render, cable_in.clone()));
+            let player = play(
+                1000.0,
+                0.3,
+                DeviceSelector::NameContains(Flow::Render, cable_in.clone()),
+            );
             std::thread::sleep(Duration::from_millis(500));
-            let r = record(CaptureTarget::Device(DeviceSelector::NameContains(Flow::Capture, cable_out.clone())), 3.0, |_| {});
+            let r = record(
+                CaptureTarget::Device(DeviceSelector::NameContains(
+                    Flow::Capture,
+                    cable_out.clone(),
+                )),
+                3.0,
+                |_| {},
+            );
             let pl = player.describe();
             drop(player);
             let l = levels(&r, 2.0, &[1000.0, 3000.0]);
-            let pass = r.state == StreamState::Running && lv(&l, 1000.0) > -16.0 && lv(&l, 3000.0) < lv(&l, 1000.0) - 60.0;
-            check("render_capture_cable", pass, json!({"levels_db": l, "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "player": pl, "samples": r.samples.len(), "diag": r.diag}), &mut report);
+            let pass = r.state == StreamState::Running
+                && lv(&l, 1000.0) > -16.0
+                && lv(&l, 3000.0) < lv(&l, 1000.0) - 60.0;
+            check(
+                "render_capture_cable",
+                pass,
+                json!({"levels_db": l, "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "player": pl, "samples": r.samples.len(), "diag": r.diag}),
+                &mut report,
+            );
         }
 
         // B. process loopback isolates one program from another
@@ -443,7 +579,12 @@ mod imp {
             let r = record(CaptureTarget::Process(ProcessTarget::Pid(pid)), 3.0, |_| {});
             let l = levels(&r, 2.0, &[1500.0, 3000.0]);
             let pass = lv(&l, 1500.0) > -20.0 && lv(&l, 3000.0) < lv(&l, 1500.0) - 60.0;
-            check("process_loopback_isolation", pass, json!({"levels_db": l, "pid": r.pid, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}), &mut report);
+            check(
+                "process_loopback_isolation",
+                pass,
+                json!({"levels_db": l, "pid": r.pid, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}),
+                &mut report,
+            );
             let _ = target.kill();
             let _ = other.kill();
             let _ = target.wait();
@@ -460,27 +601,36 @@ mod imp {
             let r2 = restarted.clone();
             let fake2 = fake.clone();
             let sink2 = sink.clone();
-            let r = record(CaptureTarget::Process(ProcessTarget::ExeNames(vec!["ct-fakeapp.exe".into()])), 1.0, move |cap| {
-                std::thread::sleep(Duration::from_millis(1500));
-                let first_pid = cap.status.pid.load(Ordering::Relaxed);
-                let _ = first.kill();
-                let _ = first.wait();
-                std::thread::sleep(Duration::from_millis(500));
-                *r2.lock().unwrap() = Some(spawn_tone_process(&fake2, 1500.0, &sink2));
-                // wait until the stream has found the new process
-                let t0 = Instant::now();
-                while t0.elapsed() < Duration::from_secs(8) {
-                    let p = cap.status.pid.load(Ordering::Relaxed);
-                    if p != 0 && p != first_pid && cap.status.state() == StreamState::Running {
-                        break;
+            let r = record(
+                CaptureTarget::Process(ProcessTarget::ExeNames(vec!["ct-fakeapp.exe".into()])),
+                1.0,
+                move |cap| {
+                    std::thread::sleep(Duration::from_millis(1500));
+                    let first_pid = cap.status.pid.load(Ordering::Relaxed);
+                    let _ = first.kill();
+                    let _ = first.wait();
+                    std::thread::sleep(Duration::from_millis(500));
+                    *r2.lock().unwrap() = Some(spawn_tone_process(&fake2, 1500.0, &sink2));
+                    // wait until the stream has found the new process
+                    let t0 = Instant::now();
+                    while t0.elapsed() < Duration::from_secs(8) {
+                        let p = cap.status.pid.load(Ordering::Relaxed);
+                        if p != 0 && p != first_pid && cap.status.state() == StreamState::Running {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
                     }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-                std::thread::sleep(Duration::from_millis(2500));
-            });
+                    std::thread::sleep(Duration::from_millis(2500));
+                },
+            );
             let l = levels(&r, 0.9, &[1500.0]);
             let pass = lv(&l, 1500.0) > -20.0 && r.restarts >= 1;
-            check("process_restart_recovery", pass, json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}), &mut report);
+            check(
+                "process_restart_recovery",
+                pass,
+                json!({"levels_db": l, "restarts": r.restarts, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}),
+                &mut report,
+            );
             let child = restarted.lock().unwrap().take();
             if let Some(mut c) = child {
                 let _ = c.kill();
@@ -491,20 +641,46 @@ mod imp {
         // D. (information) the microphone the engine would pick never is our
         // own cable, and whether the CI sink's virtual mic echoes its speaker
         {
-            let own: Vec<String> = devices::OWN_VIRTUAL_DEVICES.iter().map(|s| s.to_string()).collect();
-            let mic = devices::resolve(&DeviceSelector::DefaultExcluding(Flow::Capture, own)).map(|(_, e)| e.name).unwrap_or_default();
+            let own: Vec<String> = devices::OWN_VIRTUAL_DEVICES
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            let mic = devices::resolve(&DeviceSelector::DefaultExcluding(Flow::Capture, own))
+                .map(|(_, e)| e.name)
+                .unwrap_or_default();
             let lower = mic.to_lowercase();
-            let pass = !devices::OWN_VIRTUAL_DEVICES.iter().any(|p| lower.contains(p));
-            check("microphone_never_own_cable", pass, json!({"picked": mic, "default": devices::default_id(Flow::Capture)}), &mut report);
-            let player = play(2500.0, 0.3, DeviceSelector::NameContains(Flow::Render, sink.clone()));
+            let pass = !devices::OWN_VIRTUAL_DEVICES
+                .iter()
+                .any(|p| lower.contains(p));
+            check(
+                "microphone_never_own_cable",
+                pass,
+                json!({"picked": mic, "default": devices::default_id(Flow::Capture)}),
+                &mut report,
+            );
+            let player = play(
+                2500.0,
+                0.3,
+                DeviceSelector::NameContains(Flow::Render, sink.clone()),
+            );
             std::thread::sleep(Duration::from_millis(500));
-            let r = record(CaptureTarget::Device(DeviceSelector::NameContains(Flow::Capture, "microphone array (virtual audio".into())), 2.0, |_| {});
+            let r = record(
+                CaptureTarget::Device(DeviceSelector::NameContains(
+                    Flow::Capture,
+                    "microphone array (virtual audio".into(),
+                )),
+                2.0,
+                |_| {},
+            );
             drop(player);
             report.insert("info_sink_mic_echo".into(), json!({"levels_db": levels(&r, 1.5, &[2500.0]), "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}));
         }
 
         report.insert("pass".into(), json!(ok));
-        let _ = std::fs::write(&out, serde_json::to_string_pretty(&Value::Object(report)).unwrap_or_default());
+        let _ = std::fs::write(
+            &out,
+            serde_json::to_string_pretty(&Value::Object(report)).unwrap_or_default(),
+        );
         if ok {
             0
         } else {

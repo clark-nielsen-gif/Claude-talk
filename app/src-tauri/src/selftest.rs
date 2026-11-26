@@ -46,11 +46,17 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
             let id = 900 + i as u32;
             let mut sine = Sine::new(*f, ENGINE_RATE as f64, 0.25);
             host.add_generated_source(
-                Source { id, label: format!("selftest-{name}"), parties: BTreeSet::from([party.clone()]), contains_outputs: BTreeSet::new() },
+                Source {
+                    id,
+                    label: format!("selftest-{name}"),
+                    parties: BTreeSet::from([party.clone()]),
+                    contains_outputs: BTreeSet::new(),
+                },
                 move |b| sine.fill(b, ENGINE_CHANNELS),
             )
             .map_err(|_| "error.internal")?;
-            host.set_route(id, *out, Route::default()).map_err(|_| "error.internal")?;
+            host.set_route(id, *out, Route::default())
+                .map_err(|_| "error.internal")?;
         }
     }
     // record the cable (what Discord hears) and the bridge (what Claude hears)
@@ -58,8 +64,16 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
     let (fan, mut fan_h) = SourceFanout::new(1, ENGINE_RATE);
     let (mut mix, mut mix_h) = OutputMixer::new(2, ENGINE_CHANNELS, 480);
     connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
-    let patterns = vec!["claude talk – til discord".to_string(), "claude talk".to_string(), "cable output".to_string()];
-    let cap = spawn_capture("selftest", CaptureTarget::Device(DeviceSelector::FirstMatching(Flow::Capture, patterns)), fan);
+    let patterns = vec![
+        "claude talk – til discord".to_string(),
+        "claude talk".to_string(),
+        "cable output".to_string(),
+    ];
+    let cap = spawn_capture(
+        "selftest",
+        CaptureTarget::Device(DeviceSelector::FirstMatching(Flow::Capture, patterns)),
+        fan,
+    );
     let mut cable = Vec::new();
     let mut buf = vec![0f32; 480 * ENGINE_CHANNELS];
     let t0 = std::time::Instant::now();
@@ -75,7 +89,12 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
     }
     drop(cap);
     drop(fan_h);
-    let claude = state.bridge_probe.lock().map_err(|_| "error.internal")?.take().unwrap_or_default();
+    let claude = state
+        .bridge_probe
+        .lock()
+        .map_err(|_| "error.internal")?
+        .take()
+        .unwrap_or_default();
     {
         let mut g = state.audio.lock().map_err(|_| "error.internal")?;
         if let Some(host) = g.as_mut() {
@@ -95,11 +114,20 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
     let rate = ENGINE_RATE as f64;
     let mut out = Vec::new();
     for (name, _, output, f) in tests {
-        let (here, there) = if output == ids::TO_DISCORD { (&to_discord, &to_claude) } else { (&to_claude, &to_discord) };
+        let (here, there) = if output == ids::TO_DISCORD {
+            (&to_discord, &to_claude)
+        } else {
+            (&to_claude, &to_discord)
+        };
         let level = tone_db_near(here, f, 2.0, rate);
         let leak = tone_db_near(there, f, 2.0, rate);
         let passed = level > -30.0 && leak < level - 60.0;
-        out.push(RouteResult { route: name.into(), passed, level_db: level, leak_db: leak });
+        out.push(RouteResult {
+            route: name.into(),
+            passed,
+            level_db: level,
+            leak_db: leak,
+        });
     }
     log::info!("self-test: {out:?}");
     Ok(out)

@@ -1,0 +1,109 @@
+# Builds and publishes a release when a tag like v1.0.0 is pushed (or by
+# hand). Produces ClaudeTalk-Setup.exe and ClaudeTalk-portable.zip.
+#
+# Optional secrets (see SIGNING.md) – everything works without them:
+#   TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) and TAURI_UPDATER_PUBKEY
+#       → signed update manifests (latest.json) and automatic updates
+#   SIGNPATH_API_TOKEN (+ vars SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+#       SIGNPATH_POLICY_SLUG) → code-signed installer (no SmartScreen warning)
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.tag || github.ref_name }}
+  HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' && 'yes' || '' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - name: Install UI dependencies
+        working-directory: app
+        run: npm ci
+      - name: Build installer
+        working-directory: app
+        shell: powershell
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          CLAUDE_TALK_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          $cfg = @{}
+          if ($env:TAURI_SIGNING_PRIVATE_KEY -and $env:CLAUDE_TALK_UPDATER_PUBKEY) {
+            Write-Host 'Update signing: ON'
+            $cfg = @{ bundle = @{ createUpdaterArtifacts = $true } }
+          } else {
+            Write-Host 'Update signing: off (no TAURI_SIGNING_PRIVATE_KEY / TAURI_UPDATER_PUBKEY secret)'
+            Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+          }
+          $json = ($cfg | ConvertTo-Json -Compress -Depth 5)
+          npx tauri build --config $json
+          if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
+      - name: Collect files
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory dist-release | Out-Null
+          $setup = Get-ChildItem target/release/bundle/nsis -Filter *-setup.exe | Select-Object -First 1
+          Copy-Item $setup.FullName dist-release/ClaudeTalk-Setup.exe
+          $sig = Get-ChildItem target/release/bundle/nsis -Filter *-setup.exe.sig -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($sig) { Copy-Item $sig.FullName dist-release/ClaudeTalk-Setup.exe.sig }
+          # portable: the program alone (Discord's microphone still needs the
+          # installer once, or "Installer Discords mikrofon" in the app)
+          New-Item -ItemType Directory portable | Out-Null
+          Copy-Item target/release/claude-talk.exe 'portable/Claude Talk.exe'
+          Copy-Item README.md portable/LÆS MIG.md
+          Compress-Archive portable/* dist-release/ClaudeTalk-portable.zip
+      - name: Code signing (SignPath, if configured)
+        id: signpath
+        if: ${{ env.HAS_SIGNPATH == 'yes' }}
+        uses: actions/upload-artifact@v4
+        with: { name: unsigned-installer, path: dist-release/ClaudeTalk-Setup.exe }
+      - name: Submit to SignPath
+        if: ${{ steps.signpath.outcome == 'success' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.signpath.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist-signed
+      - name: Use signed installer
+        if: ${{ steps.signpath.outcome == 'success' }}
+        shell: powershell
+        run: Copy-Item dist-signed/ClaudeTalk-Setup.exe dist-release/ClaudeTalk-Setup.exe -Force
+      - name: Update manifest (latest.json)
+        if: ${{ hashFiles('dist-release/ClaudeTalk-Setup.exe.sig') != '' }}
+        shell: powershell
+        run: |
+          $sig = Get-Content dist-release/ClaudeTalk-Setup.exe.sig -Raw
+          $url = "https://github.com/${{ github.repository }}/releases/download/$env:TAG/ClaudeTalk-Setup.exe"
+          @{ version = $env:TAG.TrimStart('v'); notes = "Claude Talk $env:TAG"; pub_date = (Get-Date).ToUniversalTime().ToString('o');
+             platforms = @{ 'windows-x86_64' = @{ signature = $sig.Trim(); url = $url } } } | ConvertTo-Json -Depth 5 | Set-Content dist-release/latest.json
+      - name: Publish GitHub release
+        shell: powershell
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          $files = Get-ChildItem dist-release | ForEach-Object FullName
+          gh release view $env:TAG 2>$null
+          if ($LASTEXITCODE -eq 0) { gh release upload $env:TAG $files --clobber }
+          else { gh release create $env:TAG $files --title "Claude Talk $env:TAG" --notes-file RELEASE_NOTES.md }

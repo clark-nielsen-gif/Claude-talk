@@ -5,7 +5,9 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
-use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE};
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProcInfo {
@@ -18,11 +20,20 @@ pub struct ProcInfo {
 pub fn snapshot() -> Vec<ProcInfo> {
     let mut out = Vec::new();
     unsafe {
-        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return out };
-        let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return out;
+        };
+        let mut e = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
         if Process32FirstW(snap, &mut e).is_ok() {
             loop {
-                let len = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+                let len = e
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(e.szExeFile.len());
                 out.push(ProcInfo {
                     pid: e.th32ProcessID,
                     parent: e.th32ParentProcessID,
@@ -46,7 +57,11 @@ pub fn find_roots(procs: &[ProcInfo], names: &[String]) -> Vec<u32> {
     let names: Vec<String> = names.iter().map(|n| n.to_lowercase()).collect();
     let matching: Vec<&ProcInfo> = procs.iter().filter(|p| names.contains(&p.exe)).collect();
     let ids: std::collections::HashSet<u32> = matching.iter().map(|p| p.pid).collect();
-    let mut roots: Vec<u32> = matching.iter().filter(|p| !ids.contains(&p.parent)).map(|p| p.pid).collect();
+    let mut roots: Vec<u32> = matching
+        .iter()
+        .filter(|p| !ids.contains(&p.parent))
+        .map(|p| p.pid)
+        .collect();
     roots.sort_unstable();
     roots
 }
@@ -56,7 +71,15 @@ pub struct ProcHandle(pub HANDLE);
 
 impl ProcHandle {
     pub fn open(pid: u32) -> Option<ProcHandle> {
-        unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok().map(ProcHandle)
+        unsafe {
+            OpenProcess(
+                PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                false,
+                pid,
+            )
+        }
+        .ok()
+        .map(ProcHandle)
     }
 }
 
@@ -73,7 +96,11 @@ mod tests {
     use super::*;
     #[test]
     fn roots_skip_children_of_the_same_app() {
-        let p = |pid, parent, exe: &str| ProcInfo { pid, parent, exe: exe.into() };
+        let p = |pid, parent, exe: &str| ProcInfo {
+            pid,
+            parent,
+            exe: exe.into(),
+        };
         let procs = vec![
             p(10, 1, "update.exe"),
             p(11, 10, "discord.exe"),
@@ -81,7 +108,10 @@ mod tests {
             p(13, 11, "discord.exe"),
             p(20, 1, "chrome.exe"),
         ];
-        assert_eq!(find_roots(&procs, &["Discord.exe".into(), "DiscordPTB.exe".into()]), vec![11]);
+        assert_eq!(
+            find_roots(&procs, &["Discord.exe".into(), "DiscordPTB.exe".into()]),
+            vec![11]
+        );
         assert_eq!(find_roots(&procs, &["slack.exe".into()]), Vec::<u32>::new());
     }
 }
