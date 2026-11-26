@@ -1,0 +1,11 @@
+[package]
+name = "ct-audiotest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Claude Talk audio test tool: tone players and end-to-end checks on real Windows devices"
+publish = false
+
+[dependencies]
+ct-engine = { path = "../../engine" }
+serde_json = "1"

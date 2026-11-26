@@ -1,0 +1,48 @@
+# Real-device audio tests on Windows: engine render/capture through the
+# virtual cable, process-loopback isolation and recovery after a program
+# restart. (Later milestones add the full frequency-isolation test with the
+# Claude window.)
+name: audio-e2e
+
+on:
+  push:
+    branches: [main]
+    paths: ['engine/**', 'tools/**', 'ci/fixtures/**', '.github/workflows/audio-e2e.yml', 'Cargo.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # results are published to ci-results/* branches
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  GH_TOKEN: ${{ github.token }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Build test tool
+        run: cargo build -p ct-audiotest --release
+      - name: Install VB-CABLE (as the product does)
+        shell: powershell
+        run: ci/fixtures/install-vbcable.ps1
+      - name: Install CI test sink
+        shell: powershell
+        run: ci/fixtures/install-test-sink.ps1
+      - name: Devices
+        shell: powershell
+        run: target/release/ct-audiotest.exe devices | Tee-Object results/devices.json
+      - name: Smoke test
+        shell: powershell
+        run: |
+          target/release/ct-audiotest.exe smoke --cable-in 'CABLE Input' --cable-out 'Claude Talk' --sink 'Virtual Audio' --out results/smoke.json
+          if ($LASTEXITCODE -ne 0) { throw 'smoke test failed' }
+      - name: Publish results
+        if: always()
+        shell: powershell
+        run: ci/publish-results.ps1 -Folder results -Job 'audio-smoke'
