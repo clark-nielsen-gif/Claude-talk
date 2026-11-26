@@ -150,10 +150,19 @@ $gone = Get-ChildItem 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall
 Check 'removed_from_installed_apps' ($null -eq $gone) $null
 $auto = @(AutostartEntries) + @(AutostartEntries 'HKLM')
 Check 'autostart_removed' ($auto.Count -eq 0) $auto
-$end = Endpoints
-$r.endpoints_end = $end
-$left = @($end | Where-Object { $_.FriendlyName -like '*Claude Talk*' -or $_.FriendlyName -like '*VB-Audio Virtual Cable*' })
-Check 'virtual_microphone_removed' ($left.Count -eq 0) @($left | ForEach-Object FriendlyName)
+# On a runner whose only audio device was the cable, Windows' endpoint
+# listing can keep failing (0xE000020B) once the driver is gone. Then the
+# device tree is the evidence: no VB-Audio device present any more.
+try {
+    $end = Endpoints
+    $r.endpoints_end = $end
+    $left = @($end | Where-Object { $_.FriendlyName -like '*Claude Talk*' -or $_.FriendlyName -like '*VB-Audio Virtual Cable*' })
+    Check 'virtual_microphone_removed' ($left.Count -eq 0) @($left | ForEach-Object FriendlyName)
+} catch {
+    $pnp = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -like '*VB-Audio*' -or $_.FriendlyName -like '*Claude Talk*' })
+    $r.endpoints_end = 'listing failed after the driver was removed; checked the present devices instead'
+    Check 'virtual_microphone_removed' ($pnp.Count -eq 0) @{ via = 'Get-PnpDevice -PresentOnly'; left = @($pnp | ForEach-Object FriendlyName) }
+}
 Check 'cable_files_removed' (-not (Test-Path (Split-Path $marker))) (Split-Path $marker)
 
 } catch {
