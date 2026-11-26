@@ -1,0 +1,186 @@
+# Milestone 0: prove the virtual-device foundation on real Windows runners
+# before anything else is built. Two candidates, tested side by side:
+#   A) VirtualDrivers "Virtual Audio Driver" (MIT), signed release 25.7.14
+#   B) Official VB-Audio VB-CABLE + Hi-Fi Cable, downloaded from vb-audio.com
+# Each job fails loudly if test signing is on, and uploads a JSON report.
+name: driver-proof
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ['ci/driver-proof/**', '.github/workflows/driver-proof.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  virtualdrivers:
+    name: A · VirtualDrivers signed (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2025, windows-2022]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true   # candidate A is expected to fail; the report is the evidence
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baseline report
+        shell: powershell
+        run: ci/driver-proof/Report-Audio.ps1 -OutFile report-A-before.json -Label baseline
+
+      - name: Download signed release 25.7.14
+        env: { GH_TOKEN: '${{ github.token }}' }
+        shell: powershell
+        run: |
+          gh release download 25.7.14 -R VirtualDrivers/Virtual-Audio-Driver -D vad
+          Get-ChildItem vad | Format-Table Name, Length
+          Get-ChildItem vad -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath vad\x -Force }
+          Get-ChildItem vad -Recurse -Include *.inf, *.sys, *.cat | Format-Table FullName
+
+      - name: Inspect signatures (Authenticode and kernel-mode policy)
+        shell: powershell
+        run: |
+          $files = Get-ChildItem vad -Recurse -Include *.sys, *.cat
+          foreach ($f in $files) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            "{0}: {1} / signer: {2} / issuer: {3}" -f $f.Name, $s.Status, $s.SignerCertificate.Subject, $s.SignerCertificate.Issuer
+          }
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match 'x64' | Select-Object -Last 1
+          foreach ($f in $files) { & $signtool.FullName verify /kp /v $f.FullName 2>&1 | Select-Object -Last 8; "exit=$LASTEXITCODE" }
+
+      - name: Install two instances without test signing
+        shell: powershell
+        run: |
+          $inf = (Get-ChildItem vad -Recurse -Filter VirtualAudioDriver.inf | Select-Object -First 1).FullName
+          pnputil /add-driver $inf /install
+          "pnputil exit=$LASTEXITCODE"
+          ci/driver-proof/RootDevice.ps1 -InfPath $inf -HardwareId 'ROOT\VirtualAudioDriver'
+          ci/driver-proof/RootDevice.ps1 -InfPath $inf -HardwareId 'ROOT\VirtualAudioDriver'
+          Start-Sleep 5
+          Get-PnpDevice | Where-Object HardwareID -contains 'ROOT\VirtualAudioDriver' | ForEach-Object {
+            $code = (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
+            "{0}  status={1}  problem={2}" -f $_.InstanceId, $_.Status, $code
+          }
+
+      - name: Endpoints after install
+        if: always()
+        shell: powershell
+        run: |
+          ci/driver-proof/Report-Audio.ps1 -OutFile report-A-after.json -Label after-install
+          ci/driver-proof/List-Endpoints.ps1 -OutFile endpoints-A.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'proof-A-${{ matrix.os }}', path: '*.json' }
+
+  vbaudio:
+    name: B · VB-CABLE + Hi-Fi Cable (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2025, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baseline report
+        shell: powershell
+        run: ci/driver-proof/Report-Audio.ps1 -OutFile report-B-before.json -Label baseline
+
+      - name: Download official packages from vb-audio.com
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip -OutFile cable.zip
+          Invoke-WebRequest https://download.vb-audio.com/Download_CABLE/HiFiCableAsioBridgeSetup_v1007.zip -OutFile hifi.zip
+          Get-FileHash cable.zip, hifi.zip | Format-Table Algorithm, Hash, Path
+          Expand-Archive cable.zip -DestinationPath vb\cable -Force
+          Expand-Archive hifi.zip -DestinationPath vb\hifi -Force
+          Get-ChildItem vb -Recurse | Format-Table FullName, Length
+
+      - name: Inspect signatures (kernel-mode policy)
+        shell: powershell
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match 'x64' | Select-Object -Last 1
+          Get-ChildItem vb -Recurse -Include *.sys, *.cat, *.exe | ForEach-Object {
+            $s = Get-AuthenticodeSignature $_.FullName
+            "{0}: {1} / {2}" -f $_.Name, $s.Status, $s.SignerCertificate.Subject
+            if ($_.Extension -ne '.exe') { & $signtool.FullName verify /kp $_.FullName 2>&1 | Select-Object -Last 3 }
+          }
+
+      - name: Trust VB-Audio as driver publisher (suppresses the Windows Security dialog)
+        shell: powershell
+        run: |
+          $cat = Get-ChildItem vb\cable -Recurse -Filter *.cat | Select-Object -First 1
+          $cert = (Get-AuthenticodeSignature $cat.FullName).SignerCertificate
+          "Publisher: $($cert.Subject)  thumbprint: $($cert.Thumbprint)"
+          $store = New-Object Security.Cryptography.X509Certificates.X509Store 'TrustedPublisher', 'LocalMachine'
+          $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
+          $hcat = Get-ChildItem vb\hifi -Recurse -Filter *.cat -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($hcat) {
+            $h = (Get-AuthenticodeSignature $hcat.FullName).SignerCertificate
+            "Hi-Fi publisher: $($h.Subject)  thumbprint: $($h.Thumbprint)"
+            $store.Open('ReadWrite'); $store.Add($h); $store.Close()
+          }
+
+      - name: Silent install VB-CABLE (-i -h)
+        timeout-minutes: 5
+        shell: powershell
+        run: |
+          $exe = (Get-ChildItem vb\cable -Recurse -Filter 'VBCABLE_Setup_x64.exe').FullName
+          $p = Start-Process $exe -ArgumentList '-i', '-h' -Wait -PassThru
+          "VB-CABLE setup exit=$($p.ExitCode)"
+
+      - name: Silent install Hi-Fi Cable (-i -h)
+        timeout-minutes: 5
+        shell: powershell
+        run: |
+          $exe = Get-ChildItem vb\hifi -Recurse -Filter '*64*.exe' | Select-Object -First 1
+          if (-not $exe) { $exe = Get-ChildItem vb\hifi -Recurse -Filter '*.exe' | Select-Object -First 1 }
+          "Running $($exe.FullName)"
+          $p = Start-Process $exe.FullName -ArgumentList '-i', '-h' -Wait -PassThru
+          "Hi-Fi setup exit=$($p.ExitCode)"
+
+      - name: Endpoints after install
+        shell: powershell
+        run: |
+          Start-Sleep 5
+          ci/driver-proof/Report-Audio.ps1 -OutFile report-B-after.json -Label after-install
+          ci/driver-proof/List-Endpoints.ps1 -OutFile endpoints-B-before-rename.json
+
+      - name: Rename capture endpoints to the product names
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchInterface 'VB-Audio Virtual Cable' -MatchDeviceDesc 'CABLE Output' `
+            -NewDeviceDesc 'Claude Talk – til Discord' -NewInterface ''
+          ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchInterface 'Hi-Fi' -MatchDeviceDesc '.' `
+            -NewDeviceDesc 'Claude Talk – til Claude' -NewInterface ''
+          ci/driver-proof/Rename-Endpoint.ps1 -Flow Render -MatchInterface 'VB-Audio Virtual Cable' -MatchDeviceDesc 'CABLE Input' `
+            -NewDeviceDesc 'Claude Talk (intern 1)' -NewInterface ''
+          ci/driver-proof/Rename-Endpoint.ps1 -Flow Render -MatchInterface 'Hi-Fi' -MatchDeviceDesc '.' `
+            -NewDeviceDesc 'Claude Talk (intern 2)' -NewInterface ''
+
+      - name: Verify names as apps see them
+        shell: powershell
+        run: |
+          $rows = ci/driver-proof/List-Endpoints.ps1 -OutFile endpoints-B-after-rename.json
+          $cap = $rows | Where-Object Flow -eq 'Capture' | ForEach-Object FriendlyName
+          $ok = $true
+          foreach ($want in 'Claude Talk – til Discord', 'Claude Talk – til Claude') {
+            $hit = $cap | Where-Object { $_ -like "$want*" }
+            if ($hit) { "FOUND  '$hit'" } else { "MISSING '$want'"; $ok = $false }
+            if ($hit -and $hit -ne $want) { "NOTE   exact name differs: '$hit'" }
+          }
+          if (-not $ok) { throw 'Two renamed virtual microphones were not found.' }
+
+      - name: Names as DirectShow apps see them (Chrome/older apps use this path)
+        shell: powershell
+        run: |
+          choco install ffmpeg -y --no-progress | Out-Null
+          ffmpeg -hide_banner -list_devices true -f dshow -i dummy 2>&1 | Select-String 'audio' | Write-Host
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'proof-B-${{ matrix.os }}', path: '*.json' }
