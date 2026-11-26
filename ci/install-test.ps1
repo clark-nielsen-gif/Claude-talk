@@ -14,9 +14,21 @@ function Check([string] $name, [bool] $ok, $detail) {
 }
 function Endpoints {
     # separate process: the COM type in List-Endpoints must not clash
-    $f = Join-Path $env:RUNNER_TEMP ("ep-" + [guid]::NewGuid() + ".json")
-    powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/driver-proof/List-Endpoints.ps1" -OutFile $f | Out-Null
-    if (Test-Path $f) { @(Get-Content $f -Raw -Encoding utf8 | ConvertFrom-Json | ForEach-Object { $_ }) } else { @() }
+    # Right after a driver is removed, listing can fail for a moment
+    # (0xE000020B): try again, and never treat a failed listing as "none".
+    for ($i = 0; $i -lt 6; $i++) {
+        $f = Join-Path $env:RUNNER_TEMP ("ep-" + [guid]::NewGuid() + ".json")
+        powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot/driver-proof/List-Endpoints.ps1" -OutFile $f | Out-Null
+        $ok = ($LASTEXITCODE -eq 0) -and (Test-Path $f)
+        $global:LASTEXITCODE = 0
+        if ($ok) {
+            $raw = Get-Content $f -Raw -Encoding utf8
+            if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+            return @($raw | ConvertFrom-Json | ForEach-Object { $_ })
+        }
+        Start-Sleep -Seconds 2
+    }
+    throw 'could not list the audio endpoints' 
 }
 $dash = [char]0x2013
 
