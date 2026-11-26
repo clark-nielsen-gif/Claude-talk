@@ -3,10 +3,9 @@
 # uninstall on a fresh runner.
 name: install-test
 
+# Started on demand (gh workflow run) at milestones and before releases,
+# not on every push: heavy Windows jobs.
 on:
-  push:
-    branches: [main]
-    paths: ['app/**', 'engine/**', 'ci/install-test.ps1', '.github/workflows/install-test.yml', 'Cargo.*']
   workflow_dispatch:
 
 permissions:

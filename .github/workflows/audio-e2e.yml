@@ -4,10 +4,9 @@
 # Claude window.)
 name: audio-e2e
 
+# Started on demand (gh workflow run) at milestones and before releases,
+# not on every push: heavy Windows jobs.
 on:
-  push:
-    branches: [main]
-    paths: ['engine/**', 'tools/**', 'ci/fixtures/**', '.github/workflows/audio-e2e.yml', 'Cargo.*']
   workflow_dispatch:
 
 permissions:

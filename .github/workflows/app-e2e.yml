@@ -3,10 +3,9 @@
 # microphone and background. Checks frequency isolation both ways.
 name: app-e2e
 
+# Started on demand (gh workflow run) at milestones and before releases,
+# not on every push: heavy Windows jobs.
 on:
-  push:
-    branches: [main]
-    paths: ['engine/**', 'tools/**', 'app/**', 'ci/fixtures/**', '.github/workflows/app-e2e.yml', 'Cargo.*']
   workflow_dispatch:
 
 permissions:

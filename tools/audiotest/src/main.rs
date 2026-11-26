@@ -1235,6 +1235,75 @@ mod imp {
             report.insert("info_sink_mic_echo".into(), json!({"levels_db": levels(&r, 1.5, &[2500.0]), "device": r.device, "state": format!("{:?}", r.state), "hr": r.hr, "diag": r.diag}));
         }
 
+        // E. latency of the engine itself, without the app: a program's
+        // bursts are captured (process loopback), routed through the engine
+        // (20 ms route buffer) and played into the cable; recorded before the
+        // engine (program), after it (cable playback side, loopback) and
+        // after VB-CABLE (cable recording side).
+        {
+            let dir = std::env::temp_dir().join("ct-lat");
+            let _ = std::fs::create_dir_all(&dir);
+            let prog = dir.join("burster.exe");
+            let _ = std::fs::copy(&exe, &prog);
+            let mut child = spawn_burst_process(&prog, 2500.0, &sink, 600);
+            std::thread::sleep(Duration::from_millis(800));
+            let (fan, mut fan_h) = SourceFanout::new(1, ENGINE_RATE);
+            let (mix, mut mix_h) = OutputMixer::new(2, ENGINE_CHANNELS, 480);
+            let tap = connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 20.0);
+            let cap = spawn_capture(
+                "lat-src",
+                CaptureTarget::Process(ProcessTarget::ExeNames(vec!["burster.exe".into()])),
+                fan,
+            );
+            let render = spawn_render(
+                "lat-out",
+                DeviceSelector::FirstMatching(
+                    Flow::Render,
+                    ct_engine::win::host::cable_render_patterns(),
+                ),
+                mix,
+            );
+            std::thread::sleep(Duration::from_secs(2));
+            let (_, recs) = record_multi(
+                vec![
+                    CaptureTarget::Process(ProcessTarget::ExeNames(vec!["burster.exe".into()])),
+                    CaptureTarget::DeviceLoopback(DeviceSelector::FirstMatching(
+                        Flow::Render,
+                        ct_engine::win::host::cable_render_patterns(),
+                    )),
+                    CaptureTarget::Device(DeviceSelector::FirstMatching(
+                        Flow::Capture,
+                        ct_engine::win::host::cable_capture_patterns(),
+                    )),
+                ],
+                8.0,
+            );
+            let ms = |r: &(Vec<f32>, f64)| -> Vec<f64> {
+                burst_onsets(&r.0, 2500.0, ENGINE_RATE as f64, 0.3, 2400)
+                    .into_iter()
+                    .map(|i| i as f64 / 48.0 - r.1)
+                    .collect()
+            };
+            let (a, c, b) = (ms(&recs[0]), ms(&recs[1]), ms(&recs[2]));
+            let engine = median(&match_delays(&a, &c, 400.0));
+            let cable = median(&match_delays(&c, &b, 400.0));
+            let total = median(&match_delays(&a, &b, 400.0));
+            let pass = engine.is_some_and(|v| v < 40.0);
+            check(
+                "latency_engine_pipeline",
+                pass,
+                json!({"engine_ms": engine, "vbcable_ms": cable, "total_ms": total, "bursts": [a.len(), c.len(), b.len()],
+                       "route_target_ms": tap.target_ms.load(), "route_buffered_ms": tap.buffered_ms.load(), "route_underrun": tap.underrun_frames.load(Ordering::Relaxed),
+                       "render_queue_frames": render.status.period_frames.load(Ordering::Relaxed), "recorder_buffer_ms": [recs[0].1, recs[1].1, recs[2].1]}),
+                &mut report,
+            );
+            drop(cap);
+            drop(render);
+            let _ = child.kill();
+            let _ = child.wait();
+            drop((fan_h, mix_h));
+        }
+
         // F. per-app routing: only Discord records from our cable; the
         // setting survives a Discord restart and can be undone.
         {
