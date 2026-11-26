@@ -57,6 +57,9 @@ pub struct AdaptiveResampler {
     source_epoch: u32,
     restart_grace: bool,
     source_quiet: bool,
+    /// An underrun whose cause is not known yet: grown when new sound comes
+    /// (a late packet), dropped when the source turns out to have gone quiet.
+    pending_growth: Option<usize>,
     /// frames of fade-in still to apply after a gap (no click on resume)
     fade_in: usize,
     /// fixed mode: input frames owed for a gap that was played as silence;
@@ -121,6 +124,7 @@ impl AdaptiveResampler {
             source_epoch: 0,
             restart_grace: false,
             source_quiet: false,
+            pending_growth: None,
             fade_in: 0,
             owed: 0.0,
             owed_pulls: 0,
@@ -243,6 +247,16 @@ impl AdaptiveResampler {
         let steady = (self.target_frames as f64 + block_in / 2.0
             - self.input_age_s * self.in_rate as f64)
             .max(0.0) as usize;
+        if let Some(left) = self.pending_growth {
+            if self.source_quiet {
+                // the source went quiet: the gap was a pause, not jitter
+                self.pending_growth = None;
+            } else if available > left {
+                // new sound after the gap: it was a late packet (jitter)
+                self.pending_growth = None;
+                self.adapt_after_underrun();
+            }
+        }
 
         if self.priming {
             if available >= self.target_frames {
@@ -392,7 +406,8 @@ impl AdaptiveResampler {
                     if std::mem::take(&mut self.restart_grace) || self.source_quiet {
                         self.min_slack = usize::MAX;
                     } else {
-                        self.adapt_after_underrun();
+                        // decided when it is clear whether a pause began
+                        self.pending_growth = Some(ring.slots() / ch);
                     }
                     return stats;
                 }

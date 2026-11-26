@@ -754,6 +754,8 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             let due = ((now_qpc - *since).max(0.0) * ENGINE_RATE as f64 / 1e7) as u64;
             let frames = due.saturating_sub(*sent).min(ENGINE_RATE as u64 / 10) as usize;
             if frames > 0 {
+                // flagged before the silence arrives at the routes
+                fanout.set_quiet_fill(true);
                 push_silence_after(fanout, &mut last_sample, frames);
                 *sent += frames as u64;
                 // exactly as far as the silence sent reaches
