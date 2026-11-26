@@ -14,6 +14,8 @@ Du skal bruge Windows 11, Discord-programmet på din pc (ikke Discord i browsere
 
 **3. Tryk på knappen.** Claude Talk åbner. Tryk **Sæt det op for mig**, og derefter **Åbn Claude**. Log ind på Claude med din e-mail (kun første gang, se herunder). Start et opkald i Discord. Tryk så på stemme-knappen i Claude-vinduet: den runde knap med lydbølger i højre side af skrivefeltet.
 
+**Hver gang du vil have Claude med:** Claude Talk starter selv med Windows og ligger ved uret. Klik på ikonet (eller åbn Claude Talk fra Start-menuen), tryk **Åbn Claude**, og tryk på den runde knap med lydbølger i Claude-vinduet.
+
 | Første gang | Klar |
 |---|---|
 | ![Velkommen](docs/screenshots/onboarding-welcome--light.png) | ![Klar](docs/screenshots/onboarding-ready--light.png) |
@@ -50,7 +52,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 
 **Jeg har lukket vinduet. Kører Claude Talk stadig?** Ja. Når du lukker vinduet, lægger Claude Talk sig nede ved uret (tryk på den lille pil ^ ved uret, hvis du ikke kan se ikonet, eller åbn Claude Talk fra Start-menuen). Klik på ikonet for at åbne det igen. Vil du lukke helt, så højreklik på ikonet og vælg **Luk Claude Talk**.
 
-**De andre kan ikke høre Claude.** Se i feltet med overskriften **Discord** i Claude Talk. Står der et grønt flueben ved »De andre i Discord hører Claude«, så se i Claude-vinduet, om Claude taler (lydbølgerne bevæger sig). Ellers følg knappen i feltet.
+**De andre kan ikke høre Claude.** Se i feltet med overskriften **Discord** i Claude Talk. Står der et grønt flueben ved »De andre i Discord hører Claude«, så tjek i Discord, at du ikke har slået din mikrofon fra, og at Discord står på »Stemmeaktivitet« (ikke »Tryk for at tale«). Se også i Claude-vinduet, om Claude taler (lydbølgerne bevæger sig). Ellers følg knappen i feltet.
 
 **Hvordan fjerner jeg det igen?** Åbn **Indstillinger → Apps → Installerede apps**, tryk på **…** ved Claude Talk og vælg **Afinstaller**. Svar **Ja**, når Windows spørger. Discord får sin almindelige mikrofon tilbage, og Claude Talk-mikrofonen fjernes. Undervejs bliver du spurgt, om du også vil slette dine indstillinger og logge ud af Claude i Claude Talk.
 
@@ -65,7 +67,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 | »Tryk på den runde knap med lydbølger …« | Tryk **Vis Claude-vinduet**, og tryk på den knap i skrivefeltet. |
 | »Din mikrofon er slået fra …« | Tryk **Slå min mikrofon til** i feltet **Dig**. |
 | Claudes stemme er svag i Discord | Slå Discords støjfjernelse fra under *Stemme og video*. |
-| Noget andet driller | **Hjælp → Kør selvtest** (når du ikke er i et opkald). Hjælper det ikke, så **Hjælp → Gem fejlrapport** og **Skriv til os**. |
+| Noget andet driller | **Hjælp → Kør selvtest** (når du ikke er i et opkald og ikke taler med Claude). Hjælper det ikke, så **Hjælp → Gem fejlrapport** og **Skriv til os**. |
 
 ![Vejledning til Discord](docs/screenshots/main-discord-wrong-mic--light.png)
 

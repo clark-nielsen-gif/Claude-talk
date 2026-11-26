@@ -310,6 +310,9 @@ impl Config {
         // "Slå min mikrofon fra" is for now, not for tomorrow: muted after
         // a restart, nobody in Discord would hear the user, without a hint
         self.mic_muted = false;
+        // the same for "Claude stille i Discord": nobody would hear Claude
+        // the next day, and the tray does not show it
+        self.claude_to_discord_muted = false;
         // only the programs the Chrome/app mode offers (a hand-edited
         // "discord.exe" here would let Discord hear itself)
         if self.external_claude.as_deref().is_some_and(|e| {

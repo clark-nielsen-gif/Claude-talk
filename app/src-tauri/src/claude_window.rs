@@ -207,7 +207,8 @@ fn auto_send(app: &AppHandle) {
     let text = {
         let st = app.state::<AppState>();
         let c = st.config.lock().unwrap_or_else(|p| p.into_inner());
-        if !c.instructions.auto_send {
+        // (not while Claude is out of the call: the message describes the call)
+        if !c.instructions.auto_send || !c.claude_in_discord {
             return;
         }
         c.instructions.text(&c.language, c.claude_hears_discord)
@@ -482,10 +483,16 @@ mod win {
                         let mut kind = Default::default();
                         args.ProcessFailedKind(&mut kind)?;
                         log::warn!("Claude window: a WebView2 process failed (kind {})", kind.0);
-                        // Whatever failed, the page no longer uses our microphone.
+                        // Only the browser (0) or the page's own renderer (1,
+                        // exited; 2, hung) takes the page – and its use of our
+                        // microphone – with it. GPU, utility and frame
+                        // processes come back by themselves; the page and its
+                        // voice conversation keep running.
                         let st = fail_app.state::<AppState>();
-                        st.claude_mic_active.store(false, Ordering::Relaxed);
-                        crate::audio::refresh_mic(&fail_app);
+                        if kind.0 <= 2 {
+                            st.claude_mic_active.store(false, Ordering::Relaxed);
+                            crate::audio::refresh_mic(&fail_app);
+                        }
                         if kind.0 == 0 {
                             // The browser process is gone: forget its id (a new
                             // program could get it) and close the dead window;
@@ -571,7 +578,14 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
             "bridge source mode: {}",
             v.get("mode").and_then(|m| m.as_str()).unwrap_or("?")
         ),
-        Some("stats") => log::debug!("bridge stats: {v}"),
+        Some("stats") => {
+            // sent every 2 s while the page uses our microphone: whatever
+            // happened meanwhile, it is in use
+            log::debug!("bridge stats: {v}");
+            if !state.claude_mic_active.swap(true, Ordering::Relaxed) {
+                crate::audio::refresh_mic(app);
+            }
+        }
         _ => {}
     }
 }

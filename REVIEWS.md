@@ -87,3 +87,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 
 **Rettet efter runde 6:** programmet lukker ikke, når sidste vindue lukkes; `taskkill` er fjernet (Tauris egen lukning tager også hjælperen); referencen renderes for det øjeblik, mikrofonrammen blev optaget, og forsinkelsesvagten på faste routes regner med forsinkelsen (testen kører nu også med 2 og 3 rammer ad gangen: 64 dB); højttalere tilføjet under Avanceret slår ekkodæmpning til; COM i opstarten; et mislykket programskifte slår tilstanden helt fra; pladsholdere har 5,5:1; README-billederne er nye; lukke-dialogen fra ikonet ved uret kører uden at stoppe lyden.
 
+## Runde 7 – 2026-11-26 – ikke ren (design og "min mor" rene)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 4 minor | Efter et nedbrud i en WebView2-hjælpeproces (GPU, lyd-tjeneste, iframe) troede Claude Talk, at Claude ikke lyttede mere, og sendte ingen lyd, selv om samtalen kørte videre. |
+| Lyd | 1 major, 2 minor | Stilhed, der blev fyldt ind for en kilde, blev aldrig afstemt med en pakke, der bare kom sent: referencens forsinkelse hoppede, og ekkodæmpningen faldt til 2–11 dB, når pakker af og til var over 5 ms forsinkede. |
+| Design | 0 major, 9 minor | **Ren.** |
+| "Min mor" | 0 major, 17 minor | **Ren.** |
+| "Bryd det" | 2 major, 7 minor | Samme WebView2-fund. Discords gemte indstilling blev slettet ved hver nedlukning af Windows, så »genstart Discord« kom igen hver dag. |
+
+**Rettet efter runde 7:** kun browser- og side-nedbrud nulstiller Claudes mikrofon, og siden bekræfter hvert andet sekund, at den bruger den; den del af en sen pakke, der allerede er spillet som stilhed, springes over (WASAPI's tidsstempel), så tidslinjen ikke vokser; Discords indstilling bevares ved Windows-nedlukning, når Claude Talk starter med Windows; »Claude stille i Discord« overlever ikke en genstart; instruktioner sendes ikke, mens Claude er ude af opkaldet; README forklarer »hver gang«.
+

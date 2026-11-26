@@ -182,7 +182,13 @@ fn shutdown_inner(app: &AppHandle, user_quit: bool) {
         drop(host);
         // Nothing feeds Discord's microphone any more: give Discord its own
         // microphone back (the next start points it at Claude Talk again).
-        discord::restore();
+        // Not when Windows ends the session and Claude Talk starts with
+        // Windows: it is back at the next sign-in, and keeping Discord's
+        // setting spares a "restart Discord" after every reboot (K8).
+        let autostart = st.config.lock().map(|c| c.autostart).unwrap_or(true);
+        if user_quit || !autostart {
+            discord::restore();
+        }
         // Discord closed: its choice can only be put back once it runs again
         let discord_running =
             !ct_engine::win::policy::pids_of(&ct_engine::win::host::discord_executables())

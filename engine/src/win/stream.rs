@@ -585,6 +585,10 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
     let mut last_data = Instant::now();
     // silence fed since the program went quiet: (since, frames sent)
     let mut quiet: Option<(Instant, u64)> = None;
+    // how far that silence reached, in the packets' clock (100 ns QPC units):
+    // a packet that was only late overlaps it, and the overlap is dropped so
+    // the timeline (and the echo reference's delay) does not grow
+    let mut silence_until: Option<u64> = None;
     // A quiet program sends no packets; look every 5 ms so the silence that
     // replaces them is on time (late silence would make the routes underrun
     // and grow their buffers).
@@ -612,16 +616,31 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             let mut data: *mut u8 = std::ptr::null_mut();
             let mut frames = 0u32;
             let mut bflags = 0u32;
-            if let Err(e) =
-                unsafe { capture.GetBuffer(&mut data, &mut frames, &mut bflags, None, None) }
-            {
+            let mut qpc = 0u64;
+            if let Err(e) = unsafe {
+                capture.GetBuffer(&mut data, &mut frames, &mut bflags, None, Some(&mut qpc))
+            } {
                 return finish(&client, e.into());
             }
+            // part of this packet was already played as silence (it came late)
+            let skip = match silence_until {
+                Some(end) if qpc != 0 && end > qpc => {
+                    (((end - qpc) as f64 * ENGINE_RATE as f64 / 1e7) as u32).min(frames)
+                }
+                _ => 0,
+            };
             if bflags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32 != 0 {
                 ctx.status.discontinuities.fetch_add(1, Ordering::Relaxed);
             }
-            if bflags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
-                fanout.push(None, ENGINE_CHANNELS, frames as usize);
+            if skip < frames {
+                // the rest of this packet (and all later ones) is new sound
+                silence_until = None;
+            }
+            let keep = (frames - skip) as usize;
+            if keep == 0 {
+                // entirely covered by the silence already sent
+            } else if bflags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
+                fanout.push(None, ENGINE_CHANNELS, keep);
             } else {
                 let samples = unsafe {
                     std::slice::from_raw_parts(
@@ -629,7 +648,11 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                         frames as usize * ENGINE_CHANNELS,
                     )
                 };
-                fanout.push(Some(samples), ENGINE_CHANNELS, frames as usize);
+                fanout.push(
+                    Some(&samples[skip as usize * ENGINE_CHANNELS..]),
+                    ENGINE_CHANNELS,
+                    keep,
+                );
             }
             if let Err(e) = unsafe { capture.ReleaseBuffer(frames) } {
                 return finish(&client, e.into());
@@ -651,6 +674,7 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             if frames > 0 {
                 fanout.push(None, ENGINE_CHANNELS, frames);
                 *sent += frames as u64;
+                silence_until = Some(qpc_100ns());
                 ctx.status
                     .silence_filled_frames
                     .fetch_add(frames as u64, Ordering::Relaxed);
@@ -658,6 +682,20 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         }
     };
     finish(&client, ended)
+}
+
+/// Now on the clock WASAPI uses for packet positions (100 ns units).
+fn qpc_100ns() -> u64 {
+    use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
+    let (mut c, mut f) = (0i64, 0i64);
+    unsafe {
+        let _ = QueryPerformanceCounter(&mut c);
+        let _ = QueryPerformanceFrequency(&mut f);
+    }
+    if f <= 0 {
+        return 0;
+    }
+    (c as i128 * 10_000_000 / f as i128) as u64
 }
 
 fn finish(client: &IAudioClient, ended: Ended) -> Ended {
