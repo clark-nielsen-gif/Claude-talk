@@ -1,0 +1,17 @@
+﻿[
+    {
+        "Flow":  "Render",
+        "FriendlyName":  "CABLE In 16ch (VB-Audio Virtual Cable)",
+        "Id":  "{0.0.0.00000000}.{b35569a3-587f-4799-ab1a-94a6f6553a48}"
+    },
+    {
+        "Flow":  "Render",
+        "FriendlyName":  "CABLE Input (VB-Audio Virtual Cable)",
+        "Id":  "{0.0.0.00000000}.{bc9f44f7-7103-45f6-bd0e-28c3d3c928eb}"
+    },
+    {
+        "Flow":  "Capture",
+        "FriendlyName":  "CABLE Output (VB-Audio Virtual Cable)",
+        "Id":  "{0.0.1.00000000}.{cb8360bb-ccc6-4a7f-938d-02b8b4fa02f2}"
+    }
+]
