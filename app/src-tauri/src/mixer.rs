@@ -90,7 +90,28 @@ pub mod imp {
         }
     }
 
+    /// Claude Talk's own program name (the installed `claude-talk.exe`, the
+    /// portable `Claude Talk.exe`, or a renamed copy): never a mixer source –
+    /// it plays into the cable and hosts the Claude window, so capturing it
+    /// would feed our own outputs back into themselves.
+    fn own_exe() -> Vec<String> {
+        let mut v = vec!["claude-talk.exe".to_string(), "claude talk.exe".to_string()];
+        if let Some(n) = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.file_name().map(|f| f.to_string_lossy().to_lowercase()))
+        {
+            v.push(n);
+        }
+        v
+    }
+
     pub fn add_source(host: &mut AudioHost, s: &MixerSource) -> Result<(), String> {
+        if let MixerSourceKind::Program { exe } = &s.kind {
+            let e = exe.to_lowercase();
+            if own_exe().contains(&e) || e == "msedgewebview2.exe" {
+                return Err("error.ownProgram".into());
+            }
+        }
         let (party, kind) = match &s.kind {
             MixerSourceKind::Input { device_id } => (
                 Party::User,
@@ -280,10 +301,8 @@ pub mod imp {
                 .collect::<Vec<_>>()
         };
         let mut skip: Vec<String> = discord_executables();
-        skip.extend([
-            "claude-talk.exe".to_string(),
-            "msedgewebview2.exe".to_string(),
-        ]);
+        skip.extend(["msedgewebview2.exe".to_string()]);
+        skip.extend(own_exe());
         let mut programs: Vec<Choice> = Vec::new();
         for s in ct_engine::win::sessions::sessions(Flow::Render).unwrap_or_default() {
             let exe = s.exe.to_lowercase();

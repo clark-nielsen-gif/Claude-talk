@@ -26,7 +26,7 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 ## Det skal du vide
 - **Claude kører i sit eget vindue i Claude Talk.** Det er det, der gør, at Claude kan høre dig og Discord, uden at noget andet på din pc kommer med. Du logger ind én gang, og så husker vinduet det.
 - **Log ind med din e-mail.** Google tillader ikke login i programmers egne vinduer. Skriv din e-mail, og tryk på knappen under feltet (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet.
-- **Discord bruger Claude Talk-mikrofonen** (i Discord hedder den »Claude Talk – til Discord«). Claude Talk sætter det selv op, og din stemme går stadig igennem som før. Lad derfor Claude Talk køre (den starter med Windows og ligger nede ved uret). Lukker du Claude Talk, får Discord din almindelige mikrofon tilbage. Er du midt i et opkald, spørger Claude Talk først, om Discord skal genstartes, så de andre stadig kan høre dig.
+- **Discord bruger Claude Talk-mikrofonen**, når Discords inputenhed står på »Standard« (det gør den normalt). Claude Talk sætter det selv op, og din stemme går stadig igennem som før. Lad derfor Claude Talk køre (den starter med Windows og ligger nede ved uret). Lukker du Claude Talk, får Discord din almindelige mikrofon tilbage. Er du midt i et opkald, spørger Claude Talk først, om Discord skal genstartes, så de andre stadig kan høre dig.
 - **Brug gerne høretelefoner.** Med højttalere slår Claude Talk selv ekkodæmpning til, men høretelefoner giver den bedste lyd.
 - Programmet kræver **Windows 11**.
 
@@ -54,7 +54,7 @@ Det sker, fordi programmet er nyt, og Windows ikke kender det endnu. Det er sikk
 
 | Det ser du | Det gør du |
 |---|---|
-| »Discord bruger en anden mikrofon« | Tryk **Vis mig hvordan**, og vælg *Claude Talk – til Discord* som inputenhed i Discord. Fluebenet kommer af sig selv. |
+| »Discord bruger en anden mikrofon« | Tryk **Vis mig hvordan**, og vælg **Standard** som inputenhed i Discord (ikke en bestemt mikrofon). Fluebenet kommer af sig selv. |
 | »Discord skal lige genstartes« | Tryk **Genstart Discord for mig**. |
 | »Windows blokerer din mikrofon« | Tryk **Åbn mikrofonindstillinger**, og slå »Adgang til mikrofon« og »Giv skrivebordsapps adgang til din mikrofon« til. |
 | »Vi kan ikke finde en mikrofon« | Sæt dit headset i. Claude Talk finder det selv. |

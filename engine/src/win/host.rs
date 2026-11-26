@@ -170,9 +170,6 @@ const AEC_MIC_IN: OutputId = 9001;
 const AEC_REF_IN: OutputId = 9002;
 /// Source ids from here are internal (self-test tones): never echo references.
 const INTERNAL_SOURCES: SourceId = 900;
-/// Reference buffer for echo reduction: short, so the reference reaches the
-/// canceller before the echo does (speaker + microphone latency is longer).
-const AEC_REF_BUFFER_MS: f64 = 10.0;
 
 /// Echo reduction between the raw microphone and the outputs. The
 /// microphone's routes are moved from the raw capture to the processed
@@ -527,6 +524,9 @@ impl AudioHost {
             return Err("no microphone".into());
         };
         let mut raw = connect_raw(&mut mic.handle, AEC_MIC_IN);
+        // the microphone's (re)starts, passed on to the processed microphone:
+        // the gap around a reopen must not grow the routes behind it
+        let mic_stats = mic.handle.stats.clone();
         let (ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
         let mut ref_mix = ref_mix.without_limiter();
         let (mut fanout, processed) = SourceFanout::new(ids::MIC, ENGINE_RATE);
@@ -546,7 +546,7 @@ impl AudioHost {
                     &mut src.handle,
                     &mut ref_in,
                     GainParams::new(0.0, false),
-                    AEC_REF_BUFFER_MS,
+                    crate::aec::REF_BUFFER_MS,
                 );
             }
         }
@@ -571,7 +571,13 @@ impl AudioHost {
                 let ch = ENGINE_CHANNELS;
                 let mut m = vec![0f32; FRAME];
                 let mut r = vec![0f32; FRAME];
+                let mut mic_restarts = mic_stats.restarts.load(Ordering::Relaxed);
                 while !stop2.load(Ordering::Relaxed) {
+                    let now = mic_stats.restarts.load(Ordering::Relaxed);
+                    if now != mic_restarts {
+                        mic_restarts = now;
+                        fanout.mark_restart();
+                    }
                     // The microphone delivers 10 ms packets (some USB and
                     // Bluetooth mics several at once) and this thread reads
                     // them as they come; more than 60 ms waiting is a stall

@@ -103,10 +103,11 @@ const da = {
   },
 
   guide: {
-    discordTitle: 'Vælg Claude Talk som mikrofon i Discord',
+    discordTitle: 'Sæt Discords mikrofon til »Standard«',
+    sketchChoice: 'Standard',
     discordSteps: [
       'Tryk på knappen herunder. Discord åbner sine lydindstillinger.',
-      'Find feltet for mikrofonen (det hedder »Inputenhed«, »Indgangsenhed« eller »Input Device«), og vælg Claude Talk – til Discord.',
+      'Find feltet for mikrofonen (det hedder »Inputenhed«, »Indgangsenhed« eller »Input Device«), og vælg »Standard« (på engelsk »Default«). Så bruger Discord Claude Talk-mikrofonen, mens Claude Talk kører, og din almindelige mikrofon, når det ikke gør.',
       'Det var det. Vi holder øje og viser et grønt flueben, så snart det virker.',
     ],
     discordButton: 'Åbn Discords lydindstillinger',
@@ -163,6 +164,8 @@ const da = {
     unsupportedAction: 'Se hvordan du opdaterer',
     hotkeyTaken: 'Den genvej bruges allerede af et andet program. Vælg en anden.',
     hotkeyDuplicate: 'Den genvej bruges allerede til en anden handling. Vælg en anden.',
+    ownProgram: 'Claude Talk kan ikke tilføje sig selv eller Claude-vinduet som kilde.',
+    cableNoArm: 'Claude Talk-mikrofonen findes ikke til pc’er med ARM-processor (f.eks. Snapdragon) i den udgave, VB-Audio har nu. Claude Talk kan derfor ikke bruges på denne pc endnu.',
     claudeWindow: 'Claude-vinduet kunne ikke åbnes. Prøv igen om et øjeblik.',
     report: 'Fejlrapporten kunne ikke gemmes. Prøv igen.',
     open: 'Det kunne ikke åbnes. Prøv igen.',
@@ -369,10 +372,11 @@ const en: Dict = {
     pttHint: 'Hold {key} to talk to Claude',
   },
   guide: {
-    discordTitle: 'Choose Claude Talk as your microphone in Discord',
+    discordTitle: 'Set Discord’s microphone to “Default”',
+    sketchChoice: 'Default',
     discordSteps: [
       'Press the button below. Discord opens its voice settings.',
-      'Find the microphone field (called “Input Device”), and choose Claude Talk – til Discord.',
+      'Find the microphone field (called “Input Device”), and choose “Default”. Discord then uses the Claude Talk microphone while Claude Talk runs, and your normal microphone when it doesn’t.',
       'That’s it. We keep watching and show a green check as soon as it works.',
     ],
     discordButton: 'Open Discord’s voice settings',
@@ -427,6 +431,8 @@ const en: Dict = {
     unsupportedAction: 'See how to update',
     hotkeyTaken: 'Another app already uses that shortcut. Choose a different one.',
     hotkeyDuplicate: 'That shortcut is already used for another action. Choose a different one.',
+    ownProgram: 'Claude Talk can’t add itself or the Claude window as a source.',
+    cableNoArm: 'The Claude Talk microphone isn’t available for PCs with an ARM processor (e.g. Snapdragon) in VB-Audio’s current package. Claude Talk can’t be used on this PC yet.',
     claudeWindow: 'The Claude window couldn’t open. Try again in a moment.',
     report: 'The error report couldn’t be saved. Try again.',
     open: 'That couldn’t be opened. Try again.',

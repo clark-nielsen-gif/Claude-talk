@@ -23,6 +23,12 @@ pub fn spawn_watcher(app: AppHandle) {
             let exes = discord_executables();
             let state = app.state::<AppState>().inner().clone();
             let mut routed_since: Option<Instant> = None;
+            // Discord's processes when the routing took hold, and whether
+            // Discord has restarted since: if it still records another mic
+            // after a restart, its input is set to a specific device and a
+            // further restart would not help (the guide is shown instead).
+            let mut routed_pids: Vec<u32> = Vec::new();
+            let mut restarted_since_route = false;
             let mut last_logged = (u8::MAX, false);
             let mut last_good: [Option<String>; 3] = [None, None, None];
             let mut tick = 0u32;
@@ -41,7 +47,9 @@ pub fn spawn_watcher(app: AppHandle) {
                 tick += 1;
                 guard_default_output(&state, &mut last_good);
                 let enabled = state.config.lock().map(|c| c.route_discord).unwrap_or(true);
-                let running = !policy::pids_of(&exes).is_empty();
+                let mut pids = policy::pids_of(&exes);
+                pids.sort_unstable();
+                let running = !pids.is_empty();
                 if !enabled && running && policy::discord_routed_to_cable(&exes) == Some(true) {
                     // "Restore normal sound settings" was pressed while Discord was closed
                     let n = policy::restore_discord(&exes);
@@ -55,18 +63,31 @@ pub fn spawn_watcher(app: AppHandle) {
                                     "Discord's microphone set to Claude Talk ({n} processes)"
                                 );
                                 routed_since = Some(Instant::now());
+                                routed_pids = pids.clone();
+                                restarted_since_route = false;
                             }
                             Ok(_) => {}
                             Err(e) => log::warn!("could not set Discord's microphone: {e}"),
                         },
                         Some(true) => {
                             routed_since.get_or_insert_with(Instant::now);
+                            if routed_pids.is_empty() {
+                                routed_pids = pids.clone();
+                            } else if routed_pids != pids {
+                                routed_pids = pids.clone();
+                                restarted_since_route = true;
+                                routed_since = Some(Instant::now());
+                            }
                         }
                         None => {}
                     }
                 }
                 if !running {
                     routed_since = None;
+                }
+                if !enabled {
+                    routed_pids.clear();
+                    restarted_since_route = false;
                 }
                 let cable = policy::cable_capture_id();
                 let mic = sessions::discord_mic(&exes, cable.as_deref());
@@ -86,7 +107,8 @@ pub fn spawn_watcher(app: AppHandle) {
                 // If its device setting is "Default", a restart fixes it.
                 let restart = uses == NO
                     && routed_since.is_some_and(|t| t.elapsed() > Duration::from_secs(6))
-                    && enabled;
+                    && enabled
+                    && !restarted_since_route;
                 state
                     .discord_needs_restart
                     .store(restart, Ordering::Relaxed);

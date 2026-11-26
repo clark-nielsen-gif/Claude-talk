@@ -55,6 +55,11 @@ pub struct AdaptiveResampler {
     restart_grace: bool,
     /// frames of fade-in still to apply after a gap (no click on resume)
     fade_in: usize,
+    /// fixed mode: input frames owed for a gap that was played as silence;
+    /// skipped when they arrive, so the delay really stays the same
+    owed: f64,
+    /// the last frame played (a gap at a block boundary fades from it)
+    last: [f32; 8],
 }
 
 impl AdaptiveResampler {
@@ -105,6 +110,8 @@ impl AdaptiveResampler {
             source_epoch: 0,
             restart_grace: false,
             fade_in: 0,
+            owed: 0.0,
+            last: [0.0; 8],
         }
     }
 
@@ -203,6 +210,18 @@ impl AdaptiveResampler {
             self.drift.reset();
         }
 
+        if self.fixed && self.owed >= 1.0 {
+            // a late packet arrived: drop what was already played as silence
+            let n = (self.owed as usize).min(available);
+            if n > 0 {
+                if let Ok(c) = ring.read_chunk(n * ch) {
+                    c.commit_all();
+                }
+                available -= n;
+                self.owed -= n as f64;
+                stats.skipped_frames += n as u32;
+            }
+        }
         self.min_slack = self
             .min_slack
             .min(available.saturating_sub(block_in.ceil() as usize));
@@ -222,6 +241,16 @@ impl AdaptiveResampler {
                     out[written..].fill(0.0);
                     stats.underrun_frames += ((wanted - written) / ch) as u32;
                     // the sound stops: ramp the last 1 ms down instead of a click
+                    if written == 0 && wanted / ch >= FADE {
+                        // nothing new at all: ring the last frame down
+                        for f in 0..FADE {
+                            let g = 1.0 - (f + 1) as f32 / FADE as f32;
+                            for c in 0..ch.min(8) {
+                                out[f * ch + c] = self.last[c] * g;
+                            }
+                        }
+                    }
+                    self.last = [0.0; 8];
                     let tail = (written / ch).min(FADE);
                     for k in 0..tail {
                         let g = k as f32 / tail as f32; // 0 at the gap
@@ -232,7 +261,12 @@ impl AdaptiveResampler {
                     }
                     self.apply_fade_in(&mut out[..written]);
                     if self.fixed {
-                        // keep the timeline: the gap is silence, nothing moves
+                        // keep the timeline: the gap was played as silence,
+                        // so the same stretch of input is skipped when it
+                        // arrives (at most 40 ms: a longer gap is a source
+                        // that really paused, whose next sound is new)
+                        let missing = ((wanted - written) / ch) as f64 / self.nominal;
+                        self.owed = (self.owed + missing).min(self.in_rate as f64 * 0.04);
                         self.fade_in = FADE;
                         return stats;
                     }
@@ -274,6 +308,11 @@ impl AdaptiveResampler {
             written += n;
         }
         self.apply_fade_in(out);
+        if out.len() >= ch {
+            for c in 0..ch.min(8) {
+                self.last[c] = out[out.len() - ch + c];
+            }
+        }
         stats
     }
 
@@ -481,24 +520,38 @@ mod tests {
 
     #[test]
     fn gaps_fade_out_and_in_without_clicks() {
-        let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
-        let mut r = AdaptiveResampler::new(1, 48000, 48000, 20.0, 100.0);
-        let mut out = vec![0.0f32; 480];
-        let mut all = Vec::new();
-        for block in 0..200 {
-            // a constant level: any jump in the output is a click
-            let stalled = (80..100).contains(&block);
-            if !stalled {
-                let _ = prod
-                    .write_chunk_uninit(480)
-                    .map(|c| c.fill_from_iter(std::iter::repeat(0.5f32)));
+        // the gap starts at different points of a block, including exactly
+        // on a block boundary (nothing at all to play in a pull)
+        for offset in [0usize, 1, 48, 200, 479] {
+            let (mut prod, mut cons) = rtrb::RingBuffer::<f32>::new(48000);
+            let mut r = AdaptiveResampler::new(1, 48000, 48000, 20.0, 100.0);
+            let mut out = vec![0.0f32; 480];
+            let mut all = Vec::new();
+            for block in 0..200 {
+                // a constant level: any jump in the output is a click
+                let n = match block {
+                    80 => offset,
+                    81..=99 => 0,
+                    _ => 480,
+                };
+                if n > 0 {
+                    let _ = prod
+                        .write_chunk_uninit(n)
+                        .map(|c| c.fill_from_iter(std::iter::repeat(0.5f32)));
+                }
+                r.pull(&mut cons, &mut out);
+                all.extend_from_slice(&out);
             }
-            r.pull(&mut cons, &mut out);
-            all.extend_from_slice(&out);
+            let max_step = all[4800..]
+                .windows(2)
+                .map(|w| (w[1] - w[0]).abs())
+                .fold(0.0f32, f32::max);
+            assert!(
+                max_step < 0.05,
+                "offset {offset}: a click, step of {max_step}"
+            );
+            assert!(all.contains(&0.0), "the stall must be a gap");
         }
-        let max_step = all.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0f32, f32::max);
-        assert!(max_step < 0.05, "a click: step of {max_step}");
-        assert!(all.iter().any(|&x| x == 0.0), "the stall must be a gap");
     }
 
     #[test]

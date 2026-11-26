@@ -181,7 +181,9 @@ pub fn send_instructions(app: AppHandle, state: State<AppState>) -> Result<(), S
     Ok(())
 }
 
-#[tauri::command]
+// `async`: on Windows, creating a window inside a synchronous command
+// deadlocks (it runs in WebView2's IPC handler on the main thread).
+#[tauri::command(async)]
 pub fn open_claude(app: AppHandle) -> Result<(), String> {
     crate::claude_window::open(&app).map_err(|e| {
         log::error!("open Claude window: {e}");
@@ -225,12 +227,13 @@ pub fn save_report(app: AppHandle) -> Result<String, String> {
     })
 }
 
-#[tauri::command]
+// off the main thread: it may ask first (a Windows dialog)
+#[tauri::command(async)]
 pub fn quit(app: AppHandle) {
     crate::request_quit(&app);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn show_main(app: AppHandle) {
     // started with Windows: the window (and its WebView2) is made only
     // when it is first opened

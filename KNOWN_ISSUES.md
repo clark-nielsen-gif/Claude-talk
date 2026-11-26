@@ -59,3 +59,21 @@ Lukker man Claude Talk normalt, spørger den først og giver Discord sin egen mi
 - Broen til Claude-vinduet begrænser antallet af ventende pakker, ikke deres alder i Chromiums kø. Målt forsinkelse til Claude står i `PROGRESS.md`.
 - Når en tilføjet kilde fjernes i **Avanceret**, stopper dens lyd uden udtoning (et lille klik er muligt).
 
+## K20 – Windows på ARM (Snapdragon)
+Installeren bruger VB-Audios ARM64-driver, hvis pakken har en. Har den ikke, siger installeren og programmet tydeligt, at Claude Talk-mikrofonen ikke findes til pc'en endnu (kode 6). Det er ikke testet på en ARM-pc.
+
+## K21 – Discord i browseren og andre Discord-programmer
+Claude Talk genkender Discord, Discord PTB og Discord Canary. Discord i en browser og programmer som Vesktop eller Legcord genkendes ikke. Kortet bliver ved med at sige »Start Discord«.
+
+## K22 – Login med firma-konto (SSO)
+Logger man ind på Claude via sin arbejdsplads (SSO), åbner login-siden i den almindelige browser, og Claude-vinduet bliver ikke logget ind. Brug login med e-mail og kode.
+
+## K23 – Hvis Discords højttaler sættes til Claude Talks interne enhed
+Claude Talk sætter Windows' standardhøjttaler tilbage, hvis den bliver »Claude Talk – intern« (D23). Vælger man den som højttaler inde i Discords egne indstillinger eller i Windows' lydstyrkemixer pr. program, opdages det ikke, og de andre hører sig selv.
+
+## K24 – To Windows-brugere på samme pc
+Kablet deles af alle brugere. Lader bruger A Claude tale, og skifter man til bruger B uden at logge A ud, kan B's Discord høre A's Claude.
+
+## K25 – Forsinkelse til Claude
+Vejen fra Discord til Claude-vinduet går gennem en buffer, broen til siden og sidens egen lydkø. Målt forsinkelse står i `PROGRESS.md`. Den er over målet på 40 ms. For en samtale med Claude betyder det, at Claude hører de andre en anelse senere; Claude svarer alligevel først, når nogen er færdig med at tale.
+

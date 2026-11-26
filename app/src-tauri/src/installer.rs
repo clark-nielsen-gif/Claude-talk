@@ -4,7 +4,8 @@
 //!   vb-audio.com, checks it, installs it silently, gives the devices their
 //!   Claude Talk names and makes sure Windows' default devices did not
 //!   change. Exit codes: 0 ok, 2 no internet, 3 package failed the check,
-//!   4 driver install failed, 5 other error.
+//!   4 driver install failed, 5 other error, 6 no driver for this PC
+//!   (Windows on ARM and the package has no ARM64 driver).
 //! * `--uninstall-cleanup`: gives Discord its own microphone back, removes
 //!   autostart, and removes VB-CABLE if Claude Talk installed it.
 //!
@@ -59,6 +60,34 @@ pub fn elevated_log_dir() -> PathBuf {
     program_files().join("Claude Talk").join("logs")
 }
 
+/// Windows on ARM (the program itself runs emulated as x64 there).
+fn is_arm64() -> bool {
+    use windows::Win32::System::SystemInformation::IMAGE_FILE_MACHINE_ARM64;
+    use windows::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+    let (mut process, mut native) = (Default::default(), Default::default());
+    unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, Some(&mut native)) }.is_ok()
+        && native == IMAGE_FILE_MACHINE_ARM64
+}
+
+/// The ARM64 setup program and driver catalog in an extracted package.
+fn find_arm64(dir: &Path) -> Option<(PathBuf, PathBuf)> {
+    let files: Vec<PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    let named = |ext: &str| {
+        files.iter().find(|p| {
+            let n = p
+                .file_name()
+                .map(|f| f.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            n.contains("arm64") && n.ends_with(ext)
+        })
+    };
+    Some((named(".exe")?.clone(), named(".cat")?.clone()))
+}
+
 /// Who signs VB-Audio's own setup program (Vincent Burel's VB-Audio).
 fn vb_audio_signer(name: &str) -> bool {
     let n = name.to_lowercase();
@@ -111,12 +140,25 @@ pub fn install_cable() -> i32 {
         return 5;
     }
     let _ = std::fs::remove_file(&zip);
-    let setup = dir.join(SETUP_EXE);
+    // Windows on ARM needs VB-Audio's ARM64 setup and driver; the x64 driver
+    // cannot load there.
+    let (setup, catalog) = if is_arm64() {
+        match find_arm64(&dir) {
+            Some(found) => found,
+            None => {
+                log::error!("installer: this PC is ARM64 and the package has no ARM64 driver");
+                let _ = std::fs::remove_dir_all(&dir);
+                return 6;
+            }
+        }
+    } else {
+        (dir.join(SETUP_EXE), dir.join(CATALOG))
+    };
     // The tested package (exact hash), or a newer one whose driver catalog
     // is signed by Microsoft's hardware program and whose setup program is
     // signed by VB-Audio; signatures checked with revocation (we are online:
     // the package was just downloaded).
-    let catalog_ok = signer_name(&dir.join(CATALOG), true).is_some_and(|n| n.contains(WHCP));
+    let catalog_ok = signer_name(&catalog, true).is_some_and(|n| n.contains(WHCP));
     let setup_signer = signer_name(&setup, true);
     let setup_ok = match &setup_signer {
         Some(_) if hash_ok => true,
@@ -161,7 +203,11 @@ pub fn uninstall_cleanup() -> i32 {
     // VB-CABLE is removed only if Claude Talk installed it, and only with
     // the very setup program that installed it.
     if let Ok(expected) = std::fs::read_to_string(marker()) {
-        let setup = data_dir().join(SETUP_EXE);
+        let setup = if is_arm64() {
+            find_arm64(&data_dir()).map(|(s, _)| s).unwrap_or_default()
+        } else {
+            data_dir().join(SETUP_EXE)
+        };
         let same =
             !expected.trim().is_empty() && sha256_hex(&setup).is_some_and(|h| h == expected.trim());
         // no revocation check here: uninstalling must work offline, and the

@@ -84,7 +84,13 @@ mod imp {
         crate::mixer::imp::apply(&mut host, &saved.mixer, saved.advanced_unlocked);
         if let Some(exe) = saved.external_claude.as_deref() {
             if let Err(e) = crate::mixer::imp::set_external_claude(&mut host, Some(exe)) {
-                log::warn!("external Claude not started: {e}");
+                // the extra cable is gone: turn the mode off, or the mic would
+                // stay open for good with no switch to turn it off
+                log::warn!("external Claude not started ({e}); mode turned off");
+                if let Ok(mut c) = state.config.lock() {
+                    c.external_claude = None;
+                }
+                state.save_config();
             }
         }
         *state.audio.lock().unwrap_or_else(|p| p.into_inner()) = Some(host);

@@ -4,7 +4,7 @@ import { useApp, useT } from '../context';
 
 /** A neutral sketch of a voice-settings panel with the right choice marked.
  *  Deliberately generic: no third-party logos or screenshots. */
-function Sketch({ label }: { label: string }) {
+function Sketch({ label, choice }: { label: string; choice: string }) {
   return (
     <svg className="illustration" viewBox="0 0 480 150" role="img" aria-label={label} width="100%">
       <rect x="0" y="0" width="480" height="150" rx="12" fill="var(--sunk)" />
@@ -15,7 +15,7 @@ function Sketch({ label }: { label: string }) {
       <rect x="20" y="92" width="200" height="38" rx="8" fill="var(--card)" stroke="var(--clay)" strokeWidth="2" />
       <circle cx="40" cy="111" r="7" fill="var(--clay)" />
       <path d="M36.5 111l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      <text x="56" y="115" fontSize="13" fontWeight="600" fontFamily="Inter Variable, sans-serif" fill="var(--ink)">Claude Talk – til Discord</text>
+      <text x="56" y="115" fontSize="13" fontWeight="600" fontFamily="Inter Variable, sans-serif" fill="var(--ink)">{choice}</text>
       <rect x="252" y="20" width="96" height="10" rx="5" fill="var(--line-strong)" />
       <rect x="252" y="44" width="208" height="34" rx="8" fill="var(--card)" stroke="var(--line)" />
       <rect x="266" y="58" width="120" height="6" rx="3" fill="var(--line-strong)" />
@@ -50,7 +50,7 @@ export function DiscordGuide({ mode, onClose }: { mode: 'mic' | 'restart'; onClo
         {mode === 'mic' ? (
           <>
             <h2 id="guide-title">{t.guide.discordTitle}</h2>
-            <Sketch label={t.guide.sketchLabel} />
+            <Sketch label={t.guide.sketchLabel} choice={t.guide.sketchChoice} />
             <ol>{t.guide.discordSteps.map((s) => <li key={s}>{s}</li>)}</ol>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>

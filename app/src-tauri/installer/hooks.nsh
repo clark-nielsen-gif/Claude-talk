@@ -17,6 +17,12 @@
     ${Else}
       MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Claude Talk needs the internet for a moment to download the Claude Talk microphone from VB-Audio. Check your connection and press Retry." /SD IDCANCEL IDRETRY install_cable
     ${EndIf}
+  ${ElseIf} $0 == 6
+    ${If} $LANGUAGE == 1030
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Claude Talk-mikrofonen findes ikke til pc'er med ARM-processor (f.eks. Snapdragon) endnu. Claude Talk kan derfor ikke bruges på denne pc." /SD IDOK
+    ${Else}
+      MessageBox MB_OK|MB_ICONEXCLAMATION "The Claude Talk microphone isn't available for PCs with an ARM processor (e.g. Snapdragon) yet. Claude Talk can't be used on this PC." /SD IDOK
+    ${EndIf}
   ${ElseIf} $0 != 0
     ${If} $LANGUAGE == 1030
       MessageBox MB_OK|MB_ICONEXCLAMATION "Claude Talk-mikrofonen kunne ikke sættes op. Åbn Claude Talk. Programmet forklarer dig, hvad du kan gøre." /SD IDOK

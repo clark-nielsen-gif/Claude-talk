@@ -10,7 +10,11 @@ export function useInstallCable(): { installing: boolean; install: () => void } 
   const install = () => {
     setInstalling(true);
     api.installCable()
-      .then((code) => { if (code === 2) toast(t.errors.cableNoInternet); else if (code !== 0) toast(t.errors.cableInstallFailed); })
+      .then((code) => {
+        if (code === 2) toast(t.errors.cableNoInternet);
+        else if (code === 6) toast(t.errors.cableNoArm);
+        else if (code !== 0) toast(t.errors.cableInstallFailed);
+      })
       .catch((e) => {
         if (String(e) === 'error.cableNeedsInstaller') toast(t.errors.cableNeedsInstaller);
         else if (String(e) !== 'cancelled') toast(t.errors.cableInstallFailed);

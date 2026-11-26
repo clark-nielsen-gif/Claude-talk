@@ -39,3 +39,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 
 **Ikke rettet, med begrundelse:** se `KNOWN_ISSUES.md` K15–K19 (VoiceMeeter, højttalere på en anden enhed end standarden, privat projekt, dræbt proces, små lydpunkter).
 
+## Runde 3 – 2026-11-26 – ikke ren
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | ikke afsluttet | Revieweren ventede på en tilladelse til at hente en webside og blev stoppet. Runden var allerede ikke ren. |
+| Lyd | 1 blocker, 2 major, 3 minor | Ekkodæmperens reference (10 ms) løb tør og flyttede sig: kun 4–27 dB ekko fjernet i en simulering af den rigtige kobling. Mikrofonens genstarter fik mikrofon-routes til at vokse med ekkodæmpning slået til. Forsinkelsen er ikke målt igen efter ændringerne. |
+| Design | 1 blocker, 7 major, 14 minor | Opsætningen kunne snurre for evigt, hvis mikrofonen manglede. Linjen under kontakten sagde »alt virker«, mens kortene sagde andet. Beskeder forsvandt efter 2,6 s. Kontrast på tre steder. Mixeren overlappede i smalle vinduer. |
+| "Min mor" | 1 blocker, 8 major, 16 minor | Samme opsætnings-blocker. Linket i login-mailen logger ind i den forkerte browser. »Genstart Discord« sagde ikke, at man ryger ud af opkaldet. Lukke-dialogen havde skæve mellemrum. Stemme-knappen var ikke beskrevet. Browserens og Windows' advarsler ved download og installation var ikke forklaret. |
+| "Bryd det" | 1 blocker, 4 major, 12 minor | »Åbn Claude« lavede vinduet i en synkron kommando (Tauri dokumenterer en deadlock på Windows). En Discord med fast inputenhed gav en evig »genstart Discord«-løkke. Vejledningen fik brugeren til at vælge Claude Talk-mikrofonen fast i Discord. Den bærbare Claude Talk kunne tilføje sig selv som kilde. Windows på ARM. |
+
+**Rettet efter runde 3:** alle blocker- og major-fund, se `DECISIONS.md` D21 og `KNOWN_ISSUES.md` K9 og K20–K25, samt de fleste minor-fund (knapper der stikker ud, tastaturfokus i dialogen, ensartede ord, installerbeskeder på ét sprog, første lukning forklarer ikonet ved uret, lyd-klik ved huller på blokgrænser).
+
