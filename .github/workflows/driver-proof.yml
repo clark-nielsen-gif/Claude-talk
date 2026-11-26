@@ -92,21 +92,24 @@ jobs:
           "cable step outcome=${{ steps.cable.outcome }}" | Tee-Object -Append results\cable-install.txt
           ci/driver-proof/Report-Audio.ps1 -OutFile results\02-after-cable.json -Label after-cable
 
-      - name: Install Hi-Fi Cable silently, NO publisher pre-trust
-        id: hifi
-        timeout-minutes: 4
-        continue-on-error: true
+      - name: Hi-Fi Cable – attempt 1, no pre-trust (recorded with screenshots)
+        shell: powershell
+        run: ci/driver-proof/Watch-Installer.ps1 -Exe vb\hifi\HiFiCableAsioBridgeSetup.exe -Arguments '-i','-h' -OutDir results -Name hifi-1 | Tee-Object results\hifi-install.txt
+
+      - name: Hi-Fi Cable – attempt 2, installer signer pre-trusted
         shell: powershell
         run: |
-          $p = Start-Process vb\hifi\HiFiCableAsioBridgeSetup.exe -ArgumentList '-i', '-h' -Wait -PassThru
-          "Hi-Fi setup exit=$($p.ExitCode)" | Tee-Object results\hifi-install.txt
+          $cert = (Get-AuthenticodeSignature vb\hifi\HiFiCableAsioBridgeSetup.exe).SignerCertificate
+          "Trusting publisher for this runner only: $($cert.Subject)"
+          $store = New-Object Security.Cryptography.X509Certificates.X509Store 'TrustedPublisher', 'LocalMachine'
+          $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
+          ci/driver-proof/Watch-Installer.ps1 -Exe vb\hifi\HiFiCableAsioBridgeSetup.exe -Arguments '-i','-h' -OutDir results -Name hifi-2 | Tee-Object -Append results\hifi-install.txt
 
       - name: Report after Hi-Fi Cable
         if: always()
         shell: powershell
         run: |
           Start-Sleep 5
-          "hifi step outcome=${{ steps.hifi.outcome }}" | Tee-Object -Append results\hifi-install.txt
           ci/driver-proof/Report-Audio.ps1 -OutFile results\03-after-hifi.json -Label after-hifi
           ci/driver-proof/List-Endpoints.ps1 -OutFile results\04-endpoints-before-rename.json | Out-Null
 
@@ -126,10 +129,12 @@ jobs:
         if: always()
         shell: powershell
         run: |
-          ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchInterface 'VB-Audio Virtual Cable' -MatchDeviceDesc 'CABLE Output' `
-            -NewDeviceDesc 'Claude Talk – til Discord' -NewInterface ''
-          ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchInterface 'Hi-Fi' -MatchDeviceDesc '.' `
-            -NewDeviceDesc 'Claude Talk – til Claude' -NewInterface ''
+          $m1 = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'CABLE Output' -NewDeviceDesc 'Claude Talk – til Discord' -NewInterface 'Claude Talk'
+          $m2 = 'not-run'
+          if (ci/driver-proof/List-Endpoints.ps1 | Where-Object { $_.Flow -eq 'Capture' -and $_.FriendlyName -match 'Hi-Fi' }) {
+            $m2 = ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchFriendlyName 'Hi-Fi' -NewDeviceDesc 'Claude Talk – til Claude' -NewInterface 'Claude Talk'
+          }
+          "discord-mic method=$m1`nclaude-mic method=$m2" | Tee-Object results\rename-method.txt
 
       - name: Verify names as apps see them
         if: always()
@@ -142,7 +147,7 @@ jobs:
             $hit = $cap | Where-Object { $_ -like "$want*" } | Select-Object -First 1
             if ($hit) { "FOUND   '$want' as '$hit'" } else { "MISSING '$want'"; $ok = $false }
           }
-          $_ = $cap | Tee-Object results\capture-names.txt
+          $cap | Set-Content -Encoding utf8 results\capture-names.txt
           if (-not $ok) { throw 'Two renamed virtual microphones were not found.' }
 
       - name: Publish results
