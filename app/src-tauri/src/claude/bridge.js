@@ -111,21 +111,27 @@
     track.getConstraints = () => Object.assign({}, constraints);
     // Accept any constraints; the signal is already exactly what Claude should hear.
     track.applyConstraints = (c) => { constraints = Object.assign({}, c || {}); return Promise.resolve(); };
-    const stop = track.stop.bind(track);
-    let stopped = false;
-    track.stop = () => {
-      if (!stopped) { stopped = true; liveClones = Math.max(0, liveClones - 1); if (liveClones === 0) post({ type: 'mic', active: false }); }
-      stop();
+    // Every live track and clone counts: the mix is sent while any of them
+    // lives (apps clone tracks for recorders and calls, then stop the original).
+    const origStop = track.stop.bind(track);
+    const origClone = track.clone.bind(track);
+    let counted = true;
+    liveClones++;
+    post({ type: 'mic', active: true });
+    const release = () => {
+      if (!counted) return;
+      counted = false;
+      liveClones = Math.max(0, liveClones - 1);
+      if (liveClones === 0) post({ type: 'mic', active: false });
     };
+    track.stop = () => { release(); origStop(); };
+    track.addEventListener('ended', release);
+    track.clone = () => dress(origClone());
     return track;
   }
 
   function newMicTrack() {
-    const t = dress(ensureSource().track.clone());
-    liveClones++;
-    post({ type: 'mic', active: true });
-    t.addEventListener('ended', () => { if (liveClones > 0) { liveClones--; if (liveClones === 0) post({ type: 'mic', active: false }); } });
-    return t;
+    return dress(ensureSource().track.clone());
   }
 
   // ---- replaced APIs -----------------------------------------------------------

@@ -87,7 +87,7 @@ export function App() {
             <main className="content">
               {page === 'home' && <Home info={info} />}
               {page === 'advanced' && <Advanced />}
-              {page === 'settings' && <Settings />}
+              {page === 'settings' && <Settings info={info} />}
               {page === 'help' && <Help info={info} />}
             </main>
           </div>

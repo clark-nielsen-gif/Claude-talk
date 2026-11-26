@@ -203,6 +203,54 @@ pub mod imp {
             .collect()
     }
 
+    /// Output to the extra cable (Claude in another program hears it) and
+    /// the source that is that program's sound.
+    pub const EXTERNAL_OUT: u32 = 190;
+    pub const EXTERNAL_SRC: u32 = 191;
+
+    pub fn set_external_claude(host: &mut AudioHost, exe: Option<&str>) -> Result<(), String> {
+        host.remove_source(EXTERNAL_SRC);
+        host.remove_output(EXTERNAL_OUT);
+        let Some(exe) = exe else { return Ok(()) };
+        let Some(cable) = ct_engine::win::host::extra_cable() else {
+            log::warn!("external Claude: no extra virtual cable");
+            return Err("error.noExtraCable".into());
+        };
+        host.add_output(
+            Output {
+                id: EXTERNAL_OUT,
+                label: "Til Claude (kabel)".into(),
+                heard_by: BTreeSet::from([Party::Claude]),
+            },
+            OutputKind::Device(DeviceSelector::Id(cable.render.id.clone())),
+        );
+        let label = match exe {
+            "claude.exe" => "Claude-appen",
+            "chrome.exe" => "Claude i Chrome",
+            _ => "Claude i Edge",
+        };
+        host.add_source(
+            Source {
+                id: EXTERNAL_SRC,
+                label: label.into(),
+                parties: BTreeSet::from([Party::Claude]),
+                contains_outputs: BTreeSet::new(),
+            },
+            SourceKind::Program(ProcessTarget::ExeNames(vec![exe.to_string()])),
+        )
+        .map_err(|e| format!("error.{}", e.key()))?;
+        for (s, o) in [
+            (ids::MIC, EXTERNAL_OUT),
+            (ids::DISCORD, EXTERNAL_OUT),
+            (EXTERNAL_SRC, ids::TO_DISCORD),
+        ] {
+            host.set_route(s, o, Route::default())
+                .map_err(|e| format!("error.{}", e.key()))?;
+        }
+        log::info!("external Claude: {exe} via '{}'", cable.render.name);
+        Ok(())
+    }
+
     pub fn choices() -> Choices {
         let devs = |flow| {
             devices::list(flow)
@@ -238,6 +286,47 @@ pub mod imp {
             outputs: devs(Flow::Render),
         }
     }
+}
+
+/// Programs that can be "Claude" in the external mode.
+pub const EXTERNAL_PROGRAMS: [&str; 3] = ["claude.exe", "chrome.exe", "msedge.exe"];
+
+/// Turns "Use Claude in Chrome or the app" on (with that program) or off.
+#[tauri::command]
+pub fn set_external_claude(
+    app: AppHandle,
+    state: State<AppState>,
+    exe: Option<String>,
+) -> Result<(), String> {
+    let exe = exe.map(|e| e.to_lowercase());
+    if exe
+        .as_deref()
+        .is_some_and(|e| !EXTERNAL_PROGRAMS.contains(&e))
+    {
+        return Err("error.internal".into());
+    }
+    #[cfg(windows)]
+    {
+        if let Some(h) = state
+            .audio
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_mut()
+        {
+            imp::set_external_claude(h, exe.as_deref())?;
+        }
+        crate::audio::apply_switches(&app);
+    }
+    #[cfg(not(windows))]
+    let _ = &app;
+    state
+        .config
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .external_claude = exe;
+    state.save_config();
+    remember_routes(&state);
+    Ok(())
 }
 
 /// Saves the current routing into the config (after any change in the mixer).

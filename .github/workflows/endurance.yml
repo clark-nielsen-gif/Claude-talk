@@ -1,0 +1,52 @@
+# 2-hour endurance run of the real app (started by hand – it costs CI
+# minutes): isolation, Discord → Claude latency, memory and CPU every 5 min.
+name: endurance
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Duration in minutes'
+        default: '120'
+
+permissions:
+  contents: write   # results are published to ci-results/* branches
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  endurance:
+    runs-on: windows-latest
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - name: Build UI
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+      - name: Build app (CI test mode) and test tool
+        run: |
+          cargo build -p claude-talk --profile ci --no-default-features --features "ci-testpage custom-protocol"
+          cargo build -p ct-audiotest --profile ci
+      - name: Install VB-CABLE (as the product does)
+        shell: powershell
+        run: ci/fixtures/install-vbcable.ps1
+      - name: Install CI test sink
+        shell: powershell
+        run: ci/fixtures/install-test-sink.ps1
+      - name: Endurance run
+        shell: powershell
+        run: |
+          target/ci/ct-audiotest.exe endurance --app target/ci/claude-talk.exe --sink 'Virtual Audio' --minutes ${{ inputs.minutes }} --every 5 --out results
+          if ($LASTEXITCODE -ne 0) { throw 'endurance run failed' }
+      - name: Publish results
+        if: always()
+        shell: powershell
+        run: ci/publish-results.ps1 -Folder results -Job 'endurance'

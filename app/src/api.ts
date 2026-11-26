@@ -26,6 +26,7 @@ export interface Config {
   hotkeys: Hotkeys;
   advancedUnlocked: boolean;
   presets?: { name: string }[];
+  externalClaude?: string | null;
 }
 
 export interface Choice { value: string; label: string }
@@ -57,6 +58,8 @@ export interface AppInfo {
   windowsBuild: number;
   supported: boolean;
   cableInstalled: boolean;
+  /** An extra virtual cable the user installed ("Claude in Chrome or the app"). */
+  extraCable?: { name: string; output: string | null } | null;
   testMode: boolean;
 }
 
@@ -79,6 +82,7 @@ const defaultConfig: Config = {
   hotkeys: { muteClaudeToDiscord: 'Ctrl+Alt+D', muteMic: 'Ctrl+Alt+M', pushToTalkClaude: 'Ctrl+Alt+Space' },
   advancedUnlocked: false,
   presets: [{ name: 'Musik' }],
+  externalClaude: scenario === 'settings-extra-cable' ? 'chrome.exe' : null,
 };
 
 function scenarioStatus(t: number): AudioStatus {
@@ -110,6 +114,7 @@ function scenarioStatus(t: number): AudioStatus {
 const scenarioInfo: AppInfo = {
   version: '1.0.0', windowsBuild: scenario === 'error-unsupported' ? 19045 : 26100,
   supported: scenario !== 'error-unsupported', cableInstalled: scenario !== 'error-cable-missing', testMode: false,
+  extraCable: scenario === 'settings-extra-cable' ? { name: 'CABLE-A Input (VB-Audio Cable A)', output: 'CABLE-A Output (VB-Audio Cable A)' } : null,
 };
 
 let mockConfig = { ...defaultConfig };
@@ -194,6 +199,10 @@ export const api = {
   },
   async loadPreset(name: string): Promise<void> {
     if (inTauri) await invoke('load_preset', { name });
+  },
+  async setExternalClaude(exe: string | null): Promise<void> {
+    if (inTauri) await invoke('set_external_claude', { exe });
+    else mockConfig = { ...mockConfig, externalClaude: exe };
   },
   async deletePreset(name: string): Promise<void> {
     if (inTauri) await invoke('delete_preset', { name });

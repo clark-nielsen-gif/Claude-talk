@@ -73,8 +73,22 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(state);
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    // The updater only exists in builds made with an update-signing key; its
+    // configuration (key + manifest URL) is set here, not in tauri.conf.json,
+    // because the plugin refuses to start without one.
     #[cfg(feature = "updater")]
-    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    let builder = match updates::pubkey() {
+        Some(key) => {
+            context.config_mut().plugins.0.insert(
+                "updater".into(),
+                serde_json::json!({ "pubkey": key, "endpoints": [updates::ENDPOINT] }),
+            );
+            builder.plugin(tauri_plugin_updater::Builder::new().build())
+        }
+        None => builder,
+    };
     builder
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
@@ -96,6 +110,7 @@ fn main() {
             mixer::save_preset,
             mixer::load_preset,
             mixer::delete_preset,
+            mixer::set_external_claude,
             commands::get_matrix,
             commands::set_route,
             commands::set_unlocked,
@@ -122,7 +137,11 @@ fn main() {
             if std::env::var("CLAUDE_TALK_TEST_OPEN_CLAUDE").is_ok() {
                 let _ = claude_window::open(&handle);
             }
-            if let Some(w) = app.get_webview_window("main") {
+            // The main window is created here, after the sound is running:
+            // its WebView2 can take seconds on a first start, and Discord's
+            // microphone should not wait for it.
+            if let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main").cloned() {
+                let w = tauri::WebviewWindowBuilder::from_config(&handle, &cfg)?.build()?;
                 if !started_minimized {
                     let _ = w.show();
                     let _ = w.set_focus();
@@ -140,6 +159,6 @@ fn main() {
                 }
             }
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running Claude Talk");
 }

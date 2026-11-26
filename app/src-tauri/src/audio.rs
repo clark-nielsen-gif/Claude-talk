@@ -78,6 +78,11 @@ mod imp {
             .unwrap_or_else(|p| p.into_inner())
             .clone();
         crate::mixer::imp::apply(&mut host, &saved.mixer, saved.advanced_unlocked);
+        if let Some(exe) = saved.external_claude.as_deref() {
+            if let Err(e) = crate::mixer::imp::set_external_claude(&mut host, Some(exe)) {
+                log::warn!("external Claude not started: {e}");
+            }
+        }
         *state.audio.lock().unwrap_or_else(|p| p.into_inner()) = Some(host);
         apply_switches(app);
         let app2 = app.clone();
@@ -116,6 +121,21 @@ mod imp {
             !on || (cfg.push_to_talk && !ptt_down),
         );
         host.set_route_muted(ids::MIC, ids::TO_DISCORD, false);
+        // the same switches for Claude in another program (if that mode is on)
+        {
+            use crate::mixer::imp::{EXTERNAL_OUT, EXTERNAL_SRC};
+            host.set_route_muted(
+                EXTERNAL_SRC,
+                ids::TO_DISCORD,
+                !on || cfg.claude_to_discord_muted,
+            );
+            host.set_route_muted(ids::DISCORD, EXTERNAL_OUT, !on);
+            host.set_route_muted(
+                ids::MIC,
+                EXTERNAL_OUT,
+                !on || (cfg.push_to_talk && !ptt_down),
+            );
+        }
         // echo reduction: always, never, or automatically with speakers
         let echo = match cfg.echo {
             crate::config::EchoMode::On => true,

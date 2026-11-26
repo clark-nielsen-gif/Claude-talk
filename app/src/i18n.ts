@@ -158,6 +158,12 @@ const da = {
     restore: 'Gendan normale lydindstillinger',
     restoreHint: 'Discord bruger igen din almindelige mikrofon. Alt andet er urørt.',
     restored: 'Lydindstillingerne er gendannet',
+    externalTitle: 'Claude i et andet program',
+    externalLabel: 'Brug Claude i Chrome eller Claude-appen',
+    externalBody: 'Du har et ekstra virtuelt kabel ({cable}). Claude Talk kan sende din mikrofon og Discord til Claude gennem det i stedet for i Claude-vinduet. Al lyd fra det valgte program går så til Discord.',
+    externalOff: 'Fra',
+    externalApp: 'Claude-appen',
+    externalHow: 'Vælg »{mic}« som mikrofon i Claude i det program. Claude-vinduet i Claude Talk kan stadig bruges som før.',
   },
 
   help: {
@@ -334,6 +340,12 @@ const en: Dict = {
     restore: 'Restore normal sound settings',
     restoreHint: 'Discord goes back to your usual microphone. Nothing else changes.',
     restored: 'Sound settings restored',
+    externalTitle: 'Claude in another program',
+    externalLabel: 'Use Claude in Chrome or the Claude app',
+    externalBody: 'You have an extra virtual cable ({cable}). Claude Talk can send your microphone and Discord to Claude through it instead of in the Claude window. All sound from the chosen program then goes to Discord.',
+    externalOff: 'Off',
+    externalApp: 'Claude app',
+    externalHow: 'Choose “{mic}” as the microphone for Claude in that program. The Claude window in Claude Talk still works as before.',
   },
   help: {
     title: 'Help',

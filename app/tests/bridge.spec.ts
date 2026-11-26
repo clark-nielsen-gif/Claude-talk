@@ -71,4 +71,34 @@ test('bridge feeds getUserMedia under a strict CSP', async ({ page }) => {
   expect(step('mediarecorder').bytes).toBeGreaterThan(0);
   expect(step('webrtc').remoteState).toBe('live');
   expect(sent.some((m) => JSON.parse(m).type === 'mic' && JSON.parse(m).active === true)).toBe(true);
+  expect(report.webrtcEnergy).toBeGreaterThan(0);
+  // the page stopped its track, but kept a clone for the latency detector:
+  // the microphone must stay in use while any clone lives
+  const mics = sent.map((m) => JSON.parse(m)).filter((m) => m.type === 'mic');
+  expect(mics[mics.length - 1].active).toBe(true);
+});
+
+test('a clone keeps the microphone alive; stopping every track releases it', async ({ page }) => {
+  await page.route('https://claude-ci.test/blank.html', (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: '<!doctype html><title>x</title>' }));
+  await page.addInitScript(fakeHost);
+  await page.addInitScript(bridge);
+  await page.goto('https://claude-ci.test/blank.html');
+  const result = await page.evaluate(async () => {
+    const mic = () => (window as any).__hostSent.map((m: string) => JSON.parse(m)).filter((m: any) => m.type === 'mic').pop()?.active;
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const t = s.getAudioTracks()[0];
+    const c = t.clone();
+    const c2 = c.clone();
+    t.stop();
+    const afterOriginal = mic();
+    c.stop();
+    const afterFirstClone = mic();
+    c.stop(); // twice is harmless
+    c2.stop();
+    return { cloneLabel: c2.label, cloneState: c.readyState, afterOriginal, afterFirstClone, afterAll: mic() };
+  });
+  expect(result.cloneLabel).toBe('Claude Talk');
+  expect(result.afterOriginal).toBe(true);
+  expect(result.afterFirstClone).toBe(true);
+  expect(result.afterAll).toBe(false);
 });

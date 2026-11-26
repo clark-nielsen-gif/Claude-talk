@@ -311,6 +311,46 @@ mod win {
                 })),
                 &mut token,
             );
+            // For error reports: did the page load (host only, never the
+            // full address), and did a WebView2 process fail?
+            let _ = core.add_NavigationCompleted(
+                &webview2_com::NavigationCompletedEventHandler::create(Box::new(|wv, args| {
+                    let (Some(wv), Some(args)) = (wv, args) else {
+                        return Ok(());
+                    };
+                    let mut ok = windows::core::BOOL::default();
+                    args.IsSuccess(&mut ok)?;
+                    let mut status = Default::default();
+                    args.WebErrorStatus(&mut status)?;
+                    let mut src = PWSTR::null();
+                    wv.Source(&mut src)?;
+                    let host = Url::parse(&take(src))
+                        .ok()
+                        .and_then(|u| u.host_str().map(str::to_string))
+                        .unwrap_or_default();
+                    if ok.as_bool() {
+                        log::info!("Claude window loaded {host}");
+                    } else {
+                        log::warn!(
+                            "Claude window could not load {host} (web error {})",
+                            status.0
+                        );
+                    }
+                    Ok(())
+                })),
+                &mut token,
+            );
+            let _ = core.add_ProcessFailed(
+                &webview2_com::ProcessFailedEventHandler::create(Box::new(|_, args| {
+                    if let Some(args) = args {
+                        let mut kind = Default::default();
+                        args.ProcessFailedKind(&mut kind)?;
+                        log::warn!("Claude window: a WebView2 process failed (kind {})", kind.0);
+                    }
+                    Ok(())
+                })),
+                &mut token,
+            );
             CORE.with(|c| *c.borrow_mut() = Some(core));
         });
         let app3 = app.clone();

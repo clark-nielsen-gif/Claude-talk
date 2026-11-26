@@ -30,6 +30,7 @@ fn main() {
         Some("listen") => imp::listen(&args[2..]),
         Some("smoke") => imp::smoke(&args[2..]),
         Some("e2e") => imp::e2e(&args[2..]),
+        Some("endurance") => imp::endurance(&args[2..]),
         _ => {
             eprintln!("usage: ct-audiotest devices | tone --freq F [--device NAME] [--seconds S] [--amp A] | smoke ...");
             2
@@ -488,6 +489,40 @@ mod imp {
         (epoch, out)
     }
 
+    fn start_app(app: &str, echo: &str) -> std::process::Child {
+        std::process::Command::new(app)
+            .env("CLAUDE_TALK_TEST_URL", "http://127.0.0.1:8765/test.html")
+            .env("CLAUDE_TALK_TEST_OPEN_CLAUDE", "1")
+            .env("CLAUDE_TALK_TEST_MIC_EXE", "fakemic.exe")
+            .env("CLAUDE_TALK_TEST_ECHO", echo)
+            .spawn()
+            .expect("start app")
+    }
+
+    /// Stops the app and its WebView2 processes (they hold the Claude
+    /// window's profile).
+    fn stop_app(p: &mut std::process::Child) {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &p.id().to_string(), "/T", "/F"])
+            .output();
+        let _ = p.kill();
+        let _ = p.wait();
+    }
+
+    fn powershell(cmd: &str) -> String {
+        let out = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", cmd])
+            .output();
+        let text = out
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout).into_owned()
+                    + &String::from_utf8_lossy(&o.stderr)
+            })
+            .unwrap_or_default();
+        println!("powershell: {cmd} -> {}", text.trim());
+        text
+    }
+
     /// Full end-to-end test of the app with the Claude window on the CI voice
     /// page. Fake programs (copies of this tool) play the tones:
     /// "Discord" 1000 Hz, microphone 2500 Hz, background 3000 Hz; the page
@@ -533,13 +568,7 @@ mod imp {
         for echo in ["off", "on"] {
             let _ = std::fs::remove_file(&page_report);
             let mut phase = serde_json::Map::new();
-            let mut app_proc = std::process::Command::new(&app)
-                .env("CLAUDE_TALK_TEST_URL", "http://127.0.0.1:8765/test.html")
-                .env("CLAUDE_TALK_TEST_OPEN_CLAUDE", "1")
-                .env("CLAUDE_TALK_TEST_MIC_EXE", "fakemic.exe")
-                .env("CLAUDE_TALK_TEST_ECHO", echo)
-                .spawn()
-                .expect("start app");
+            let mut app_proc = start_app(&app, echo);
 
             // what Discord hears: record our virtual microphone while the page runs
             std::thread::sleep(Duration::from_secs(8));
@@ -618,6 +647,11 @@ mod imp {
                         vec!["claude talk – til discord".into(), "claude talk".into()],
                     )),
                     CaptureTarget::Process(ProcessTarget::ExeNames(vec!["discord.exe".into()])),
+                    // what Claude Talk plays into the cable, before VB-CABLE's own buffer
+                    CaptureTarget::DeviceLoopback(DeviceSelector::FirstMatching(
+                        Flow::Render,
+                        vec!["claude talk – intern".into(), "cable input".into()],
+                    )),
                 ],
                 8.0,
             );
@@ -640,7 +674,16 @@ mod imp {
                 .into_iter()
                 .map(|t| t - cable_buf)
                 .collect();
-            let to_discord = match_delays(&a, &b, 300.0);
+            let to_discord_total = match_delays(&a, &b, 300.0);
+            // Claude Talk's own share: from the microphone into the cable
+            // (VB-CABLE then adds its internal buffer, see KNOWN_ISSUES K9)
+            let (into_rec, into_buf) = &recs[3];
+            let c: Vec<f64> = ms(burst_onsets(into_rec, 2500.0, rate, 0.3, 2400))
+                .into_iter()
+                .map(|t| t - into_buf)
+                .collect();
+            let to_discord = match_delays(&a, &c, 300.0);
+            let cable_added = median(&match_delays(&c, &b, 300.0));
             // Discord → Claude: wall-clock time the burst entered the
             // recorder (a sample is pulled one 10 ms block after its slot and
             // waited `dc_buf` in the tap), minus one more 10 ms capture
@@ -660,16 +703,27 @@ mod imp {
                 .filter(|&m| m >= epoch && m <= epoch + 9000.0)
                 .collect();
             let to_claude = match_delays(&sent, &marks, 300.0);
-            let (md, mc) = (median(&to_discord), median(&to_claude));
+            let (md, mc, mt) = (
+                median(&to_discord),
+                median(&to_claude),
+                median(&to_discord_total),
+            );
             let pass = to_discord.len() >= 5
                 && to_claude.len() >= 5
                 && md.is_some_and(|v| v < 40.0)
                 && mc.is_some_and(|v| v < 40.0);
-            println!("[{}] echo {echo}: latency to Discord {md:?} ms ({} bursts), to Claude {mc:?} ms ({} bursts)", if pass { "PASS" } else { "FAIL" }, to_discord.len(), to_claude.len());
+            println!(
+                "[{}] echo {echo}: latency Claude Talk → cable {md:?} ms ({} bursts), + VB-CABLE {cable_added:?} ms = {mt:?} ms at Discord; Discord → Claude {mc:?} ms ({} bursts)",
+                if pass { "PASS" } else { "FAIL" },
+                to_discord.len(),
+                to_claude.len()
+            );
             phase.insert(
                 "latency".into(),
-                json!({"pass": pass, "to_discord_ms": md, "to_claude_ms": mc, "to_discord_all": to_discord, "to_claude_all": to_claude,
-                       "bursts": {"mic": a.len(), "cable": b.len(), "discord": sent.len(), "page": marks.len()}, "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf]}),
+                json!({"pass": pass, "to_discord_ms": md, "vbcable_added_ms": cable_added, "to_discord_total_ms": mt, "to_claude_ms": mc,
+                       "to_discord_all": to_discord, "to_claude_all": to_claude,
+                       "bursts": {"mic": a.len(), "into_cable": c.len(), "cable": b.len(), "discord": sent.len(), "page": marks.len()},
+                       "recorder_buffer_ms": [mic_buf, cable_buf, dc_buf, into_buf]}),
             );
             ok &= pass;
             // back to steady tones for the next mode
@@ -679,14 +733,97 @@ mod imp {
                 kids[i] = spawn_tone_process(&dir.join(names[i]), freq, &sink);
             }
 
-            // the app and its WebView2 processes (they hold the Claude window's profile)
-            let _ = std::process::Command::new("taskkill")
-                .args(["/PID", &app_proc.id().to_string(), "/T", "/F"])
-                .output();
-            let _ = app_proc.kill();
-            let _ = app_proc.wait();
+            stop_app(&mut app_proc);
             report.insert(format!("echo_{echo}"), Value::Object(phase));
             std::thread::sleep(Duration::from_secs(3));
+        }
+
+        // Robustness: the app keeps working when programs restart, the
+        // virtual microphone disappears, sample rates change and Windows'
+        // audio service restarts.
+        {
+            let mut rob = serde_json::Map::new();
+            let mut app_proc = start_app(&app, "off");
+            std::thread::sleep(Duration::from_secs(10));
+            let step = |name: &str, rob: &mut serde_json::Map<String, Value>| {
+                let r = record(
+                    CaptureTarget::Device(DeviceSelector::FirstMatching(
+                        Flow::Capture,
+                        vec!["claude talk – til discord".into(), "claude talk".into()],
+                    )),
+                    3.0,
+                    |_| {},
+                );
+                let l = levels(&r, 2.0, &[440.0, 2500.0, 1000.0]);
+                let (c, m, d) = (lv(&l, 440.0), lv(&l, 2500.0), lv(&l, 1000.0));
+                let pass = c > -30.0 && m > -30.0 && d < c.min(m) - 60.0;
+                println!(
+                    "[{}] robustness {name}: {l}",
+                    if pass { "PASS" } else { "FAIL" }
+                );
+                rob.insert(name.into(), json!({"pass": pass, "levels_db": l, "device": r.device, "state": format!("{:?}", r.state)}));
+                pass
+            };
+            ok &= step("baseline", &mut rob);
+
+            let _ = kids[1].kill();
+            let _ = kids[1].wait();
+            std::thread::sleep(Duration::from_secs(2));
+            kids[1] = spawn_tone_process(&dir.join(names[1]), 2500.0, &sink);
+            std::thread::sleep(Duration::from_secs(5));
+            ok &= step("microphone_program_restarted", &mut rob);
+
+            powershell("Get-PnpDevice -FriendlyName '*VB-Audio Virtual Cable*' | Disable-PnpDevice -Confirm:$false");
+            std::thread::sleep(Duration::from_secs(4));
+            powershell("Get-PnpDevice -FriendlyName '*VB-Audio Virtual Cable*' | Enable-PnpDevice -Confirm:$false");
+            std::thread::sleep(Duration::from_secs(10));
+            ok &= step("virtual_microphone_removed_and_back", &mut rob);
+
+            let cable_ids: Vec<String> = [Flow::Render, Flow::Capture]
+                .into_iter()
+                .flat_map(|f| devices::list(f).unwrap_or_default())
+                .filter(|e| e.name.to_lowercase().contains("claude talk"))
+                .map(|e| e.id)
+                .collect();
+            let set_rate = |ids: &[String], rate: u32| {
+                ids.iter()
+                    .map(|id| format!("{:?}", ct_engine::win::policy::set_device_rate(id, rate)))
+                    .collect::<Vec<_>>()
+            };
+            rob.insert(
+                "cable_rate_change".into(),
+                json!(set_rate(&cable_ids, 44100)),
+            );
+            std::thread::sleep(Duration::from_secs(8));
+            ok &= step("virtual_microphone_at_44100", &mut rob);
+            set_rate(&cable_ids, 48000);
+            std::thread::sleep(Duration::from_secs(5));
+
+            let sink_ids: Vec<String> = devices::list(Flow::Render)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|e| e.name.to_lowercase().contains(&sink.to_lowercase()))
+                .map(|e| e.id)
+                .collect();
+            rob.insert("sink_rate_change".into(), json!(set_rate(&sink_ids, 44100)));
+            std::thread::sleep(Duration::from_secs(8));
+            ok &= step("programs_device_at_44100", &mut rob);
+            set_rate(&sink_ids, 48000);
+            std::thread::sleep(Duration::from_secs(5));
+
+            powershell("Restart-Service Audiosrv -Force");
+            std::thread::sleep(Duration::from_secs(15));
+            ok &= step("audio_service_restarted", &mut rob);
+
+            let alive = matches!(app_proc.try_wait(), Ok(None));
+            println!(
+                "[{}] robustness app_still_running",
+                if alive { "PASS" } else { "FAIL" }
+            );
+            rob.insert("app_still_running".into(), json!(alive));
+            ok &= alive;
+            stop_app(&mut app_proc);
+            report.insert("robustness".into(), Value::Object(rob));
         }
 
         // tidy up
@@ -706,6 +843,200 @@ mod imp {
             out.join("e2e.json"),
             serde_json::to_string_pretty(&Value::Object(report)).unwrap_or_default(),
         );
+        if ok {
+            0
+        } else {
+            1
+        }
+    }
+
+    /// Memory (MB, working set of the app and its child processes) and
+    /// total CPU seconds used so far.
+    fn app_usage(pid: u32) -> (f64, f64) {
+        let cmd = format!(
+            "$p = Get-CimInstance Win32_Process | Where-Object {{ $_.ProcessId -eq {pid} -or $_.ParentProcessId -eq {pid} }} | ForEach-Object {{ Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }}; \
+             '{{0}} {{1}}' -f ($p | Measure-Object WorkingSet64 -Sum).Sum, ($p | Measure-Object TotalProcessorTime -Sum).Sum.TotalSeconds"
+        );
+        let out = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &cmd])
+            .output();
+        let text = out
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default();
+        let mut it = text
+            .split_whitespace()
+            .map(|v| v.replace(',', ".").parse::<f64>().unwrap_or(0.0));
+        (
+            it.next().unwrap_or(0.0) / 1_048_576.0,
+            it.next().unwrap_or(0.0),
+        )
+    }
+
+    /// Long run with the real app (2 hours in CI): every few minutes the
+    /// virtual microphone must still carry Claude and the microphone and
+    /// nothing else, Discord's bursts must reach the Claude window in under
+    /// 40 ms, and memory must not grow.
+    ///
+    /// `endurance --app claude-talk.exe --sink "Virtual Audio" --minutes 120 --every 5 --out results`
+    pub fn endurance(args: &[String]) -> i32 {
+        std::panic::set_hook(Box::new(|info| eprintln!("PANIC: {info}")));
+        let _com = ComGuard::new();
+        let app = arg(args, "--app").unwrap_or("claude-talk.exe").to_string();
+        let sink = arg(args, "--sink").unwrap_or("Virtual Audio").to_string();
+        let minutes: f64 = arg(args, "--minutes")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(120.0);
+        let every: f64 = arg(args, "--every")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(5.0);
+        let out = std::path::PathBuf::from(arg(args, "--out").unwrap_or("results"));
+        let _ = std::fs::create_dir_all(&out);
+        let page_report = out.join("page-report.json");
+        let marks_file = out.join("page-marks.json");
+        let srv_out = page_report.to_string_lossy().into_owned();
+        std::thread::spawn(move || {
+            super::serve::run(&["--port".into(), "8765".into(), "--out".into(), srv_out])
+        });
+
+        let me = std::env::current_exe().expect("exe");
+        let dir = std::env::temp_dir().join("ct-endurance");
+        let _ = std::fs::create_dir_all(&dir);
+        for n in ["Discord.exe", "fakemic.exe", "background.exe"] {
+            let _ = std::fs::copy(&me, dir.join(n));
+        }
+        let run_s = (minutes * 60.0 + 600.0).to_string();
+        let tone = |name: &str, freq: &str, extra: &[&str]| {
+            let mut a = vec![
+                "tone",
+                "--freq",
+                freq,
+                "--device",
+                sink.as_str(),
+                "--seconds",
+                run_s.as_str(),
+            ];
+            a.extend_from_slice(extra);
+            std::process::Command::new(dir.join(name))
+                .args(a)
+                .spawn()
+                .expect("start tone")
+        };
+        let mut kids = [
+            tone(
+                "Discord.exe",
+                "1000",
+                &["--amp", "0.5", "--burst-ms", "25", "--period-ms", "700"],
+            ),
+            tone("fakemic.exe", "2500", &[]),
+            tone("background.exe", "3000", &[]),
+        ];
+        std::thread::sleep(Duration::from_millis(1500));
+        let mut app_proc = start_app(&app, "off");
+        let pid = app_proc.id();
+        std::thread::sleep(Duration::from_secs(20));
+
+        let t0 = Instant::now();
+        let mut samples = Vec::new();
+        let mut ok = true;
+        let mut first_mem = None;
+        let mut last_cpu: Option<(f64, Instant)> = None;
+        loop {
+            let at_min = t0.elapsed().as_secs_f64() / 60.0;
+            let cable = record(
+                CaptureTarget::Device(DeviceSelector::FirstMatching(
+                    Flow::Capture,
+                    vec!["claude talk – til discord".into(), "claude talk".into()],
+                )),
+                3.0,
+                |_| {},
+            );
+            let l = levels(&cable, 2.0, &[440.0, 2500.0, 1000.0, 3000.0]);
+            let (c, m, d, b) = (
+                lv(&l, 440.0),
+                lv(&l, 2500.0),
+                lv(&l, 1000.0),
+                lv(&l, 3000.0),
+            );
+            let isolation = c > -30.0 && m > -30.0 && d < c.min(m) - 60.0 && b < c.min(m) - 60.0;
+
+            let _ = std::fs::remove_file(&marks_file);
+            let (epoch, recs) = record_multi(
+                vec![CaptureTarget::Process(ProcessTarget::ExeNames(vec![
+                    "discord.exe".into(),
+                ]))],
+                8.0,
+            );
+            std::thread::sleep(Duration::from_millis(1500));
+            let (dc, dc_buf) = &recs[0];
+            let sent: Vec<f64> = burst_onsets(dc, 1000.0, ENGINE_RATE as f64, 0.3, 2400)
+                .into_iter()
+                .map(|i| epoch + i as f64 / 48.0 - dc_buf)
+                .collect();
+            let marks: Vec<f64> = std::fs::read(&marks_file)
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or_default();
+            let marks: Vec<f64> = marks
+                .into_iter()
+                .filter(|&t| t >= epoch && t <= epoch + 9000.0)
+                .collect();
+            let delays = match_delays(&sent, &marks, 300.0);
+            let lat = median(&delays);
+            let latency_ok = delays.len() >= 5 && lat.is_some_and(|v| v < 40.0);
+
+            let (mem, cpu_s) = app_usage(pid);
+            let now = Instant::now();
+            let cpu_pct = last_cpu.map(|(c0, t)| {
+                100.0 * (cpu_s - c0)
+                    / now.duration_since(t).as_secs_f64()
+                    / std::thread::available_parallelism()
+                        .map(|n| n.get())
+                        .unwrap_or(1) as f64
+            });
+            last_cpu = Some((cpu_s, now));
+            let first = *first_mem.get_or_insert(mem);
+            let alive = matches!(app_proc.try_wait(), Ok(None));
+            let pass = isolation
+                && latency_ok
+                && alive
+                && mem < 150.0
+                && mem < first + 30.0
+                && cpu_pct.is_none_or(|p| p < 3.0);
+            ok &= pass;
+            println!(
+                "[{}] {at_min:.0} min: isolation {isolation} {l} | to Claude {lat:?} ms ({} bursts) | {mem:.0} MB, CPU {cpu_pct:?} %",
+                if pass { "PASS" } else { "FAIL" },
+                delays.len()
+            );
+            samples.push(json!({"minute": (at_min * 10.0).round() / 10.0, "pass": pass, "isolation": isolation, "levels_db": l,
+                "latency_to_claude_ms": lat, "bursts": delays.len(), "memory_mb": (mem * 10.0).round() / 10.0, "cpu_percent": cpu_pct, "alive": alive}));
+            let _ = std::fs::write(
+                out.join("endurance.json"),
+                serde_json::to_string_pretty(&json!({"pass": ok, "samples": samples}))
+                    .unwrap_or_default(),
+            );
+            if !alive || at_min >= minutes {
+                break;
+            }
+            let next = (at_min + every).min(minutes);
+            while t0.elapsed().as_secs_f64() / 60.0 < next {
+                std::thread::sleep(Duration::from_secs(5));
+            }
+        }
+        stop_app(&mut app_proc);
+        for k in kids.iter_mut() {
+            let _ = k.kill();
+            let _ = k.wait();
+        }
+        if let Ok(a) = std::env::var("APPDATA") {
+            if let Ok(rd) =
+                std::fs::read_dir(std::path::PathBuf::from(a).join("Claude Talk").join("logs"))
+            {
+                for e in rd.flatten() {
+                    let _ = std::fs::copy(e.path(), out.join(e.file_name()));
+                }
+            }
+        }
         if ok {
             0
         } else {
@@ -919,12 +1250,27 @@ mod imp {
                 let _ = c.kill();
                 let _ = c.wait();
             };
-            // 1. Discord and Chrome start; Claude Talk routes Discord before it opens the microphone
-            let d = listen("Discord.exe", "3");
-            let c = listen("chrome.exe", "3");
+            // 0. (information) routing a Discord that has not used audio yet
+            let d = listen("Discord.exe", "6");
             std::thread::sleep(Duration::from_millis(800));
-            let routed = policy::route_discord_to_cable(&discord);
-            std::thread::sleep(Duration::from_secs(6));
+            let before_audio = format!("{:?}", policy::route_discord_to_cable(&discord));
+            stop(d);
+            let _ = policy::restore_discord(&discord);
+            report.insert("info_route_before_audio".into(), json!(before_audio));
+
+            // 1. Discord and Chrome are recording; Claude Talk routes Discord
+            // the way the app does (retrying every 2 s until Windows accepts)
+            let d = listen("Discord.exe", "0");
+            let c = listen("chrome.exe", "0");
+            std::thread::sleep(Duration::from_millis(1500));
+            let mut routed = policy::route_discord_to_cable(&discord);
+            let mut tries = 1;
+            while !matches!(routed, Ok(n) if n > 0) && tries < 4 {
+                std::thread::sleep(Duration::from_secs(2));
+                routed = policy::route_discord_to_cable(&discord);
+                tries += 1;
+            }
+            std::thread::sleep(Duration::from_secs(4));
             let d_mic = sessions::discord_mic(&discord, cable.as_deref());
             let d_where = where_("discord.exe");
             let c_where = where_("chrome.exe");
@@ -935,13 +1281,23 @@ mod imp {
                 && !c_where
                     .iter()
                     .any(|n| n.to_lowercase().contains("claude talk"));
+            // a running recording moved by itself, or needs Discord restarted
+            // (the app then shows "Genstart Discord for mig")
+            let moved_live = d_mic == sessions::DiscordMic::Cable;
+            let d = listen("Discord.exe", "0");
+            std::thread::sleep(Duration::from_secs(4));
+            let after_restart = sessions::discord_mic(&discord, cable.as_deref());
+            let after_restart_where = where_("discord.exe");
+            stop(d);
             check(
                 "per_app_routing",
                 matches!(routed, Ok(n) if n > 0)
-                    && d_mic == sessions::DiscordMic::Cable
+                    && after_restart == sessions::DiscordMic::Cable
                     && chrome_ok
                     && flag == Some(true),
-                json!({"routed": format!("{routed:?}"), "discord_mic": format!("{d_mic:?}"), "discord_records_from": d_where, "chrome_records_from": c_where, "stored": flag}),
+                json!({"routed": format!("{routed:?}"), "tries": tries, "moved_while_recording": moved_live, "discord_records_from": d_where,
+                       "after_discord_restart": format!("{after_restart:?}"), "after_restart_records_from": after_restart_where,
+                       "chrome_records_from": c_where, "stored": flag}),
                 &mut report,
             );
             // 2. Windows remembers it for the program: a new Discord process is routed too
@@ -962,6 +1318,23 @@ mod imp {
             std::thread::sleep(Duration::from_millis(800));
             let _ = policy::route_discord_to_cable(&discord);
             stop(d);
+            // where Windows keeps the setting (diagnostics for the offline restore)
+            if let Some(id) = &cable {
+                let guid = id
+                    .rsplit('.')
+                    .next()
+                    .unwrap_or(id)
+                    .trim_matches(|c| c == '{' || c == '}')
+                    .to_string();
+                let found = powershell(&format!(
+                    "reg query HKCU /s /f '{guid}' 2>&1 | Select-Object -First 40 | Out-String"
+                ));
+                let found_lm = powershell(&format!("reg query HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices /s /f '{guid}' /d 2>&1 | Select-Object -First 20 | Out-String"));
+                report.insert(
+                    "info_policy_store".into(),
+                    json!({"hkcu": found, "hklm_mmdevices": found_lm}),
+                );
+            }
             let removed_offline = policy::restore_discord(&discord);
             let d = listen("Discord.exe", "0");
             std::thread::sleep(Duration::from_secs(4));

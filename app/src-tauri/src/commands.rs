@@ -16,27 +16,42 @@ pub struct AppInfo {
     pub supported: bool,
     pub cable_installed: bool,
     pub test_mode: bool,
+    /// An extra virtual cable the user installed: "Claude in Chrome or the
+    /// app" can be offered. `output` is the microphone to choose there.
+    pub extra_cable: Option<ExtraCableInfo>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraCableInfo {
+    pub name: String,
+    pub output: Option<String>,
 }
 
 #[tauri::command]
 pub fn app_info() -> AppInfo {
     #[cfg(windows)]
-    let (build, supported, cable) = (
-        ct_engine::win::windows_build(),
-        ct_engine::win::supports_process_loopback(),
-        {
-            let _com = ct_engine::win::ComGuard::new();
-            ct_engine::win::host::cable_installed()
-        },
-    );
+    let (build, supported, cable, extra) = {
+        let _com = ct_engine::win::ComGuard::new();
+        (
+            ct_engine::win::windows_build(),
+            ct_engine::win::supports_process_loopback(),
+            ct_engine::win::host::cable_installed(),
+            ct_engine::win::host::extra_cable().map(|c| ExtraCableInfo {
+                name: c.render.name,
+                output: c.capture_name,
+            }),
+        )
+    };
     #[cfg(not(windows))]
-    let (build, supported, cable) = (0, false, false);
+    let (build, supported, cable, extra) = (0, false, false, None);
     AppInfo {
         version: env!("CARGO_PKG_VERSION").into(),
         windows_build: build,
         supported,
         cable_installed: cable,
         test_mode: cfg!(feature = "ci-testpage"),
+        extra_cable: extra,
     }
 }
 

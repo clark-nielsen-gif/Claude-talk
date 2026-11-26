@@ -53,7 +53,8 @@ Check 'discord_microphone_named' ($null -ne $cap) @{ capture = @($cap | ForEach-
 Check 'cable_render_named' ($null -ne $ren) @($ren | ForEach-Object FriendlyName)
 $marker = Join-Path $env:ProgramData 'Claude Talk\cable-installed-by-claude-talk'
 Check 'cable_marked_as_ours' (Test-Path $marker) $marker
-$driver = Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceName -like '*VB-Audio*' } | Select-Object -First 1 DeviceName, DriverVersion, Signer
+# the cable's own driver (MEDIA class), not the audio endpoints Windows creates for it
+$driver = Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceClass -eq 'MEDIA' -and ($_.DeviceName -like '*VB-Audio*' -or $_.Manufacturer -like '*VB-Audio*') } | Select-Object -First 1 DeviceName, DriverVersion, Signer, Manufacturer
 Check 'driver_production_signed' ($null -ne $driver -and $driver.Signer -like '*Microsoft*') $driver
 
 # 2. the app starts: time to the audio engine, CPU and memory while idle
@@ -68,7 +69,14 @@ for ($i = 0; $i -lt 100 -and -not $started; $i++) {
     if ($log -and (Select-String -Path $log.FullName -Pattern 'audio engine started' -Quiet)) { $started = (Get-Date) }
 }
 $startS = if ($started) { [math]::Round(($started - $t0).TotalSeconds, 2) } else { $null }
-Check 'app_starts' ($null -ne $started -and -not $app.HasExited) @{ seconds_to_audio_engine = $startS }
+$exited = $app.HasExited
+$crash = if ($exited) {
+    Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $t0 } -ErrorAction SilentlyContinue |
+        Where-Object { $_.Message -like '*claude-talk*' } | Select-Object -First 3 | ForEach-Object { $_.Message }
+} else { $null }
+Check 'app_starts' ($null -ne $started -and -not $exited) @{ seconds_to_audio_engine = $startS; exited = $exited; exit_code = $(if ($exited) { $app.ExitCode } else { $null }); events = $crash }
+Get-ChildItem $logs -ErrorAction SilentlyContinue | Copy-Item -Destination $Out
+if ($exited) { throw 'the app did not keep running' }
 Start-Sleep 5
 # the program and its WebView2 helpers (none while the Claude window is closed)
 function Tree { Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq $app.Id -or $_.ParentProcessId -eq $app.Id } }

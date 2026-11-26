@@ -115,6 +115,10 @@ pub struct Config {
     /// Advanced mixer: added sources/outputs and the routing.
     pub mixer: Mixer,
     pub presets: Vec<Preset>,
+    /// "Use Claude in Chrome or the app" (only with an extra virtual cable):
+    /// the program whose sound is Claude's voice (claude.exe, chrome.exe,
+    /// msedge.exe), or none.
+    pub external_claude: Option<String>,
 }
 
 impl Default for Config {
@@ -135,6 +139,7 @@ impl Default for Config {
             route_discord: true,
             mixer: Mixer::default(),
             presets: Vec::new(),
+            external_claude: None,
         }
     }
 }

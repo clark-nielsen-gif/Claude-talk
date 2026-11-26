@@ -345,7 +345,12 @@ unsafe trait IPolicyConfig: windows_core::IUnknown {
     fn get_mix_format(&self) -> HRESULT;
     fn get_device_format(&self) -> HRESULT;
     fn reset_device_format(&self) -> HRESULT;
-    fn set_device_format(&self) -> HRESULT;
+    fn set_device_format(
+        &self,
+        device_id: windows::core::PCWSTR,
+        endpoint_format: *const windows::Win32::Media::Audio::WAVEFORMATEX,
+        mix_format: *const windows::Win32::Media::Audio::WAVEFORMATEX,
+    ) -> HRESULT;
     fn get_processing_period(&self) -> HRESULT;
     fn set_processing_period(&self) -> HRESULT;
     fn get_share_mode(&self) -> HRESULT;
@@ -368,6 +373,48 @@ pub fn set_default_endpoint(endpoint_id: &str) -> windows::core::Result<()> {
         unsafe { pc.set_default_endpoint(windows::core::PCWSTR(id.as_ptr()), role.0) }.ok()?;
     }
     Ok(())
+}
+
+/// Sets a device's shared-mode format to 16-bit stereo at `rate` (what the
+/// Sound control panel's "Default format" does). Used by the robustness test
+/// to change a sample rate while Claude Talk runs.
+pub fn set_device_rate(endpoint_id: &str, rate: u32) -> windows::core::Result<()> {
+    use windows::Win32::Media::Audio::{
+        WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVEFORMATEXTENSIBLE_0,
+    };
+    use windows::Win32::Media::KernelStreaming::{
+        KSDATAFORMAT_SUBTYPE_PCM, SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, WAVE_FORMAT_EXTENSIBLE,
+    };
+    use windows::Win32::Media::Multimedia::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+    let make = |bits: u16, sub| WAVEFORMATEXTENSIBLE {
+        Format: WAVEFORMATEX {
+            wFormatTag: WAVE_FORMAT_EXTENSIBLE as u16,
+            nChannels: 2,
+            nSamplesPerSec: rate,
+            nAvgBytesPerSec: rate * 2 * (bits as u32 / 8),
+            nBlockAlign: 2 * bits / 8,
+            wBitsPerSample: bits,
+            cbSize: 22,
+        },
+        Samples: WAVEFORMATEXTENSIBLE_0 {
+            wValidBitsPerSample: bits,
+        },
+        dwChannelMask: SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT,
+        SubFormat: sub,
+    };
+    let device = make(16, KSDATAFORMAT_SUBTYPE_PCM);
+    let mix = make(32, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+    let pc: IPolicyConfig = unsafe { CoCreateInstance(&CLSID_POLICY_CONFIG, None, CLSCTX_ALL) }?;
+    let id = HSTRING::from(endpoint_id);
+    unsafe {
+        pc.set_device_format(
+            windows::core::PCWSTR(id.as_ptr()),
+            &device as *const _ as *const WAVEFORMATEX,
+            &mix as *const _ as *const WAVEFORMATEX,
+        )
+    }
+    .ok()
 }
 
 #[cfg(test)]

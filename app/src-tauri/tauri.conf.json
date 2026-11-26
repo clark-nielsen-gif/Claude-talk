@@ -15,6 +15,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Claude Talk",
         "width": 980,
         "height": 700,

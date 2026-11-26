@@ -536,9 +536,12 @@ impl AudioHost {
                 let mut m = vec![0f32; FRAME];
                 let mut r = vec![0f32; FRAME];
                 while !stop2.load(Ordering::Relaxed) {
-                    // a stall left a backlog: drop it instead of playing late
+                    // Keep at most one block waiting: the microphone delivers
+                    // 10 ms packets and this thread reads them as they come,
+                    // so anything more is a stall (or start-up) backlog that
+                    // would otherwise add its delay for good.
                     let backlog = raw.slots() / ch;
-                    if backlog > 6 * FRAME {
+                    if backlog > 2 * FRAME {
                         let drop_frames = backlog - FRAME;
                         if let Ok(c) = raw.read_chunk(drop_frames * ch) {
                             c.commit_all();
@@ -732,6 +735,56 @@ impl AudioHost {
 pub fn is_own_device(name: &str) -> bool {
     let n = name.to_lowercase();
     OWN_VIRTUAL_DEVICES.iter().any(|p| n.contains(p))
+}
+
+/// Name fragments of other virtual cables a user may have installed
+/// themselves (VB-CABLE A/B/C/D, VoiceMeeter, Hi-Fi Cable). With one of these,
+/// Claude can also be used in another program ("Claude in Chrome or the app").
+pub const EXTRA_CABLE_PATTERNS: [&str; 6] = [
+    "cable-a",
+    "cable-b",
+    "cable-c",
+    "cable-d",
+    "voicemeeter",
+    "hi-fi cable",
+];
+
+/// An extra virtual cable: where we play to, and the microphone the other
+/// program must choose.
+#[derive(Clone, Debug)]
+pub struct ExtraCable {
+    pub render: devices::Endpoint,
+    pub capture_name: Option<String>,
+}
+
+pub fn extra_cable() -> Option<ExtraCable> {
+    let renders = devices::list(Flow::Render).ok()?;
+    let render = EXTRA_CABLE_PATTERNS.iter().find_map(|p| {
+        renders.iter().find(|e| {
+            let n = e.name.to_lowercase();
+            n.contains(p) && !n.contains("claude talk")
+        })
+    })?;
+    let lower = render.name.to_lowercase();
+    let prefix = lower
+        .split(" input")
+        .next()
+        .unwrap_or(&lower)
+        .trim()
+        .to_string();
+    let capture_name = devices::list(Flow::Capture)
+        .ok()?
+        .into_iter()
+        .find(|e| {
+            e.name
+                .to_lowercase()
+                .starts_with(&format!("{prefix} output"))
+        })
+        .map(|e| e.name);
+    Some(ExtraCable {
+        render: render.clone(),
+        capture_name,
+    })
 }
 
 /// Whether the virtual cable is installed (render side found).
