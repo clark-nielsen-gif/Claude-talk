@@ -13,7 +13,9 @@ GitHubs Windows-runnere starter med **test-signing slået til** (det er billedet
 Bevist på `windows-latest`, `windows-2025` og `windows-2022`:
 - Installeret pakke: `vbmmecable64_win10.inf`, version 3.5.2.0 (31-10-2026). Katalogsigner: **Microsoft Windows Hardware Compatibility Publisher**, attribut **Attested**. `signtool /kp` består. Det er en produktionssignatur.
 - `VBCABLE_Setup_x64.exe -i -h` installerer lydløst **uden** driverdialog og uden at udgiveren er betroet på forhånd. Afslutningskode 0, enheder aktive uden genstart.
-- Mikrofonen kan omdøbes via Core Audio-API'et (`IMMDevice::OpenPropertyStore(STGM_READWRITE)`), samme mekanisme som Windows' Lyd-kontrolpanel. Ingen registry-hacks og intet SYSTEM-trick nødvendigt.
+- Mikrofonen kan omdøbes via Core Audio-API'et (`IMMDevice::OpenPropertyStore(STGM_READWRITE)`), samme mekanisme som Windows' Lyd-kontrolpanel. Ingen registry-hacks og intet SYSTEM-trick nødvendigt. Navnet overlever en genstart af lydtjenesten.
+- **Navnet bliver "Claude Talk – til Discord (VB-Audio)".** Windows sammensætter altid det synlige navn som "beskrivelse (grænseflade)". At skrive det sammensatte navn direkte afvises med `E_ACCESSDENIED` (bevist i CI), og en tom grænseflade giver "()". "(VB-Audio)" er pænt og opfylder samtidig VB-Audios licensbetingelse om, at brugeren kan se, at kablet er fra VB-Audio.
+- Windows Server-billeder har lydtjenesten slået fra. Den startes i CI. På almindelige Windows-pc'er kører den altid.
 
 ### Kandidat B2: VB-Audio Hi-Fi Cable (gratis, 2014) – **afvist**
 - Installerer `vbhfvaio64_win7.inf`, som er signeret med VB-Audios gamle certifikat fra 2014 (krydssigneret, ikke Microsoft-signeret). Windows viser altid "Windows-sikkerhed"-dialogen (`pnpui.dll,InstallSecurityPromptRunDllW`), og installeren hænger, til nogen klikker. Dokumenteret med processer og skærmbilleder.
