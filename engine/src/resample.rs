@@ -141,8 +141,11 @@ impl AdaptiveResampler {
     /// delay (fill + this age) instead of the fill alone: the fill jumps by a
     /// packet whenever the source's and the output's clock phases cross,
     /// the delay does not.
+    /// Negative when the output renders for a moment before the source's
+    /// last delivery (the echo reference, rendered for when a microphone
+    /// frame was recorded).
     pub fn set_input_age(&mut self, seconds: f64) {
-        self.input_age_s = seconds.clamp(0.0, 0.1);
+        self.input_age_s = seconds.clamp(-0.1, 0.1);
     }
 
     /// Called before each pull with the source's restart counter.
@@ -242,10 +245,17 @@ impl AdaptiveResampler {
         let block_in = (out.len() / ch) as f64 / self.nominal;
         let limit = self.target_frames as f64 + (self.target_frames as f64).max(2.0 * block_in);
         let mut available = available;
-        if available as f64 > limit {
+        // A fixed route judges by its delay: what was delivered after the
+        // moment being rendered (a microphone burst) is not a backlog.
+        let ahead = if self.fixed {
+            (-self.input_age_s * self.in_rate as f64).max(0.0) as usize
+        } else {
+            0
+        };
+        if available.saturating_sub(ahead) as f64 > limit {
             // keep the target, but never less than one block plus margin
             let keep = (self.target_frames as f64).max(1.5 * block_in + CHUNK as f64) as usize;
-            let skip = available - keep;
+            let skip = available.saturating_sub(ahead) - keep;
             if let Ok(c) = ring.read_chunk(skip * ch) {
                 c.commit_all();
             }
@@ -257,7 +267,7 @@ impl AdaptiveResampler {
         if self.fixed && self.owed >= 1.0 {
             // A late packet arrived: the fill is above the target by what was
             // already played as silence; drop that much.
-            let excess = available.saturating_sub(self.target_frames);
+            let excess = available.saturating_sub(self.target_frames + ahead);
             let n = (self.owed as usize).min(excess);
             if n > 0 {
                 if let Ok(c) = ring.read_chunk(n * ch) {

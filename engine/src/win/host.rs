@@ -603,7 +603,14 @@ impl AudioHost {
                         }
                         c.commit_all();
                     }
-                    ref_mix.render(&mut r);
+                    // The reference for the moment this frame was recorded,
+                    // not the moment it is processed: a microphone that
+                    // delivers several frames at once would otherwise get
+                    // a reference that runs dry and moves (round-6 review).
+                    let rest = (raw.slots() / ch) as u64;
+                    let newest = mic_stats.last_push_ns.load(Ordering::Relaxed);
+                    let recorded = newest.saturating_sub(rest * 1_000_000_000 / ENGINE_RATE as u64);
+                    ref_mix.render_at(&mut r, recorded);
                     match reducer.as_mut() {
                         Some(red) => fanout.push(Some(red.process(&r, &m)), 1, FRAME),
                         None => fanout.push(Some(&m), 1, FRAME),

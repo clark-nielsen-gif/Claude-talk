@@ -307,7 +307,7 @@ impl OutputMixer {
             tap.resampler
                 .note_source_epoch(tap.source_stats.restarts.load(Ordering::Relaxed));
             let last = tap.source_stats.last_push_ns.load(Ordering::Relaxed);
-            let age_s = self.now_ns.saturating_sub(last) as f64 * 1e-9;
+            let age_s = (self.now_ns as f64 - last as f64) * 1e-9;
             tap.resampler.set_input_age(age_s);
             let st = tap.resampler.pull(&mut tap.ring, scratch);
             if st.underrun_frames > 0 {

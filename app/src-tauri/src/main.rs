@@ -43,7 +43,7 @@ fn first_close_hint(app: &AppHandle) {
         let (title, text) = if da {
             (
                 "Claude Talk kører videre",
-                "Claude Talk kører videre nede ved uret, så Discord stadig kan høre dig og Claude.\n\nKlik på ikonet ved uret for at åbne vinduet igen. Vil du lukke helt, så højreklik på ikonet og vælg »Luk Claude Talk«.",
+                "Claude Talk kører videre nede ved uret, så Discord stadig kan høre dig og Claude.\n\nKlik på ikonet ved uret for at åbne vinduet igen (kan du ikke se det, så tryk på den lille pil ^ ved uret). Vil du lukke helt, så højreklik på ikonet og vælg »Luk Claude Talk«.",
             )
         } else {
             (
@@ -338,11 +338,15 @@ fn main() {
         })
         .build(context)
         .expect("error while building Claude Talk")
-        .run(|app, event| {
+        .run(|app, event| match event {
+            // The last window closed (the Claude window, when Claude Talk
+            // started with Windows and has no main window): Claude Talk keeps
+            // running by the clock – Discord's microphone depends on it.
+            // An explicit exit (Quit) carries a code and goes through.
+            tauri::RunEvent::ExitRequested { code: None, api, .. } => api.prevent_exit(),
             // Windows ends the session (sign-out, shutdown) or the app exits
             // any other way: Discord gets its own microphone back.
-            if let tauri::RunEvent::Exit = event {
-                shutdown_inner(app, false);
-            }
+            tauri::RunEvent::Exit => shutdown_inner(app, false),
+            _ => {}
         });
 }

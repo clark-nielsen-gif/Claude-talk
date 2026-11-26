@@ -2,13 +2,6 @@
 ; run elevated inside the single UAC prompt of the installer.
 ; Messages follow the installer's language: Danish (1030) or English.
 
-!macro NSIS_HOOK_PREINSTALL
-  ; A restore helper left by an earlier Claude Talk (it gives Discord its
-  ; microphone back when Discord starts) would keep the program file in use.
-  nsExec::Exec 'taskkill /F /IM claude-talk.exe'
-  Pop $0
-!macroend
-
 !macro NSIS_HOOK_POSTINSTALL
   ${If} $LANGUAGE == 1030
     DetailPrint "Claude Talk-mikrofonen sættes op"

@@ -62,6 +62,9 @@ mod imp {
     const E_ACCESSDENIED: u32 = 0x8007_0005;
 
     pub fn start(app: &AppHandle) {
+        // device lookups below (extra cable, mixer devices) need COM on
+        // this thread; started minimized there is no window to set it up
+        let _com = ct_engine::win::ComGuard::new();
         let state = app.state::<AppState>().inner().clone();
         #[allow(unused_mut)]
         let mut cfg = HostConfig::standard(state.claude_pid.clone());
@@ -174,7 +177,8 @@ mod imp {
             }
         }
         // echo reduction: always, never, or automatically with speakers
-        let speakers = state.speakers.load(Ordering::Relaxed);
+        let speakers =
+            state.speakers.load(Ordering::Relaxed) || state.added_speakers.load(Ordering::Relaxed);
         let echo = match cfg.echo {
             crate::config::EchoMode::On => true,
             crate::config::EchoMode::Off => false,

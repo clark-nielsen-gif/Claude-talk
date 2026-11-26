@@ -86,7 +86,7 @@ const da = {
     switchOnClaudeMuted: 'Tændt. Claude er gjort stille i Discord, men lytter stadig med.',
     switchOnOnlyYou: 'De andre i opkaldet hører Claude, og Claude hører kun dig.',
     switchOnMicMuted: 'De andre i opkaldet hører Claude. Din mikrofon er slået fra.',
-    claudeNotOpen: 'Claude er ikke åben endnu',
+    claudeNotOpen: 'Claude-vinduet er ikke åbent',
     claudeLogIn: 'Log ind på Claude i Claude-vinduet med din e-mail og koden fra mailen',
     claudeOpenNotListening: 'Tryk på den runde knap med lydbølger i højre side af skrivefeltet i Claude-vinduet',
     showClaude: 'Vis Claude-vinduet',
@@ -137,7 +137,7 @@ const da = {
     updateAction: 'Opdater nu',
     krispTitle: 'Bliver Claudes stemme svag i Discord?',
     krispBody: 'Slå Discords støjfjernelse fra under Stemme og video, så kommer Claudes stemme tydeligt igennem.',
-    discordTips: 'Godt at vide om Discord: Brug »Stemmeaktivering«, ikke »Tryk for at tale« – ellers hører de andre kun Claude, mens du holder tasten nede. Og slår du din mikrofon fra i Discord, hører de heller ikke Claude.',
+    discordTips: 'Godt at vide om Discord: Brug »Stemmeaktivitet« (på engelsk »Voice Activity«), ikke »Tryk for at tale« – ellers hører de andre kun Claude, mens du holder tasten nede. Og slår du din mikrofon fra i Discord, hører de heller ikke Claude.',
   },
 
   errors: {
@@ -235,7 +235,7 @@ const da = {
     hkMuteMic: 'Slå min mikrofon fra og til',
     hkPtt: 'Hold nede for at tale til Claude',
     pttEnable: 'Claude hører dig kun, mens du holder tasten nede',
-    pressKeys: 'Hold Ctrl, Shift eller Alt, og tryk en tast (Esc fortryder)',
+    pressKeys: 'Hold Ctrl, Shift eller Alt, og tryk på en tast (Esc fortryder)',
     change: 'Skift',
     restore: 'Gendan normale lydindstillinger',
     restoreHint: 'Discord bruger igen din almindelige mikrofon, og Claude går ud af opkaldet. Tænd for »Claude i Discord« på Oversigt for at tage Claude med igen.',

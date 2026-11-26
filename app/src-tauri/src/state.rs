@@ -20,6 +20,8 @@ pub struct Inner {
     pub discord_recording: AtomicBool,
     /// The default output is speakers (sound can reach the microphone).
     pub speakers: AtomicBool,
+    /// An output added in Advanced is speakers (same risk).
+    pub added_speakers: AtomicBool,
     /// When the default output was last set back from our cable.
     pub output_fixed_at: Mutex<Option<std::time::Instant>>,
     /// Shortcuts that could not be registered (shown in the app).
@@ -45,6 +47,7 @@ impl Inner {
             discord_needs_restart: AtomicBool::new(false),
             discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),
+            added_speakers: AtomicBool::new(false),
             output_fixed_at: Mutex::new(None),
             hotkey_problem: Mutex::new(String::new()),
             bridge_probe: Mutex::new(None),

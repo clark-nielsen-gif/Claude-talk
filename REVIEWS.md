@@ -75,3 +75,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 
 **Rettet efter runde 5:** hjælperen venter på, at Claude Talk er helt lukket, og startes kun ved brugerens egen lukning; installeren stopper en efterladt hjælper. Siden melder login-tilstand, og kortene siger »log ind«. Claude-vinduet passer til skærmen. Smalle vinduer viser problemkortet først. Discord-genstart tjekker Discords starter først. »Tryk for at tale« og forsinkelsen er beskrevet ærligt (K28, K29).
 
+## Runde 6 – 2026-11-26 – ikke ren
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 3 minor | Den forhøjede installer kørte `taskkill` uden fuld sti (kunne starte en plantet fil fra Overførsler som administrator). |
+| Lyd | 1 major, 3 minor | En mikrofon, der leverer flere 10 ms-rammer ad gangen, fik ekkodæmperens reference til at løbe tør (0–8 dB ekko fjernet). |
+| Design | 2 major, 10 minor | Pladsholdertekst under 4,5:1 i mørkt tema. »Gør klar til Discord« fik flueben ved siden af en fejl. |
+| "Min mor" | 1 major, 22 minor | Billederne i README var fra en tidlig version, og vejledningsbilledet sagde det modsatte af programmet. |
+| "Bryd det" | 1 blocker, 1 major, 9 minor | Startet med Windows (uden hovedvindue) lukkede Claude Talk helt, når Claude-vinduet blev lukket. Højttalere tilføjet under Avanceret fik ikke ekkodæmpning. |
+
+**Rettet efter runde 6:** programmet lukker ikke, når sidste vindue lukkes; `taskkill` er fjernet (Tauris egen lukning tager også hjælperen); referencen renderes for det øjeblik, mikrofonrammen blev optaget, og forsinkelsesvagten på faste routes regner med forsinkelsen (testen kører nu også med 2 og 3 rammer ad gangen: 64 dB); højttalere tilføjet under Avanceret slår ekkodæmpning til; COM i opstarten; et mislykket programskifte slår tilstanden helt fra; pladsholdere har 5,5:1; README-billederne er nye; lukke-dialogen fra ikonet ved uret kører uden at stoppe lyden.
+

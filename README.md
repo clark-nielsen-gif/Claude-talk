@@ -30,7 +30,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 - **Claude kører i sit eget vindue i Claude Talk.** Det er det, der gør, at Claude kan høre dig og Discord, uden at noget andet på din pc kommer med. Du logger ind én gang, og så husker vinduet det.
 - **Log ind med din e-mail.** Google tillader ikke login i programmers egne vinduer. Skriv din e-mail, og tryk på knappen under feltet (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet.
 - **Discord bruger Claude Talk-mikrofonen**, når Discords inputenhed står på »Standard« (det gør den normalt). Claude Talk sætter det selv op, og din stemme går stadig igennem som før. Lad derfor Claude Talk køre (den starter med Windows og ligger nede ved uret). Lukker du Claude Talk, får Discord din almindelige mikrofon tilbage. Er du midt i et opkald, spørger Claude Talk først, om Discord skal genstartes, så de andre stadig kan høre dig.
-- **Brug »Stemmeaktivering« i Discord**, ikke »Tryk for at tale«. Med »Tryk for at tale« hører de andre kun Claude, mens du holder tasten nede. Slår du din mikrofon fra i Discord, hører de heller ikke Claude.
+- **Brug »Stemmeaktivitet« (»Voice Activity«) i Discord**, ikke »Tryk for at tale«. Med »Tryk for at tale« hører de andre kun Claude, mens du holder tasten nede. Slår du din mikrofon fra i Discord, hører de heller ikke Claude.
 - **Brug gerne høretelefoner.** Med højttalere slår Claude Talk selv ekkodæmpning til, men høretelefoner giver den bedste lyd.
 - Programmet kræver **Windows 11**.
 
@@ -61,7 +61,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 | »Discord bruger en anden mikrofon« | Tryk **Vis mig hvordan**, og vælg **Standard** som inputenhed i Discord (ikke en bestemt mikrofon). Fluebenet kommer af sig selv. |
 | »Discord skal lige genstartes« | Tryk **Genstart Discord for mig**. |
 | »Windows blokerer din mikrofon« | Tryk **Åbn mikrofonindstillinger**, og slå »Adgang til mikrofon« og »Giv skrivebordsapps adgang til din mikrofon« til. |
-| »Vi kan ikke finde en mikrofon« | Sæt dit headset i. Claude Talk finder det selv. |
+| »Claude Talk kan ikke finde en mikrofon« | Sæt dit headset i. Claude Talk finder det selv. |
 | »Tryk på den runde knap med lydbølger …« | Tryk **Vis Claude-vinduet**, og tryk på den knap i skrivefeltet. |
 | »Din mikrofon er slået fra …« | Tryk **Slå min mikrofon til** i feltet **Dig**. |
 | Claudes stemme er svag i Discord | Slå Discords støjfjernelse fra under *Stemme og video*. |

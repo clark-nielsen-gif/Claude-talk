@@ -123,6 +123,30 @@ pub fn spawn_watcher(app: AppHandle) {
                                 && !ct_engine::win::host::is_own_device(&e.name)
                         })
                         .unwrap_or(false);
+                // speakers added as an output in Advanced: Discord or Claude
+                // played there reaches the microphone just the same
+                let added: Vec<String> = state
+                    .config
+                    .lock()
+                    .map(|c| {
+                        c.mixer
+                            .outputs
+                            .iter()
+                            .map(|o| o.device_id.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let added_speakers = !added.is_empty()
+                    && devices::list(devices::Flow::Render)
+                        .map(|l| {
+                            l.iter()
+                                .any(|e| added.contains(&e.id) && e.form_factor.is_open_air())
+                        })
+                        .unwrap_or(false);
+                if state.added_speakers.swap(added_speakers, Ordering::Relaxed) != added_speakers {
+                    log::info!("speakers among the added outputs: {added_speakers}");
+                    crate::audio::apply_switches(&app);
+                }
                 if state.speakers.swap(speakers, Ordering::Relaxed) != speakers {
                     log::info!(
                         "default output is now {}",

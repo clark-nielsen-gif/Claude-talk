@@ -200,7 +200,8 @@ mod host_wiring {
     /// rendered once per microphone frame. Source and mic on clocks `ppm` apart.
     /// Returns (echo removed over the last 15 s, the worst 2 s window after
     /// the first 40 s, reference underrun frames).
-    fn run(ref_ms: f64, ppm: f64, seconds: usize) -> (f64, f64, u64) {
+    /// `burst`: microphone frames delivered (and processed) together.
+    fn run(ref_ms: f64, ppm: f64, seconds: usize, burst: usize) -> (f64, f64, u64) {
         let mut aec = EchoReducer::new().unwrap();
         let (mut fan, mut fh) = SourceFanout::new(3, 48000);
         let (mix, mut mh) = OutputMixer::new(9002, 1, FRAME);
@@ -234,19 +235,11 @@ mod host_wiring {
             jr ^= jr << 17;
             (jr % 3001) as f64 - 1500.0
         };
+        // microphone frames waiting to be delivered (a burst)
+        let mut pending: Vec<(usize, f64, Vec<f32>)> = Vec::new();
         for m in 1..frames {
             // the mic clock runs `ppm` slow against the source clock
             let t_mic = m as f64 * 10_000.0 * (1.0 + ppm * 1e-6) + 4_000.0 + jit() * 0.3;
-            loop {
-                let t_push = (k_src as f64 + 1.0) * 10_000.0 + jit();
-                if t_push > t_mic {
-                    break;
-                }
-                let s = &x[k_src * FRAME..(k_src + 1) * FRAME];
-                let st: Vec<f32> = s.iter().flat_map(|v| [*v, *v]).collect();
-                fan.push_at(Some(&st), 2, FRAME, (t_push * 1000.0) as u64);
-                k_src += 1;
-            }
             // mic samples: what the speaker played (source time) `delay` ago
             let end_us = m as f64 * 10_000.0 * (1.0 + ppm * 1e-6);
             let mic: Vec<f32> = (0..FRAME)
@@ -262,29 +255,49 @@ mod host_wiring {
                     }
                 })
                 .collect();
-            mix.render_at(&mut r, (t_mic * 1000.0) as u64);
-            let out = aec.process(&r, &mic);
-            let (ei, eo) = (
-                mic.iter().map(|v| (*v as f64).powi(2)).sum::<f64>(),
-                out.iter().map(|v| (*v as f64).powi(2)).sum::<f64>(),
-            );
-            if m > frames - 100 * 15 {
-                e_in += ei;
-                e_out += eo;
+            pending.push((m, t_mic, mic));
+            if pending.len() < burst {
+                continue;
             }
-            if m > 100 * 40 {
-                w_in += ei;
-                w_out += eo;
-                if m % 200 == 0 {
-                    // windows with real echo in them (not the quiet parts)
-                    if w_in > 1.0 {
-                        worst = worst.min(10.0 * (w_in / w_out.max(1e-20)).log10());
+            // the burst is processed when its last frame has arrived; the
+            // source keeps delivering in real time up to that moment
+            let t_now = t_mic;
+            loop {
+                let t_push = (k_src as f64 + 1.0) * 10_000.0 + jit();
+                if t_push > t_now {
+                    break;
+                }
+                let s = &x[k_src * FRAME..(k_src + 1) * FRAME];
+                let st: Vec<f32> = s.iter().flat_map(|v| [*v, *v]).collect();
+                fan.push_at(Some(&st), 2, FRAME, (t_push * 1000.0) as u64);
+                k_src += 1;
+            }
+            for (m, t_rec, mic) in std::mem::take(&mut pending) {
+                // as host.rs: the reference for when the frame was recorded
+                mix.render_at(&mut r, (t_rec * 1000.0) as u64);
+                let out = aec.process(&r, &mic);
+                let (ei, eo) = (
+                    mic.iter().map(|v| (*v as f64).powi(2)).sum::<f64>(),
+                    out.iter().map(|v| (*v as f64).powi(2)).sum::<f64>(),
+                );
+                if m > frames - 100 * 15 {
+                    e_in += ei;
+                    e_out += eo;
+                }
+                if m > 100 * 40 {
+                    w_in += ei;
+                    w_out += eo;
+                    if m % 200 == 0 {
+                        // windows with real echo in them (not the quiet parts)
+                        if w_in > 1.0 {
+                            worst = worst.min(10.0 * (w_in / w_out.max(1e-20)).log10());
+                        }
+                        w_in = 0.0;
+                        w_out = 0.0;
                     }
-                    w_in = 0.0;
-                    w_out = 0.0;
                 }
             }
-            if m % 50 == 0 {
+            if m % 50 < burst {
                 mh.collect_garbage();
                 fh.collect_garbage();
             }
@@ -304,8 +317,19 @@ mod host_wiring {
     /// dry and moved, and only 4-27 dB of echo were removed).
     #[test]
     fn echo_is_removed_with_the_host_wiring() {
-        for ppm in [0.0, 50.0, -80.0, 100.0, 200.0, -150.0] {
-            let (erle, worst, u) = run(REF_BUFFER_MS, ppm, 240);
+        for (ppm, burst) in [
+            (0.0, 1),
+            (50.0, 1),
+            (-80.0, 1),
+            (100.0, 1),
+            (200.0, 1),
+            (-150.0, 1),
+            (0.0, 2),
+            (100.0, 2),
+            (-80.0, 3),
+        ] {
+            let (erle, worst, u) = run(REF_BUFFER_MS, ppm, 240, burst);
+            print!("{burst} frame(s) at a time, ");
             println!("clocks {ppm} ppm apart: echo reduced by {erle:.1} dB, worst 2 s window {worst:.1} dB (reference underrun frames {u})");
             assert!(
                 erle > 25.0,

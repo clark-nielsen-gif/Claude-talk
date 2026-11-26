@@ -24,7 +24,9 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
     { label: t.onboarding.stepCable, done: info.cableInstalled || !!status?.cableOk },
     { label: t.onboarding.stepMic, done: status?.micState === 'ok' },
     { label: t.onboarding.stepEngine, done: !!status?.engineRunning },
-    { label: t.onboarding.stepDiscord, done: !!status?.engineRunning },
+    // ready for Discord: the sound runs, Discord's microphone exists, and
+    // your microphone works (otherwise Discord would get nothing)
+    { label: t.onboarding.stepDiscord, done: !!status?.engineRunning && (info.cableInstalled || !!status?.cableOk) && status?.micState === 'ok' },
   ];
   const allDone = checks.every((c) => c.done);
   // What can't finish by itself: shown at once when it is certain, otherwise
@@ -76,7 +78,7 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
           <>
             <h1>{t.onboarding.setupTitle}</h1>
             <p className="lead">{problem ? t.onboarding.setupProblemBody : t.onboarding.setupBody}</p>
-            <div className="progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${progress}%` }} /></div>
+            <div className="progress" aria-label={t.onboarding.setupTitle} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${progress}%` }} /></div>
             <ul className="steps">
               {checks.map((c, i) => {
                 const revealed = i < shown;

@@ -18,9 +18,9 @@ fn t(lang: &str, key: &str) -> &'static str {
         }
         "claude" => {
             if da {
-                "Åbn Claude"
+                "Åbn Claude-vinduet"
             } else {
-                "Open Claude"
+                "Open the Claude window"
             }
         }
         "switch" => {
@@ -32,9 +32,9 @@ fn t(lang: &str, key: &str) -> &'static str {
         }
         "mute" => {
             if da {
-                "Slå min mikrofon fra"
+                "Min mikrofon er slået fra"
             } else {
-                "Mute my microphone"
+                "My microphone is off"
             }
         }
         "quit" => {
@@ -108,7 +108,12 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 }
                 after_change(app);
             }
-            "quit" => crate::request_quit(app),
+            // off the main thread: the question dialog must not stop the
+            // Claude window's audio, which the main thread carries
+            "quit" => {
+                let app = app.clone();
+                std::thread::spawn(move || crate::request_quit(&app));
+            }
             _ => {}
         }
     })

@@ -356,7 +356,17 @@ fn set_external_claude_blocking(
             .unwrap_or_else(|p| p.into_inner())
             .as_mut()
         {
-            imp::set_external_claude(h, exe.as_deref())?;
+            if let Err(e) = imp::set_external_claude(h, exe.as_deref()) {
+                // the old routes are gone already: the mode is off now, and
+                // the settings must say so (or the mic stays open for good)
+                state
+                    .config
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .external_claude = None;
+                state.save_config();
+                return Err(e);
+            }
         }
         crate::audio::apply_switches(app);
     }
