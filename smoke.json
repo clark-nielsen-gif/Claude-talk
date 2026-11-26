@@ -1,0 +1,71 @@
+{
+  "devices_capture": [
+    "Microphone Array (Virtual Audio Driver by MTT)",
+    "Claude Talk – til Discord (VB-Audio)"
+  ],
+  "devices_render": [
+    "Speakers (Virtual Audio Driver by MTT)",
+    "CABLE In 16ch (VB-Audio Virtual Cable)",
+    "CABLE Input (VB-Audio Virtual Cable)"
+  ],
+  "info_sink_mic_echo": {
+    "device": "",
+    "hr": "0x80070490",
+    "levels_db": {
+      "2500": -200.0
+    },
+    "state": "WaitingForDevice"
+  },
+  "microphone_never_own_cable": {
+    "detail": {
+      "default": "{0.0.1.00000000}.{431594e5-0731-4f27-ae30-b9d3cc989f3a}",
+      "picked": "Microphone Array (Virtual Audio Driver by MTT)"
+    },
+    "pass": true
+  },
+  "pass": false,
+  "process_loopback_isolation": {
+    "detail": {
+      "hr": "0x00000000",
+      "levels_db": {
+        "1500": -135.9,
+        "3000": -167.6
+      },
+      "pid": 5568,
+      "state": "Running"
+    },
+    "pass": false
+  },
+  "process_restart_recovery": {
+    "detail": {
+      "hr": "0x00000000",
+      "levels_db": {
+        "1500": -33.8
+      },
+      "restarts": 3,
+      "state": "Running"
+    },
+    "pass": false
+  },
+  "render_capture_cable": {
+    "detail": {
+      "device": "Claude Talk – til Discord (VB-Audio)",
+      "hr": "0x00000000",
+      "levels_db": {
+        "1000": -78.9,
+        "3000": -175.0
+      },
+      "player": {
+        "device": "CABLE Input (VB-Audio Virtual Cable)",
+        "hr": "0x00000000",
+        "period": 1056,
+        "restarts": 0,
+        "state": "Running"
+      },
+      "samples": 287040,
+      "state": "Running"
+    },
+    "pass": false
+  },
+  "windows_build": 26100
+}
