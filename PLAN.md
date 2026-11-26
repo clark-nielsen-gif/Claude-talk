@@ -1,40 +1,47 @@
-# Claude Talk – plan
+# Claude Talk – plan (arkitektur 2: én virtuel mikrofon)
 
-Hver milepæl afsluttes med grøn CI på Windows-runnere, en opdatering af `PROGRESS.md` og en review-runde (se `REVIEWS.md`).
+Repositoryet er privat. Undervejs kører hurtige tests kun på `windows-latest`. Matrixen (`windows-latest`, `windows-2025`, `windows-2022`) køres ved milepæle, og 2-timers udholdenhedstesten køres én gang til sidst. Rene DSP-tests kører også på Linux i udviklingsmiljøet.
 
-## M0 – Fundament: virtuelle mikrofoner (bevises først)
-- `driver-proof.yml`: test kandidat A (VirtualDrivers, signeret 25.7.14) og kandidat B (VB-CABLE + Hi-Fi Cable fra vb-audio.com) på `windows-latest`, `windows-2025` og `windows-2022`.
-- Bevis: ingen test-signing, to aktive optageenheder, omdøbt til `Claude Talk – til Discord` / `Claude Talk – til Claude`, læst tilbage via Core Audio (`PKEY_Device_FriendlyName`).
-- Bevis: lyd går igennem begge kabler (tone ind på render-siden, FFT på capture-siden).
-- Bevis: afinstallation fjerner enhederne igen.
-- **Stop-kriterie:** Ingen kode ud over M0, før dette er grønt.
+```
+ Fysisk mikrofon ─┐
+                  ├─► [Til Discord] ─► VB-CABLE "Claude Talk – til Discord (VB-Audio)" ─► Discord (mikrofon)
+ Claude-vinduet ──┤      (Mikrofon + Claude)
+ (process loopback│
+  af WebView2-    │
+  processtræet)   │
+                  │
+ Discord ─────────┼─► [Til Claude] ─► host-besked ─► injiceret getUserMedia i Claude-vinduet
+ (process loopback)      (Mikrofon + Discord)
+```
+Brugeren hører Claude og Discord helt normalt (ingen omdirigering af afspilning).
 
-## M1 – Lydmotor (Rust, `windows`-craten)
-- WASAPI shared/event capture og render, MMCSS "Pro Audio", én tråd per enhed.
-- Process loopback (`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`, include process tree) for Chrome/Claude og Discord, med automatisk genfinding af PID.
-- Låsefri SPSC-ringbuffere, adaptiv resampling (`rubato`) mod clock drift, gain/mute, true-peak limiter, målere.
-- Routing-graf med løkkedetektion og hårde låse (`Claude → Til Claude`, `Discord → Til Discord`).
-- Tests: unit + `proptest` for mixer, gain, limiter, resampler, drift, graf.
+## M0 – Fundament ✅
+VB-CABLE: Microsoft-attesteret, lydløs installation, omdøbt og verificeret i CI.
 
-## M2 – End-to-end lydtests i CI
-- Testprogrammer: falsk Claude (440 Hz), falsk Discord (1000 Hz), falsk mikrofon (2500 Hz via ekstra virtuel enhed).
-- FFT-isolation (≥ 60 dB), latenstid < 40 ms med impulser, robusthed (genstart af processer, enheder fra/til, sample rate-skift).
-- Separat 2-timers udholdenhedsworkflow.
+## M1 – Lydmotor (Rust, `engine/`)
+- **M1a:** låsefri SPSC-ringbuffer, mixer/routing-graf med løkkedetektion og hårde låse, gain/mute, true-peak limiter, adaptiv resampler med drift-regulering, niveaumålere. Unit tests og `proptest`.
+- **M1b:** WASAPI event-drevet capture/render, process loopback (include tree), MMCSS "Pro Audio", genfinding af PID, enhedsskift, sleep/resume, logning uden for lydtråden.
 
-## M3 – Per-app-routing
-- `IAudioPolicyConfigFactory` (Win10- og Win11-GUID'er) for Discord/DiscordPTB/DiscordCanary og chrome/Claude.
-- Verifikation med `IAudioSessionManager2`, "Gendan normale lydindstillinger", test med omdøbte testprocesser.
+## M2 – Claude-vinduet
+- Separat WebView2-miljø (egen brugerdatamappe og dermed eget processtræ, som giver isoleret process loopback af Claudes stemme).
+- Injiceret script (`AddScriptToExecuteOnDocumentCreated`), der erstatter `getUserMedia`, `enumerateDevices` og `permissions.query`. Lyd fra motoren via WebView2-hostbeskeder.
+- `PermissionRequested`: mikrofon kun for claude.ai. Navigation uden for claude.ai og Anthropics login åbnes i standardbrowseren. Venlig guide, hvis Google-login blokeres.
+- Lokal testside med streng CSP, der efterligner en stemme-webapp. Den kan kun aktiveres i CI-builds.
 
-## M4 – App (Tauri 2 + React + TS + Vite)
-- Første opstart (3 skærme), hovedskærm (Dig / Claude / Discord), avanceret mixer, indstillinger, hjælp/diagnose, systembakke, genvejstaster, autostart, i18n (da/en).
-- Design efter afsnit 6, eget ikon, bundlede skrifttyper.
-- Playwright-skærmbilleder: alle skærme, lys/mørk, 100 %/150 %.
+## M3 – End-to-end-tests i CI
+Testsiden 440 Hz, falsk Discord 1000 Hz, falsk mikrofon 2500 Hz, baggrund 3000 Hz. FFT-isolation på mindst −60 dB og latenstid under 40 ms i begge retninger.
 
-## M5 – Installer, opdatering, release
-- NSIS: én UAC, henter og installerer driverne, omdøber enheder, ren afinstallation.
-- Tauri updater med signerede manifester, kodesignering forberedt (`SIGNING.md`).
-- Installationstest i CI, `v1.0.0`-release med `ClaudeTalk-Setup.exe` + portable zip.
+## M4 – Per-app-routing til Discord
+`IAudioPolicyConfigFactory` (Win10/11), verifikation med `IAudioSessionManager2`, gendannelse og guide som fallback.
 
-## M6 – Review-runder til to rene runder i træk
-- Kodereviewer, lydtester, designreviewer, "min mor"-tester, "bryd det"-agent.
-- README (dansk, ikke-teknisk), `MANUAL_TEST.md`, ærlig slutopsummering i `PROGRESS.md`.
+## M5 – App og UI (Tauri 2 + React + TS)
+Første opstart (velkommen → vi sætter op → klar), hovedskærm, avanceret mixer, indstillinger, hjælp/diagnose, systembakke, genvejstaster, autostart, da/en. Playwright-skærmbilleder.
+
+## M6 – Installer og release
+NSIS: én UAC, henter og installerer VB-CABLE, omdøber, ren afinstallation. Tauri updater, `SIGNING.md`, installationstest, `v1.0.0`.
+
+## M7 – Reviews og afslutning
+Fem uafhængige reviewroller, til to runder i træk er rene. README, `MANUAL_TEST.md`, 2-timers udholdenhed og ærlig slutopsummering.
+
+## Valgfrit (kun hvis det ikke forsinker): to-kabel-tilstand
+Findes et ekstra virtuelt kabel (f.eks. VB-CABLE A+B), tilbydes "Brug Claude i Chrome eller desktop-appen". Ellers er tilstanden skjult.

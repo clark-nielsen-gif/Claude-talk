@@ -26,7 +26,7 @@ Bevist på `windows-latest`, `windows-2025` og `windows-2022`:
 Kan kun hentes via et personligt link efter en donation i VB-Audios webshop ("pay what you want"). Installeren kan derfor ikke hente dem selv fra vb-audio.com.
 
 ### Konsekvens
-Der findes præcis **én** virtuel mikrofon, der både er gratis, produktionssigneret og kan hentes automatisk: VB-CABLE. Produktet kræver **to**, ellers bliver ekko-reglerne brudt. Se `KNOWN_ISSUES.md` K3 for mulighederne. Valget afventer brugeren, fordi alle veje koster enten penge eller en tung afhængighed.
+Der findes præcis **én** virtuel mikrofon, der både er gratis, produktionssigneret og kan hentes automatisk: VB-CABLE. Løst med arkitektur 2 (D5): kun Discord får en virtuel mikrofon.
 
 ## D2 – CI-runnere
 - `windows-latest` (er p.t. Server 2025, build 26100), `windows-2025` og `windows-2022` (build 20348, nærmeste til Windows 10). Der findes ingen hostet Windows 10-klient.
@@ -36,3 +36,28 @@ Udviklingsmiljøet kan ikke hente GitHub Actions-artefakter (proxyen blokerer Az
 
 ## D4 – Repository
 `clark-nielsen-gif/Claude-talk` (privat, oprettet af brugeren). Bemærk: Private repositories har en begrænset kvote af gratis Actions-minutter, og Windows-minutter tæller dobbelt. 2-timers udholdenhedstesten bruger en mærkbar del af kvoten.
+
+## D5 – Arkitektur 2: Claude får lyd direkte i et indbygget vindue (brugerens valg 26-11-2026)
+- Discord bruger VB-CABLE som mikrofon (Mikrofon + Claude).
+- Claude kører i et Claude Talk-vindue (WebView2). Et script, der injiceres før siden indlæses, erstatter `navigator.mediaDevices.getUserMedia`, `enumerateDevices` og `permissions.query` for mikrofonen. claude.ai får dermed en MediaStream med Mikrofon + Discord fra Rust-motoren.
+- **Claudes stemme isoleres med process loopback på Claude-vinduets eget WebView2-processtræ.** Vinduet får sit eget WebView2-miljø (egen brugerdatamappe), så det får sin egen browserproces (`ICoreWebView2::BrowserProcessId`) og sin egen lyd-tjenesteproces, adskilt fra programmets UI. Process loopback med `INCLUDE_TARGET_PROCESS_TREE` på den PID fanger kun Claude-vinduets lyd. Brugeren hører stadig Claude normalt, fordi intet omdirigeres.
+
+## D6 – Er Claudes stemmefunktion tilgængelig i en Chromium-browser? Ja
+Anthropics hjælpeside (support.claude.com, "Use voice mode", tjekket 26-11-2026) siger, at voice mode er en betafunktion for alle abonnementer på mobil, Claude Desktop og nettet. Claude Desktop er selv bygget på Chromium (Electron), og WebView2 er Microsoft Edge' Chromium-motor med `getUserMedia`, WebRTC, Web Audio og WebCodecs. Der er ikke fundet krav, som WebView2 mangler. Det endelige bevis kan kun gives med et rigtigt login, så det er et trin i `MANUAL_TEST.md`. Risikoen står i `KNOWN_ISSUES.md` K4.
+
+## D7 – Login
+- Google blokerer OAuth i indlejrede browsere med fejlen `disallowed_useragent`. Det har Google håndhævet siden 2021. "Fortsæt med Google" forventes derfor at fejle i vinduet. Vinduet opdager navigation til `accounts.google.com` og viser i stedet en venlig vejledning: "Log ind med din e-mail – Claude sender dig en kode."
+- Login sker udelukkende på Anthropics egne sider. Programmet læser, gemmer og rører aldrig adgangskoder, koder eller cookies. Sessionen ligger kun i WebView2's egen brugerdatamappe (`%APPDATA%\Claude Talk\ClaudeWindow`).
+- Tilladt i vinduet: `claude.ai`, `*.claude.ai`, `*.anthropic.com`, `*.claude.com` og Cloudflares udfordringsside (`challenges.cloudflare.com`, som claude.ai selv bruger). Alt andet åbnes i standardbrowseren.
+
+## D8 – Lydtransport fra motoren til siden
+**Valg:** WebView2-hostbeskeder (`PostWebMessageAsString` → `window.chrome.webview`), i blokke på 10 ms (480 frames, 48 kHz mono f32, base64), og i siden en `MediaStreamTrackGenerator` (WebCodecs `AudioData`). Fallback er en `AudioWorklet` og til sidst en `ScriptProcessorNode`.
+
+**Begrundelse:**
+- En lokal WebSocket er underlagt sidens CSP (`connect-src`). claude.ai har en streng CSP, så `ws://127.0.0.1` ville blive blokeret. Hostbeskeder er ikke underlagt CSP og forlader aldrig processen, så de kræver ingen port eller token.
+- En `AudioWorklet` skal indlæses med `addModule(url)`, og det er underlagt `script-src`. Med en nonce-baseret CSP er `blob:`- og `data:`-moduler blokeret. `MediaStreamTrackGenerator` kræver ingen modulindlæsning, og frames skrives direkte ind i sporet, så der ikke er nogen ekstra jitterbuffer ud over den, Chromium selv har.
+- Shared buffers (`PostSharedBufferToScript`) kan ikke overføres til en lydtråd i siden og skulle polles fra hovedtråden. Det giver mere jitter, ikke mindre.
+- Det endelige valg verificeres i CI med testsiden, som har samme type CSP som claude.ai, og latenstiden måles.
+
+## D9 – CI-minutter (privat repository)
+Hurtige tests kører kun på `windows-latest`. Matrixen køres kun ved milepæle, og udholdenhedstesten (2 timer) køres én gang til sidst. Ren DSP-logik testes desuden på Linux i udviklingsmiljøet, hvilket er gratis.
