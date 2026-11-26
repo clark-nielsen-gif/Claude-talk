@@ -43,14 +43,15 @@ jobs:
         run: |
           # Where VB-CABLE keeps its internal latency ("Max Latency"), to
           # decide whether the installer should set it (KNOWN_ISSUES K9).
+          $ErrorActionPreference = 'Continue'
           New-Item -ItemType Directory results -Force | Out-Null
           $o = @()
-          foreach ($k in 'HKLM\SOFTWARE\VB-Audio', 'HKLM\SOFTWARE\WOW6432Node\VB-Audio', 'HKCU\Software\VB-Audio') { $o += "== $k"; $o += (reg query $k /s 2>&1) }
+          foreach ($k in 'HKLM\SOFTWARE\VB-Audio', 'HKLM\SOFTWARE\WOW6432Node\VB-Audio', 'HKCU\Software\VB-Audio') { $o += "== $k"; $o += (cmd /c "reg query `"$k`" /s 2>&1") }
           $svc = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services' | Where-Object { $_.PSChildName -like 'VBAudio*' }
-          foreach ($x in $svc) { $o += "== $($x.Name)"; $o += (reg query $x.Name /s 2>&1) }
+          foreach ($x in $svc) { $o += "== $($x.Name)"; $o += (cmd /c "reg query `"$($x.Name)`" /s 2>&1") }
           $class = 'HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}'
           foreach ($x in Get-ChildItem "Registry::$class" -ErrorAction SilentlyContinue) {
-            if ((Get-ItemProperty $x.PSPath -ErrorAction SilentlyContinue).DriverDesc -like '*VB-Audio*') { $o += "== $($x.Name)"; $o += (reg query $x.Name /s 2>&1) }
+            if ((Get-ItemProperty $x.PSPath -ErrorAction SilentlyContinue).DriverDesc -like '*VB-Audio*') { $o += "== $($x.Name)"; $o += (cmd /c "reg query `"$($x.Name)`" /s 2>&1") }
           }
           $cp = Get-ChildItem $env:RUNNER_TEMP -Recurse -Filter 'VBCABLE_ControlPanel.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($cp) {

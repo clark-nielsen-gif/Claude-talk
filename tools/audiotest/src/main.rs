@@ -1261,9 +1261,9 @@ mod imp {
 
         // E. latency of the engine itself, without the app: a program's
         // bursts are captured (process loopback), routed through the engine
-        // (20 ms route buffer) and played into the cable; recorded before the
-        // engine (program), after it (cable playback side, loopback) and
-        // after VB-CABLE (cable recording side).
+        // (route buffer as in the app) and played into the cable; recorded
+        // before the engine (program), after it (this process as Windows
+        // mixes it) and after VB-CABLE (cable recording side).
         {
             let dir = std::env::temp_dir().join("ct-lat");
             let _ = std::fs::create_dir_all(&dir);
@@ -1273,7 +1273,12 @@ mod imp {
             std::thread::sleep(Duration::from_millis(800));
             let (fan, mut fan_h) = SourceFanout::new(1, ENGINE_RATE);
             let (mix, mut mix_h) = OutputMixer::new(2, ENGINE_CHANNELS, 480);
-            let tap = connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 20.0);
+            let tap = connect(
+                &mut fan_h,
+                &mut mix_h,
+                GainParams::new(0.0, false),
+                ct_engine::win::host::ROUTE_BUFFER_MS,
+            );
             let cap = spawn_capture(
                 "lat-src",
                 CaptureTarget::Process(ProcessTarget::ExeNames(vec!["burster.exe".into()])),
@@ -1291,10 +1296,11 @@ mod imp {
             let (_, recs) = record_multi(
                 vec![
                     CaptureTarget::Process(ProcessTarget::ExeNames(vec!["burster.exe".into()])),
-                    CaptureTarget::DeviceLoopback(DeviceSelector::FirstMatching(
-                        Flow::Render,
-                        ct_engine::win::host::cable_render_patterns(),
-                    )),
+                    // this process: what the engine plays into the cable, as
+                    // Windows mixes it – before VB-CABLE's own buffer
+                    CaptureTarget::Process(ProcessTarget::Pid(Arc::new(AtomicU32::new(
+                        std::process::id(),
+                    )))),
                     CaptureTarget::Device(DeviceSelector::FirstMatching(
                         Flow::Capture,
                         ct_engine::win::host::cable_capture_patterns(),
