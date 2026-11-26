@@ -1,0 +1,108 @@
+﻿== HKLM\SOFTWARE\VB-Audio
+
+HKEY_LOCAL_MACHINE\SOFTWARE\VB-Audio\Cable
+    VBAudioCableWDM_SR    REG_DWORD    0xbb80
+    VBAudioCableWDM_Latency    REG_DWORD    0x400
+    VBAudioCableWDM_LoopBack    REG_DWORD    0x1
+
+== HKLM\SOFTWARE\WOW6432Node\VB-Audio
+ERROR: The system was unable to find the specified registry key or value.
+== HKCU\Software\VB-Audio
+ERROR: The system was unable to find the specified registry key or value.
+== HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VBAudioVACMME
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VBAudioVACMME
+    Type    REG_DWORD    0x1
+    Start    REG_DWORD    0x3
+    ErrorControl    REG_DWORD    0x1
+    ImagePath    REG_EXPAND_SZ    \SystemRoot\System32\DriverStore\FileRepository\vbmmecable64_win10.inf_amd64_9ed1e8995f3f9e21\vbaudio_cable64_win10.sys
+    DisplayName    REG_SZ    VB-Audio Virtual Cable (WDM)
+    Owners    REG_MULTI_SZ    oem12.inf
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VBAudioVACMME\Parameters
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VBAudioVACMME\Parameters\Wdf
+    WdfMajorVersion    REG_DWORD    0x1
+    WdfMinorVersion    REG_DWORD    0xf
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VBAudioVACMME\Enum
+    Count    REG_DWORD    0x1
+    NextInstance    REG_DWORD    0x1
+    0    REG_SZ    ROOT\MEDIA\0000
+
+== HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000
+    DriverDesc    REG_SZ    VB-Audio Virtual Cable
+    ProviderName    REG_SZ    VB-Audio Software
+    DriverDateData    REG_BINARY    0040ABC5CA68DD01
+    DriverDate    REG_SZ    10-31-2026
+    DriverVersion    REG_SZ    3.5.2.0
+    InfPath    REG_SZ    oem12.inf
+    InfSection    REG_SZ    VBCableInst.NTamd64
+    IncludedInfs    REG_MULTI_SZ    ks.inf\0wdmaudio.inf
+    MatchingDeviceId    REG_SZ    VBAudioVACWDM
+    AssociatedFilters    REG_SZ    wdmaud,redbook
+    Driver    REG_SZ    vbaudio_cable64_win10.sys
+    KS    REG_SZ    1
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000\Drivers
+    SubClasses    REG_SZ    wave,mixer
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000\Drivers\mixer
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000\Drivers\mixer\wdmaud.drv
+    Driver    REG_SZ    wdmaud.drv
+    Description    REG_SZ    VB-Audio Virtual Cable
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000\Drivers\wave
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e96c-e325-11ce-bfc1-08002be10318}\0000\Drivers\wave\wdmaud.drv
+    Driver    REG_SZ    wdmaud.drv
+    Description    REG_SZ    VB-Audio Virtual Cable
+
+--- control panel strings ---
+eSYSTEM\CurrentControlSet\Services\
+SYSTEM\CurrentControlSet\Control\Class\{4D36E96C-E325-11CE-BFC1-08002BE10318}
+SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio
+VBAudioVACWDM
+iSet Max Latency: 4096 smp (requires REBOOT)
+jSet Max Latency: 5120 smp (requires REBOOT)
+kSet Max Latency: 6144 smp (requires REBOOT)
+lSet Max Latency: 7168 smp (requires REBOOT)
+mSet Max Latency: 8192 smp (requires REBOOT)
+nSet Max Latency: 12288 smp (requires REBOOT)
+oSet Max Latency: 16384 smp (requires REBOOT)
+pSet Max Latency: 32768 smp (requires REBOOT)
+&Latency
+Set Current Latency: 3x 128 smp
+Set Current Latency: 3x 256 smp
+Set Current Latency: 3x 512 smp
+Set Current Latency: 3x 768 smp
+Set Current Latency: 3x 1024 smp
+Set Current Latency: 3x 2048 smp
+Set Current Latency: 7168 smp (default)
+Set Current Latency: 3x 4096 smp
+Set Current Latency: 3x 8192 smp
+\VB-AUDIO Software
+VB-AUDIO Software
+SYSTEM\CurrentControlSet\Services\VB-Cable
+SOFTWARE\VB-Audio\Cable
+Max Latency:
+Latency:
+Buffers:
+Buffer Call:
+Potential Error On Buffer size compared to current latency:
+Max Latency: %i 
+Current Latency: %i 
+http://www.facebook.com/vbaudiosoftware
+VBAudioCableWDM_SR
+Cannot access to the registry...
+VBAudioCableWDM_Latency
+to get registry write access permission...
+Pin Name and Icon have been changed in registry.
+VBAudioCableWDM
+VBAudioCableWDM_VolCtl
+VBAudioCableWDM_LoopBack
+FlushFileBuffers
+SYSTEM\CurrentControlSet\Services\Cdrom
