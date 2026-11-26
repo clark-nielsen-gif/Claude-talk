@@ -1,0 +1,81 @@
+﻿{
+    "endpoints_before":  null,
+    "install_finishes":  {
+                             "pass":  true,
+                             "detail":  {
+                                            "exit":  0,
+                                            "seconds":  15.1
+                                        }
+                         },
+    "program_installed":  {
+                              "pass":  true,
+                              "detail":  "C:\\Program Files\\Claude Talk\\claude-talk.exe"
+                          },
+    "listed_in_installed_apps":  {
+                                     "pass":  true,
+                                     "detail":  "Claude Talk"
+                                 },
+    "endpoints_after":  [
+                            {
+                                "Flow":  "Render",
+                                "FriendlyName":  "Claude Talk – intern 16ch (VB-Audio)",
+                                "Id":  "{0.0.0.00000000}.{4a417572-a6fb-4612-b5b5-b35ceef4898b}"
+                            },
+                            {
+                                "Flow":  "Render",
+                                "FriendlyName":  "Claude Talk – intern (VB-Audio)",
+                                "Id":  "{0.0.0.00000000}.{c8a275e0-2d5b-4ebc-9f36-638770674285}"
+                            },
+                            {
+                                "Flow":  "Capture",
+                                "FriendlyName":  "Claude Talk – til Discord (VB-Audio)",
+                                "Id":  "{0.0.1.00000000}.{3f6df233-71d0-453c-814c-ae967bedc571}"
+                            }
+                        ],
+    "discord_microphone_named":  {
+                                     "pass":  true,
+                                     "detail":  {
+                                                    "capture":  [
+                                                                    "Claude Talk – til Discord (VB-Audio)"
+                                                                ],
+                                                    "render":  [
+                                                                   "Claude Talk – intern 16ch (VB-Audio)",
+                                                                   "Claude Talk – intern (VB-Audio)"
+                                                               ]
+                                                }
+                                 },
+    "cable_render_named":  {
+                               "pass":  true,
+                               "detail":  [
+                                              "Claude Talk – intern 16ch (VB-Audio)",
+                                              "Claude Talk – intern (VB-Audio)"
+                                          ]
+                           },
+    "cable_marked_as_ours":  {
+                                 "pass":  true,
+                                 "detail":  "C:\\ProgramData\\Claude Talk\\cable-installed-by-claude-talk"
+                             },
+    "driver_production_signed":  {
+                                     "pass":  true,
+                                     "detail":  {
+                                                    "DeviceName":  "Claude Talk – til Discord (VB-Audio)",
+                                                    "DriverVersion":  "10.0.26100.1",
+                                                    "Signer":  "Microsoft Windows"
+                                                }
+                                 },
+    "app_starts":  {
+                       "pass":  false,
+                       "detail":  {
+                                      "seconds_to_audio_engine":  null
+                                  }
+                   },
+    "script_error":  {
+                         "pass":  false,
+                         "detail":  "Get-Process : Cannot bind argument to parameter \u0027Id\u0027 because it is null.\r\nAt D:\\a\\Claude-talk\\Claude-talk\\ci\\install-test.ps1:75 char:26\r\n+ $cpu0 = (Get-Process -Id (Tree).ProcessId | Measure-Object TotalProce ...\r\n+                          ~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : InvalidData: (:) [Get-Process], ParameterBindingValidationException\r\n    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.GetProcessC \r\n   ommand\r\n \r\n"
+                     },
+    "pass":  false,
+    "failed":  [
+                   "app_starts",
+                   "script_error"
+               ]
+}
