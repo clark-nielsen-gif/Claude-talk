@@ -1,0 +1,84 @@
+﻿{
+    "endpoints_before":  null,
+    "install_finishes":  {
+                             "pass":  true,
+                             "detail":  {
+                                            "exit":  0,
+                                            "seconds":  12.9
+                                        }
+                         },
+    "program_installed":  {
+                              "pass":  true,
+                              "detail":  "C:\\Program Files\\Claude Talk\\claude-talk.exe"
+                          },
+    "listed_in_installed_apps":  {
+                                     "pass":  true,
+                                     "detail":  "Claude Talk"
+                                 },
+    "endpoints_after":  [
+                            {
+                                "Flow":  "Render",
+                                "FriendlyName":  "Claude Talk – intern (VB-Audio)",
+                                "Id":  "{0.0.0.00000000}.{44add07e-89a8-4a2c-8947-19f98440288f}"
+                            },
+                            {
+                                "Flow":  "Render",
+                                "FriendlyName":  "Claude Talk – intern 16ch (VB-Audio)",
+                                "Id":  "{0.0.0.00000000}.{90ef8f68-620a-4bb5-beff-3a20098662f5}"
+                            },
+                            {
+                                "Flow":  "Capture",
+                                "FriendlyName":  "Claude Talk – til Discord (VB-Audio)",
+                                "Id":  "{0.0.1.00000000}.{215e6228-5691-4574-a494-3d0d4d660390}"
+                            }
+                        ],
+    "discord_microphone_named":  {
+                                     "pass":  true,
+                                     "detail":  {
+                                                    "capture":  [
+                                                                    "Claude Talk – til Discord (VB-Audio)"
+                                                                ],
+                                                    "render":  [
+                                                                   "Claude Talk – intern (VB-Audio)",
+                                                                   "Claude Talk – intern 16ch (VB-Audio)"
+                                                               ]
+                                                }
+                                 },
+    "cable_render_named":  {
+                               "pass":  true,
+                               "detail":  [
+                                              "Claude Talk – intern (VB-Audio)",
+                                              "Claude Talk – intern 16ch (VB-Audio)"
+                                          ]
+                           },
+    "cable_marked_as_ours":  {
+                                 "pass":  true,
+                                 "detail":  "C:\\ProgramData\\Claude Talk\\cable-installed-by-claude-talk"
+                             },
+    "driver_production_signed":  {
+                                     "pass":  true,
+                                     "detail":  {
+                                                    "DeviceName":  "VB-Audio Virtual Cable",
+                                                    "DriverVersion":  "3.5.2.0",
+                                                    "Signer":  "Microsoft Windows Hardware Compatibility Publisher",
+                                                    "Manufacturer":  "VB-Audio Software"
+                                                }
+                                 },
+    "app_starts":  {
+                       "pass":  true,
+                       "detail":  {
+                                      "exited":  false,
+                                      "seconds_to_audio_engine":  0.31,
+                                      "events":  null,
+                                      "exit_code":  null
+                                  }
+                   },
+    "script_error":  {
+                         "pass":  false,
+                         "detail":  "Measure-Object : Input object \"00:00:00.2343750\" is not numeric.\r\nAt D:\\a\\Claude-talk\\Claude-talk\\ci\\install-test.ps1:83 char:45\r\n+ ... ss -Id (Tree).ProcessId | Measure-Object TotalProcessorTime -Sum).Sum\r\n+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : InvalidType: (00:00:00.2343750:TimeSpan) [Measure-Object], PSInvalidOperationException\r\n    + FullyQualifiedErrorId : NonNumericInputObject,Microsoft.PowerShell.Commands.MeasureObjectCommand\r\n \r\n"
+                     },
+    "pass":  false,
+    "failed":  [
+                   "script_error"
+               ]
+}
