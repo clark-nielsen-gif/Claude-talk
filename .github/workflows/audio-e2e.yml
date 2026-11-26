@@ -8,6 +8,11 @@ name: audio-e2e
 # not on every push: heavy Windows jobs.
 on:
   workflow_dispatch:
+    inputs:
+      cable_latencies:
+        description: 'VB-CABLE internal latencies to try, in samples (JSON list; 0 = leave the default)'
+        required: false
+        default: '[0]'
 
 permissions:
   contents: write   # results are published to ci-results/* branches
@@ -25,6 +30,10 @@ jobs:
   smoke:
     runs-on: windows-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cable_latency: ${{ fromJSON(github.event.inputs.cable_latencies || '[0]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.97.0
@@ -37,6 +46,17 @@ jobs:
       - name: Install CI test sink
         shell: powershell
         run: ci/fixtures/install-test-sink.ps1
+      - name: Set VB-CABLE internal latency (experiment)
+        if: matrix.cable_latency != 0
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Set-ItemProperty 'HKLM:\SOFTWARE\VB-Audio\Cable' -Name 'VBAudioCableWDM_Latency' -Type DWord -Value ${{ matrix.cable_latency }}
+          $id = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\VBAudioVACMME\Enum').'0'
+          Write-Host "restarting $id"
+          cmd /c "pnputil /restart-device `"$id`" 2>&1" | Write-Host
+          Start-Sleep 5
+          Get-PnpDevice -Class MEDIA | Format-Table -AutoSize | Out-String | Write-Host
       - name: VB-CABLE settings (information)
         shell: powershell
         continue-on-error: true
@@ -73,4 +93,4 @@ jobs:
       - name: Publish results
         if: always()
         shell: powershell
-        run: ci/publish-results.ps1 -Folder results -Job 'audio-smoke'
+        run: ci/publish-results.ps1 -Folder results -Job 'audio-smoke-${{ matrix.cable_latency }}'
