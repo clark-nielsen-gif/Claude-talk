@@ -1,0 +1,10 @@
+﻿{
+    "Catalog":  "D:\\a\\Claude-talk\\Claude-talk\\vad\\x\\Virtual Audio Driver\\virtualaudiodriver.cat",
+    "Driver":  "VirtualAudioDriver.sys",
+    "CatalogSigner":  "CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US",
+    "MicrosoftSigned":  false,
+    "LegacyCrossSigned":  false,
+    "KernelPolicyPass":  false,
+    "ProductionOk":  false,
+    "SigntoolTail":  "            Issued to: DigiCert Trusted G4 RSA4096 SHA256 TimeStamping CA\n            Issued by: DigiCert Trusted Root G4\n            Expires:   Sun Mar 22 23:59:59 2037\n            SHA1 hash: B6C8AF834D4E53B673C76872AA8C950C7C54DF5F\n                Issued to: DigiCert Timestamp 2024\n                Issued by: DigiCert Trusted G4 RSA4096 SHA256 TimeStamping CA\n                Expires:   Sun Nov 25 23:59:59 2035\n                SHA1 hash: DBD385EE62DBD23E7BE4F67148508724D5865B45\nNumber of files successfully Verified: 0\nNumber of warnings: 0\nNumber of errors: 1\nSignTool Error: Signing Cert does not chain to a Microsoft Root Cert.\nSignTool Error: File not valid: D:\\a\\Claude-talk\\Claude-talk\\vad\\x\\Virtual Audio Driver\\VirtualAudioDriver.sys\nSystem.Management.Automation.RemoteException"
+}
