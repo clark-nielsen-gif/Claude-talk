@@ -1,0 +1,165 @@
+{
+  "devices_capture": [
+    "Claude Talk – til Discord (VB-Audio)",
+    "Microphone Array (Virtual Audio Driver by MTT)"
+  ],
+  "devices_render": [
+    "Speakers (Virtual Audio Driver by MTT)",
+    "CABLE Input (VB-Audio Virtual Cable)",
+    "CABLE In 16ch (VB-Audio Virtual Cable)"
+  ],
+  "info_policy_store": {
+    "hkcu": "\r\nHKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Multimedia\\Audio\\DefaultEndpoint\\7d1a043_0\r\n    000_001    REG_SZ    \\\\?\\SWD#MMDEVAPI#{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}#{2eef81be-33fa-4800-9670-1cd474972c3f}\r\n    001_001    REG_SZ    \\\\?\\SWD#MMDEVAPI#{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}#{2eef81be-33fa-4800-9670-1cd474972c3f}\r\n    002_001    REG_SZ    \\\\?\\SWD#MMDEVAPI#{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}#{2eef81be-33fa-4800-9670-1cd474972c3f}\r\n\r\nEnd of search: 3 match(es) found.\r\n\r\n",
+    "hklm_mmdevices": "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Capture\\{314299ae-ae66-4abf-af17-583681cb70f8}\\Properties\r\n    {9c119480-ddc2-4954-a150-5bd240d454ad},1    REG_SZ    \\\\?\\SWD#MMDEVAPI#{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}#{2eef81be-33fa-4800-9670-1cd474972c3f}\r\n    {9c119480-ddc2-4954-a150-5bd240d454ad},9    REG_SZ    \\\\?\\SWD#MMDEVAPI#{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}#{2eef81be-33fa-4800-9670-1cd474972c3f}\r\n    {9c119480-ddc2-4954-a150-5bd240d454ad},2    REG_SZ    SWD\\MMDEVAPI\\{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}\r\n    {9c119480-ddc2-4954-a150-5bd240d454ad},10    REG_SZ    SWD\\MMDEVAPI\\{0.0.1.00000000}.{314299ae-ae66-4abf-af17-583681cb70f8}\r\n\r\nEnd of search: 4 match(es) found.\r\n\r\n"
+  },
+  "info_route_before_audio": "Ok(0)",
+  "info_sink_mic_echo": {
+    "device": "Microphone Array (Virtual Audio Driver by MTT)",
+    "diag": {
+      "capture_peak_last": 0.0,
+      "captured_frames": 94560,
+      "discontinuities": 1,
+      "overflow": 0,
+      "recorded_peak": 0.0,
+      "silence_filled": 0,
+      "tap_buffered_ms": 19.95833396911621,
+      "tap_underrun": 2400
+    },
+    "hr": "0x00000000",
+    "levels_db": {
+      "2500": -200.0,
+      "2500_hz": 2487.5
+    },
+    "state": "Running"
+  },
+  "microphone_never_own_cable": {
+    "detail": {
+      "default": "{0.0.1.00000000}.{794b1cce-80c1-429f-a194-b3406cf1025c}",
+      "picked": "Microphone Array (Virtual Audio Driver by MTT)"
+    },
+    "pass": true
+  },
+  "pass": true,
+  "per_app_restore": {
+    "detail": {
+      "after_offline_restore": "Cable",
+      "after_restore": "Other",
+      "after_restore_records_from": [
+        "Microphone Array (Virtual Audio Driver by MTT)"
+      ],
+      "new_process": "Cable",
+      "new_process_records_from": [
+        "Claude Talk – til Discord (VB-Audio)"
+      ],
+      "removed_while_closed": 3,
+      "restored_entries": 3
+    },
+    "pass": true
+  },
+  "per_app_routing": {
+    "detail": {
+      "after_discord_restart": "Cable",
+      "after_restart_records_from": [
+        "Claude Talk – til Discord (VB-Audio)"
+      ],
+      "chrome_records_from": [
+        "Microphone Array (Virtual Audio Driver by MTT)"
+      ],
+      "discord_records_from": [
+        "Microphone Array (Virtual Audio Driver by MTT)"
+      ],
+      "moved_while_recording": false,
+      "routed": "Ok(1)",
+      "stored": true,
+      "tries": 1
+    },
+    "pass": true
+  },
+  "process_loopback_isolation": {
+    "detail": {
+      "diag": {
+        "capture_peak_last": 0.29966452717781067,
+        "captured_frames": 144409,
+        "discontinuities": 0,
+        "overflow": 0,
+        "recorded_peak": 0.2999851405620575,
+        "silence_filled": 889,
+        "tap_buffered_ms": 24.708332061767578,
+        "tap_underrun": 960
+      },
+      "hr": "0x00000000",
+      "levels_db": {
+        "1500": -10.5,
+        "1500_hz": 1502.0,
+        "3000": -165.3,
+        "3000_hz": 2989.8
+      },
+      "pid": 6276,
+      "state": "Running"
+    },
+    "pass": true
+  },
+  "process_restart_recovery": {
+    "detail": {
+      "diag": {
+        "capture_peak_last": 0.30000001192092896,
+        "captured_frames": 277771,
+        "discontinuities": 0,
+        "overflow": 0,
+        "recorded_peak": 0.2999999225139618,
+        "silence_filled": 760,
+        "tap_buffered_ms": 25.354167938232422,
+        "tap_underrun": 2352
+      },
+      "hr": "0x00000000",
+      "levels_db": {
+        "1500": -10.5,
+        "1500_hz": 1500.6
+      },
+      "restarts": 3,
+      "state": "Running"
+    },
+    "pass": true
+  },
+  "render_capture_cable": {
+    "detail": {
+      "device": "Claude Talk – til Discord (VB-Audio)",
+      "diag": {
+        "capture_peak_last": 0.3000030517578125,
+        "captured_frames": 140640,
+        "discontinuities": 1,
+        "overflow": 0,
+        "recorded_peak": 0.3000028431415558,
+        "silence_filled": 0,
+        "tap_buffered_ms": 11.833333015441895,
+        "tap_underrun": 4320
+      },
+      "hr": "0x00000000",
+      "levels_db": {
+        "1000": -10.6,
+        "1000_hz": 998.7,
+        "3000": -153.5,
+        "3000_hz": 3001.0
+      },
+      "player": {
+        "device": "CABLE Input (VB-Audio Virtual Cable)",
+        "hr": "0x00000000",
+        "out_frames": 156000,
+        "out_peak": 0.30000001192092896,
+        "period": 720,
+        "restarts": 0,
+        "src_frames": 168478,
+        "src_overflow": 0,
+        "src_peak": 0.30000001192092896,
+        "state": "Running",
+        "tap_buffered_ms": 17.0625,
+        "tap_drift_ppm": -546.750732421875,
+        "tap_underrun": 0
+      },
+      "samples": 287040,
+      "state": "Running"
+    },
+    "pass": true
+  },
+  "windows_build": 26100
+}
