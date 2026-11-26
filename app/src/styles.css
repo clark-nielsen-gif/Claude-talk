@@ -350,3 +350,7 @@ select.field {
 }
 /* the card that needs something from the user */
 .person.attention { border-color: var(--amber-ink); box-shadow: inset 0 0 0 1px var(--amber-ink); }
+@media (max-width: 860px) {
+  /* "are you sure" and a listening shortcut go under their text */
+  .panel > .row:has(.confirm), .panel > .row:has(.kbd) { flex-wrap: wrap; }
+}

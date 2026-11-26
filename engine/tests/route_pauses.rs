@@ -221,6 +221,12 @@ pub fn run(sc: Scen, seed: u64) -> Res {
             } else if probe(25.0)
                 && probe(40.0)
                 && t > 2e6
+                // (the sample index used as the signal wraps every 21.8 s:
+                // a block around a wrap is not a dropout)
+                && {
+                    let e = ((t - 28_000.0) / 1e6 * 48000.0) % w20 as f64;
+                    e > 4800.0 && e < w20 as f64 - 4800.0
+                }
                 && !(out.iter().cloned().fold(0.0f32, f32::max) > w20 - 600.0
                     && out.iter().cloned().fold(f32::MAX, f32::min) > 0.5)
             {
@@ -328,7 +334,6 @@ fn ordinary_routes_do_not_grow_for_pauses() {
         ),
     ];
     let mut bad = Vec::new();
-    let mut baseline = 0u64;
     for (name, sc) in cases {
         for seed in [1u64, 3, 5] {
             let r = run(sc, seed);
@@ -376,16 +381,13 @@ fn ordinary_routes_do_not_grow_for_pauses() {
                 ppm_min,
                 ppm_max
             );
-            // Late packets (jitter) may grow the route. Pauses may not (one
-            // step at most when the two clocks are far apart, where the drift
-            // control overshoots after a resume). The few dropouts the
-            // steady case shows are the model's start-up; pauses may add 2.
+            // Late packets (jitter) may grow the route. Pauses may not; with
+            // the two clocks 100 ppm apart one growth step early in a session
+            // is the drift control absorbing the drift (D11), with its gaps.
             let allowed = if sc.ppm_out != 0.0 { 5.1 } else { 0.1 };
             let grew = r.max_target > ct_engine::ROUTE_START_MS as f32 + allowed;
-            if name == "steady" {
-                baseline = baseline.max(r.sound_dropouts);
-            }
-            if sc.late_prob == 0.0 && (grew || r.sound_dropouts > baseline + 2) {
+            let gaps_allowed = if sc.ppm_out != 0.0 { 3 } else { 0 };
+            if sc.late_prob == 0.0 && (grew || r.sound_dropouts > gaps_allowed) {
                 bad.push(format!("{name} seed {seed}"));
             }
         }

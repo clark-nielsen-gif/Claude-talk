@@ -216,6 +216,13 @@ pub fn wanted_discord_input() -> Option<String> {
     })
 }
 
+/// Discord's stored input right now ("" = none; None: Discord isn't running).
+pub fn discord_input_now(exes: &[String]) -> Option<String> {
+    let f = factory().ok()?;
+    let first = *pids_of(exes).first()?;
+    f.get(first, eConsole).ok()
+}
+
 /// Whether Discord's stored input is what it should be while Claude Talk
 /// doesn't route it (None: Discord isn't running).
 pub fn discord_input_as_wanted(exes: &[String]) -> Option<bool> {
@@ -280,11 +287,17 @@ pub fn discord_routed_to_cable(exes: &[String]) -> Option<bool> {
     if pids.is_empty() {
         return None;
     }
-    Some(pids.iter().any(|&pid| {
-        f.get(pid, eConsole)
-            .map(|d| d.to_lowercase().contains(&id.to_lowercase()))
-            .unwrap_or(false)
-    }))
+    // (a value Windows won't let us read is unknown, not "not the cable")
+    let mut known = false;
+    for &pid in &pids {
+        if let Ok(d) = f.get(pid, eConsole) {
+            known = true;
+            if d.to_lowercase().contains(&id.to_lowercase()) {
+                return Some(true);
+            }
+        }
+    }
+    known.then_some(false)
 }
 
 /// Gives Discord its normal microphone back. Works while Discord runs (via

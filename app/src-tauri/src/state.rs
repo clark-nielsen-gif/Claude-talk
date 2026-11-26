@@ -29,6 +29,9 @@ pub struct Inner {
     pub output_fixed_at: Mutex<Option<std::time::Instant>>,
     /// Shortcuts that could not be registered (shown in the app).
     pub hotkey_problem: Mutex<String>,
+    /// Discord plays on another device than Windows' default (where the
+    /// Claude window plays): (Discord's device id, its name, the default's name).
+    pub output_mismatch: Mutex<Option<(String, String, String)>>,
     /// While Some, the Claude bridge appends what it sends (self-test).
     pub bridge_probe: Mutex<Option<Vec<f32>>>,
     #[cfg(windows)]
@@ -54,6 +57,7 @@ impl Inner {
             added_speakers: AtomicBool::new(false),
             output_fixed_at: Mutex::new(None),
             hotkey_problem: Mutex::new(String::new()),
+            output_mismatch: Mutex::new(None),
             bridge_probe: Mutex::new(None),
             #[cfg(windows)]
             audio: Mutex::new(None),

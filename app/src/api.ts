@@ -69,6 +69,10 @@ export interface AudioStatus {
   outputFixed: boolean;
   /** shortcuts that could not be registered: '' fine, 'duplicate', or the keys */
   hotkeyProblem: string;
+  /** Discord plays on another device than Claude: [Discord's, Claude's]. */
+  outputMismatch?: [string, string] | null;
+  claudeExternal?: Level;
+  claudeExternalRunning?: boolean;
   speakers: boolean;
   echoActive: boolean;
   cableOk: boolean;
@@ -133,6 +137,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'error-cable-missing': return { ...ok, cableOk: false };
     case 'main-speakers': return { ...ok, speakers: true, echoActive: true, micName: 'Mikrofon (Realtek High Definition Audio)' };
     case 'main-muted': return { ...ok, mic: quiet };
+    case 'main-output-elsewhere': return { ...ok, outputMismatch: ['Headset (Jabra Evolve2)', 'Højttalere (Realtek High Definition Audio)'] };
     case 'main-restored': return { ...ok, discordUsesCable: 'no' };
     case 'main-output-fixed': return { ...ok, outputFixed: true };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
@@ -172,6 +177,9 @@ export const api = {
   },
   async saveReport(): Promise<string> {
     return inTauri ? invoke<string>('save_report') : 'C:\\Users\\dig\\Desktop\\Claude Talk fejlrapport.zip';
+  },
+  async useDiscordOutput(): Promise<void> {
+    if (inTauri) await invoke('use_discord_output');
   },
   async listMicrophones(): Promise<{ id: string; name: string }[]> {
     return inTauri ? invoke('list_microphones') : [{ id: 'jabra', name: 'Headset-mikrofon (Jabra Evolve2)' }, { id: 'realtek', name: 'Mikrofon (Realtek High Definition Audio)' }];

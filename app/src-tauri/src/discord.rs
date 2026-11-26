@@ -29,6 +29,7 @@ pub fn spawn_watcher(app: AppHandle) {
             // further restart would not help (the guide is shown instead).
             let mut routed_pids: Vec<u32> = Vec::new();
             let mut restarted_since_route = false;
+            let mut empty_filled_for: Vec<u32> = Vec::new();
             let mut last_logged = (u8::MAX, false);
             let mut last_good: [Option<String>; 3] = [None, None, None];
             let mut tick = 0u32;
@@ -53,14 +54,39 @@ pub fn spawn_watcher(app: AppHandle) {
                 // Not routing (after "Gendan"): Discord keeps the user's
                 // microphone – also after it was closed when "Gendan" was
                 // pressed, or updated itself (a new version has no setting)
-                if !enabled
-                    && running
-                    && tick % 5 == 1
-                    && (policy::discord_routed_to_cable(&exes) == Some(true)
-                        || policy::discord_input_as_wanted(&exes) == Some(false))
-                {
-                    let n = restore();
-                    log::info!("Discord's own microphone given back now that it runs ({n})");
+                if !enabled && running && tick % 5 == 1 {
+                    let on_cable = policy::discord_routed_to_cable(&exes) == Some(true);
+                    let now = policy::discord_input_now(&exes).unwrap_or_default();
+                    let ours = policy::discord_given_back()
+                        .iter()
+                        .any(|g| g.eq_ignore_ascii_case(&now));
+                    let roots = discord_roots(&exes);
+                    // an empty value: a new Discord (updated, restarted) has
+                    // none yet – filled once per Discord start; a user who
+                    // clears it while Discord runs is not overridden
+                    let fresh_empty = now.is_empty()
+                        && roots != empty_filled_for
+                        && policy::discord_input_as_wanted(&exes) == Some(false);
+                    if on_cable || fresh_empty {
+                        if fresh_empty {
+                            empty_filled_for = roots;
+                        }
+                        let n = restore();
+                        log::info!("Discord's own microphone given back now that it runs ({n})");
+                    } else if !now.is_empty()
+                        && !ours
+                        && policy::discord_own_input().as_deref() != Some(&now)
+                    {
+                        // the user picked Discord's input in Windows: theirs
+                        log::info!(
+                            "Discord's input was changed in Windows; kept as the user's own"
+                        );
+                        policy::set_discord_own_input(Some(now.clone()));
+                        if let Ok(mut c) = state.config.lock() {
+                            c.discord_own_input = Some(now);
+                        }
+                        state.save_config();
+                    }
                 }
                 if enabled && running {
                     match policy::discord_routed_to_cable(&exes) {
@@ -136,6 +162,10 @@ pub fn spawn_watcher(app: AppHandle) {
                     sessions::DiscordMic::Other(_) => NO,
                     sessions::DiscordMic::Unknown => UNKNOWN,
                 };
+                if uses == YES {
+                    // it worked: a later problem may need a restart again
+                    restarted_since_route = false;
+                }
                 if let sessions::DiscordMic::Other(endpoint) = &mic {
                     if enabled {
                         adopt_discords_microphone(&app, &state, endpoint);
@@ -176,6 +206,32 @@ pub fn spawn_watcher(app: AppHandle) {
                 state
                     .discord_needs_restart
                     .store(restart, Ordering::Relaxed);
+                // Discord plays on its own device (chosen in Discord), the
+                // Claude window on Windows' default: the user would hear
+                // Claude somewhere else, or not at all (a muted monitor)
+                let default_out =
+                    devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
+                        .ok()
+                        .map(|(_, e)| e);
+                let discord_out = sessions::sessions(devices::Flow::Render)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|s| {
+                        s.active
+                            && exes.iter().any(|x| x.eq_ignore_ascii_case(&s.exe))
+                            && !ct_engine::win::host::is_own_device(&s.endpoint_name)
+                    });
+                let mismatch = match (&discord_out, &default_out) {
+                    (Some(d), Some(def)) if !d.endpoint_id.eq_ignore_ascii_case(&def.id) => Some((
+                        d.endpoint_id.clone(),
+                        d.endpoint_name.clone(),
+                        def.name.clone(),
+                    )),
+                    _ => None,
+                };
+                if let Ok(mut m) = state.output_mismatch.lock() {
+                    *m = mismatch;
+                }
                 let speakers =
                     devices::resolve(&devices::DeviceSelector::Default(devices::Flow::Render))
                         .map(|(_, e)| {
@@ -414,8 +470,16 @@ pub fn restore() -> usize {
     // setting); not from the elevated uninstaller (D27)
     let after = ct_engine::win::policy::discord_given_back();
     if after != before && !NO_FILES.load(Ordering::Relaxed) {
+        // one writer at a time, whole file or nothing
+        static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _one = WRITING.lock().unwrap_or_else(|p| p.into_inner());
+        let file = crate::paths::given_back_file();
+        let tmp = file.with_extension("tmp");
         let _ = std::fs::create_dir_all(crate::paths::app_dir());
-        let _ = std::fs::write(crate::paths::given_back_file(), after.join("\n"));
+        let list = ct_engine::win::policy::discord_given_back().join("\n");
+        if std::fs::write(&tmp, list).is_ok() {
+            let _ = std::fs::rename(&tmp, &file);
+        }
     }
     log::info!("restored Discord's microphone ({n} settings cleared)");
     n
@@ -478,12 +542,27 @@ fn main_running() -> bool {
 /// Discord's microphone choice in memory and only lets it change while
 /// Discord runs (K12). This small helper (`--restore-when-discord-starts`)
 /// waits for Discord, gives it its own microphone back, and ends. It steps
-/// aside if Claude Talk starts again, and gives up after 12 hours.
+/// aside if Claude Talk starts again, and gives up after 30 days.
 #[cfg(windows)]
 pub fn restore_when_discord_starts() -> i32 {
     use ct_engine::win::host::discord_executables;
     use ct_engine::win::{policy, ComGuard};
     let _com = ComGuard::new();
+    // Discord isn't installed (any more): nothing to wait for
+    let installed = std::env::var_os("LOCALAPPDATA").is_some_and(|l| {
+        ["Discord", "DiscordPTB", "DiscordCanary"]
+            .iter()
+            .any(|d| std::path::Path::new(&l).join(d).join("Update.exe").exists())
+    });
+    if !installed {
+        crate::autostart::restore_at_next_sign_in(false);
+        return 0;
+    }
+    if main_running() {
+        // Claude Talk started first at this sign-in: it does the work
+        crate::autostart::restore_at_next_sign_in(false);
+        return 0;
+    }
     // Windows removes a RunOnce value before it runs it: arm it again, so a
     // session that ends before Discord runs still has a helper next time
     crate::autostart::restore_at_next_sign_in(true);
@@ -523,8 +602,10 @@ pub fn restore_when_discord_starts() -> i32 {
                 log::info!("restore helper: Discord's own microphone back ({n})");
             }
             // done only when Discord really has it; else again next sign-in
+            // (no cable any more: nothing points Discord at it)
+            // (confirmed: a value Windows didn't let us read is not done)
             let done = policy::discord_routed_to_cable(&exes) == Some(false)
-                && policy::discord_input_as_wanted(&exes) != Some(false);
+                && policy::discord_input_as_wanted(&exes) == Some(true);
             if done {
                 crate::autostart::restore_at_next_sign_in(false);
             }

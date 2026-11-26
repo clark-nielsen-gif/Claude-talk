@@ -164,6 +164,8 @@ impl AdaptiveResampler {
         if epoch != self.source_epoch {
             self.source_epoch = epoch;
             self.restart_grace = true;
+            // a gap before a restart is no reason to grow either
+            self.pending_growth = None;
             if self.fixed {
                 // a restarted source owes nothing: start again at the target
                 self.owed = 0.0;

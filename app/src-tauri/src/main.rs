@@ -345,6 +345,7 @@ fn main() {
             mixer::delete_preset,
             mixer::set_external_claude,
             commands::list_microphones,
+            commands::use_discord_output,
             commands::set_microphone,
             commands::get_matrix,
             commands::set_route,

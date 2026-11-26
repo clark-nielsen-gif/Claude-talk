@@ -211,9 +211,14 @@ pub fn set_microphone(
         c.microphone = id;
         c.microphone_name = name;
         c.microphone_chosen = true;
+        // a new "you" also replaces an older input set for Discord in
+        // Windows: Discord follows this choice when Claude Talk lets go
+        c.discord_own_input = None;
         c.clone()
     };
     state.save_config();
+    #[cfg(windows)]
+    ct_engine::win::policy::set_discord_own_input(None);
     crate::audio::use_microphone(&app, cfg.microphone.clone());
     if !cfg.route_discord {
         // after "Gendan" Discord uses the user's microphone directly
@@ -221,6 +226,37 @@ pub fn set_microphone(
     }
     let _ = app.emit("config-changed", &cfg);
     Ok(cfg)
+}
+
+/// Makes the device Discord plays on Windows' default output, so the Claude
+/// window plays there too (the user chose it; Windows' own sound settings
+/// can change it back).
+#[tauri::command(async)]
+pub fn use_discord_output(state: State<AppState>) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let _com = ct_engine::win::ComGuard::new();
+        let id = state
+            .output_mismatch
+            .lock()
+            .ok()
+            .and_then(|m| m.as_ref().map(|(id, _, _)| id.clone()))
+            .ok_or("error.generic")?;
+        for role in 0..3 {
+            ct_engine::win::policy::set_default_endpoint_role(&id, role)
+                .map_err(|_| "error.generic".to_string())?;
+        }
+        log::info!("default output set to Discord's device {id}");
+        if let Ok(mut m) = state.output_mismatch.lock() {
+            *m = None;
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Err("error.internal".into())
+    }
 }
 
 /// The exact message the instructions become (shown as a preview).

@@ -39,6 +39,12 @@ pub struct AudioStatus {
     pub output_fixed: bool,
     /// Shortcuts that could not be registered ("" = all fine).
     pub hotkey_problem: String,
+    /// Claude in another program (Chrome, Edge, the app): its sound and
+    /// whether it is captured right now.
+    pub claude_external: Level,
+    pub claude_external_running: bool,
+    /// Discord plays on another device than Claude: [Discord's, Claude's].
+    pub output_mismatch: Option<[String; 2]>,
     /// Default output is speakers (echo risk).
     pub speakers: bool,
     /// Echo reduction is running on the microphone.
@@ -340,6 +346,10 @@ mod imp {
                         .into();
                     }
                     ids::CLAUDE => st.claude = l,
+                    crate::mixer::imp::EXTERNAL_SRC => {
+                        st.claude_external = l;
+                        st.claude_external_running = s.stream.state == StreamState::Running;
+                    }
                     ids::DISCORD => {
                         st.discord = l;
                         st.discord_running = s.stream.state == StreamState::Running;
@@ -409,6 +419,11 @@ mod imp {
                 .lock()
                 .map(|h| h.clone())
                 .unwrap_or_default();
+            st.output_mismatch = state
+                .output_mismatch
+                .lock()
+                .ok()
+                .and_then(|m| m.as_ref().map(|(_, d, c)| [d.clone(), c.clone()]));
             st.speakers = state.speakers.load(Ordering::Relaxed);
             st.echo_active = echo_active;
             st.claude_window_open = state.claude_pid.load(Ordering::Relaxed) != 0;
