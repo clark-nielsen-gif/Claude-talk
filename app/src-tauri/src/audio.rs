@@ -40,8 +40,9 @@ pub struct AudioStatus {
     /// Windows' default output was our cable and was set back (last 30 s).
     pub output_fixed: bool,
     pub mic_fixed: bool,
-    /// the device the output or microphone was set to
-    pub fixed_device: Option<String>,
+    /// the devices the output and microphone were set to
+    pub fixed_output: Option<String>,
+    pub fixed_mic: Option<String>,
     /// Shortcuts that could not be registered ("" = all fine).
     pub hotkey_problem: String,
     /// Claude in another program (Chrome, Edge, the app): its sound and
@@ -423,16 +424,20 @@ mod imp {
             st.discord_cable_chosen = state.discord_cable_chosen.load(Ordering::Relaxed);
             st.discord_still_on_cable = state.discord_still_on_cable.load(Ordering::Relaxed);
             st.claude_login = state.claude_login.load(Ordering::Relaxed);
-            if let Some((_, output, name)) = state
-                .device_fixed
-                .lock()
-                .ok()
-                .and_then(|f| f.clone())
-                .filter(|(t, _, _)| t.elapsed() < Duration::from_secs(30))
-            {
-                st.output_fixed = output;
-                st.mic_fixed = !output;
-                st.fixed_device = name;
+            // shown for 2 minutes: the window may be hidden when it happens
+            let recent = |m: &std::sync::Mutex<Option<(std::time::Instant, Option<String>)>>| {
+                m.lock()
+                    .ok()
+                    .and_then(|f| f.clone())
+                    .filter(|(t, _)| t.elapsed() < Duration::from_secs(120))
+            };
+            if let Some((_, name)) = recent(&state.output_fixed) {
+                st.output_fixed = true;
+                st.fixed_output = name;
+            }
+            if let Some((_, name)) = recent(&state.mic_fixed) {
+                st.mic_fixed = true;
+                st.fixed_mic = name;
             }
             st.hotkey_problem = state
                 .hotkey_problem

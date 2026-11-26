@@ -386,11 +386,12 @@ fn flow_tag(flow: ct_engine::win::devices::Flow) -> &'static str {
 
 #[cfg(windows)]
 impl DefaultGuard {
+    /// A stand-in still the default at the first check goes back to the
+    /// user's device if that is there (as Windows itself would have done
+    /// without Claude Talk's choice); one the user replaced meanwhile is
+    /// dropped then (and the file rewritten).
     fn load(flow: ct_engine::win::devices::Flow) -> Self {
         let mut g = Self::default();
-        let active: Vec<String> = ct_engine::win::devices::list(flow)
-            .map(|v| v.into_iter().map(|e| e.id).collect())
-            .unwrap_or_default();
         let text = std::fs::read_to_string(stand_in_file()).unwrap_or_default();
         for line in text.lines() {
             let f: Vec<&str> = line.trim().split('\t').collect();
@@ -401,11 +402,6 @@ impl DefaultGuard {
                 continue;
             };
             if role > 2 {
-                continue;
-            }
-            // the user's device is back already, and they have lived with
-            // the stand-in while Claude Talk was closed: their choice now
-            if active.iter().any(|a| a == f[3]) {
                 continue;
             }
             g.stand_in[role] = Some(StandIn {
@@ -484,22 +480,28 @@ fn guard_default(
     // recording no loopback input ("Stereo Mix" would send the computer's
     // sound); headsets, headphones, speakers and microphones before the rest
     // (a monitor's sound often goes nowhere)
-    let fit = |e: &devices::Endpoint| {
-        let n = e.name.to_lowercase();
-        !bad(&e.id)
-            && !["virtual", "cable", "voicemeeter", "steam streaming"]
-                .iter()
-                .any(|p| n.contains(p))
+    // (by name, so it also works for a device that isn't plugged in;
+    // "virtual" alone would rule out headsets like "HyperX Virtual Surround")
+    let fit_name = |n: &str| {
+        let n = n.to_lowercase();
+        ![
+            "virtual audio",
+            "virtual cable",
+            "vb-audio",
+            "cable input",
+            "cable output",
+            "voicemeeter",
+            "steam streaming",
+        ]
+        .iter()
+        .any(|p| n.contains(p))
             && (flow == devices::Flow::Render
                 || !devices::NOT_A_MICROPHONE
                     .iter()
                     .any(|p| n.contains(&p.to_lowercase())))
     };
-    let rank = |e: &devices::Endpoint| match e.form_factor {
-        FormFactor::Headset | FormFactor::Headphones => 0,
-        FormFactor::Speakers | FormFactor::Microphone => 1,
-        FormFactor::Other => 2,
-    };
+    let fit = |e: &devices::Endpoint| !bad(&e.id) && fit_name(&e.name);
+    let fit_id = |id: &str| devs.iter().find(|e| e.id == id).is_none_or(&fit);
     let set = |id: &str, role: usize| match policy::set_default_endpoint_role(id, role) {
         Ok(()) => {
             log::warn!("default {flow:?} (role {role}) set to {id}");
@@ -519,11 +521,15 @@ fn guard_default(
             match guard.stand_in[role].clone() {
                 // still the stand-in Claude Talk picked: back to the user's
                 // device as soon as it is there again
+                // (no notice: Windows would have done the same by itself)
                 Some(si) if *id == si.id => {
-                    if present(&si.wanted) && !bad(&si.wanted) && set(&si.wanted, role) {
+                    if present(&si.wanted)
+                        && !bad(&si.wanted)
+                        && fit_id(&si.wanted)
+                        && set(&si.wanted, role)
+                    {
                         guard.stand_in[role] = None;
                         guard.last_good[role] = Some(si.wanted.clone());
-                        fixed = Some(si.wanted);
                     }
                 }
                 // the user (or Windows) chose something else meanwhile
@@ -544,21 +550,43 @@ fn guard_default(
             .clone()
             .or_else(|| guard.stand_in[role].as_ref().map(|s| s.wanted.clone()))
             .or_else(|| {
-                let exclude: Vec<String> = devs
-                    .iter()
-                    .filter(|e| bad(&e.id) || !fit(e))
-                    .map(|e| e.id.clone())
-                    .chain(std::iter::once(id.clone()))
-                    .collect();
-                policy::last_default_by_windows(flow == devices::Flow::Render, role, &exclude)
+                policy::last_default_by_windows(
+                    flow == devices::Flow::Render,
+                    role,
+                    &|i: &str, name: &str| i != id && !bad(i) && fit_id(i) && fit_name(name),
+                )
             })
-            .filter(|g| !bad(g));
-        let back = wanted.clone().filter(|g| present(g)).or_else(|| {
-            devs.iter()
-                .filter(|e| fit(e))
-                .min_by_key(|e| rank(e))
-                .map(|e| e.id.clone())
-        });
+            .filter(|g| !bad(g) && fit_id(g));
+        // what stands in: the user's device if it is there; else what
+        // Windows itself would fall back to – the present device it had as
+        // the default most recently; else by type (a headset's hands-free
+        // part only for calls, a monitor last)
+        let rank =
+            |e: &devices::Endpoint| match (flow == devices::Flow::Render, role, e.form_factor) {
+                (true, 2, FormFactor::Headset) => 0,
+                (true, _, FormFactor::Headphones) => 0,
+                (true, _, FormFactor::Speakers) => 1,
+                (true, _, FormFactor::Headset) => 2,
+                (false, _, FormFactor::Microphone) => 0,
+                (false, _, FormFactor::Headset) => 1,
+                _ => 3,
+            };
+        let back = wanted
+            .clone()
+            .filter(|g| present(g))
+            .or_else(|| {
+                policy::last_default_by_windows(
+                    flow == devices::Flow::Render,
+                    role,
+                    &|i: &str, _: &str| i != id && devs.iter().any(|e| e.id == i && fit(e)),
+                )
+            })
+            .or_else(|| {
+                devs.iter()
+                    .filter(|e| fit(e))
+                    .min_by_key(|e| rank(e))
+                    .map(|e| e.id.clone())
+            });
         let Some(back) = back else { continue };
         if set(&back, role) {
             log::warn!("default {flow:?} (role {role}) was our cable; set back");
@@ -578,8 +606,13 @@ fn guard_default(
     // tell the user, naming the device the sound or microphone is on now
     if let Some(id) = fixed {
         let name = devs.iter().find(|e| e.id == id).map(|e| e.name.clone());
-        if let Ok(mut n) = state.device_fixed.lock() {
-            *n = Some((Instant::now(), flow == devices::Flow::Render, name));
+        let slot = if flow == devices::Flow::Render {
+            &state.output_fixed
+        } else {
+            &state.mic_fixed
+        };
+        if let Ok(mut n) = slot.lock() {
+            *n = Some((Instant::now(), name));
         }
     }
 }

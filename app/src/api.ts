@@ -72,8 +72,9 @@ export interface AudioStatus {
   /** Windows' default output was our cable and was just set back */
   outputFixed: boolean;
   micFixed?: boolean;
-  /** the device the output or microphone was set to */
-  fixedDevice?: string | null;
+  /** the devices the output and microphone were set to */
+  fixedOutput?: string | null;
+  fixedMic?: string | null;
   /** shortcuts that could not be registered: '' fine, 'duplicate', or the keys */
   hotkeyProblem: string;
   /** Discord plays on another device than Claude: [Discord's, Claude's]. */
@@ -148,7 +149,8 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
     case 'main-restored-still-on-cable': return { ...ok, discordUsesCable: 'yes', discordStillOnCable: true, claudeListening: false };
     case 'main-restored-cable-chosen': return { ...ok, discordUsesCable: 'yes', discordCableChosen: true, claudeListening: false };
-    case 'main-output-fixed': return { ...ok, outputFixed: true, fixedDevice: 'Højttalere (Realtek(R) Audio)' };
+    case 'main-mic-fixed': return { ...ok, micFixed: true, fixedMic: 'Mikrofon (Logitech BRIO)' };
+    case 'main-output-fixed': return { ...ok, outputFixed: true, fixedOutput: 'Højttalere (Realtek(R) Audio)' };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
     case 'onboarding-cable-missing': return { ...ok, cableOk: false };
     case 'onboarding-mic-blocked': return { ...ok, micState: 'blocked', mic: quiet };

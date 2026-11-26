@@ -45,8 +45,11 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
       const items = Array.from(dialog.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea'));
       if (items.length === 0) return;
       const [a, b] = [items[0], items[items.length - 1]];
-      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); b.focus(); }
-      else if (!e.shiftKey && document.activeElement === b) { e.preventDefault(); a.focus(); }
+      const inside = items.includes(document.activeElement as HTMLElement);
+      // (from the heading or the text, Tab goes to the first button and
+      // Shift+Tab to the last: never to the page behind the dialog)
+      if (e.shiftKey && (!inside || document.activeElement === a)) { e.preventDefault(); b.focus(); }
+      else if (!e.shiftKey && (!inside || document.activeElement === b)) { e.preventDefault(); a.focus(); }
     };
     window.addEventListener('keydown', keys);
     return () => { window.removeEventListener('keydown', keys); opener?.focus?.(); };

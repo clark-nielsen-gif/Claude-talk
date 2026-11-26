@@ -50,13 +50,13 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
-  if (s?.outputFixed) errors.push(<Notice key="of" kind="warn" title={t.notices.outputFixedTitle} body={s.fixedDevice ? fill(t.notices.outputFixedBodyNamed, { name: s.fixedDevice }) : t.notices.outputFixedBody} />);
-  if (s?.micFixed && s.fixedDevice) errors.push(<Notice key="mf" kind="info" title={t.notices.micFixedTitle} body={fill(t.notices.micFixedBody, { name: s.fixedDevice })} />);
+  if (s?.outputFixed) errors.push(<Notice key="of" kind="warn" title={t.notices.outputFixedTitle} body={s.fixedOutput ? fill(t.notices.outputFixedBodyNamed, { name: s.fixedOutput }) : t.notices.outputFixedBody} />);
+  if (s?.micFixed && s.fixedMic) errors.push(<Notice key="mf" kind="warn" title={t.notices.micFixedTitle} body={fill(t.notices.micFixedBody, { name: s.fixedMic })} action={t.main.otherMic} onAction={onSettings} />);
   if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onHotkeys} />);
   // (only while the Claude window is the Claude in the call)
   const outputElsewhere = on && !config.externalClaude && !!s?.claudeWindowOpen ? s?.outputMismatch : null;
   // an amber notice about where the sound plays
-  const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive);
+  const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive) || !!s?.outputFixed || !!s?.micFixed;
   if (s && outputElsewhere) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: outputElsewhere[0], claude: outputElsewhere[1] })} action={fill(t.notices.outputElsewhereAction, { discord: outputElsewhere[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.echoAction} onAction={s.echoActive ? undefined : () => { updateConfig({ echo: 'auto' }); onEcho(); }} />);
 

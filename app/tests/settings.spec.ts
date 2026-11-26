@@ -59,3 +59,18 @@ test('the Discord guide keeps focus and scroll while the status updates', async 
   await page.waitForTimeout(300);
   await expect(page.getByRole('button', { name: 'Luk', exact: true })).toBeFocused();
 });
+
+test('Shift+Tab from the guide’s heading stays in the dialog', async ({ page }) => {
+  await page.goto('/?scenario=main-discord-wrong-mic&theme=light');
+  await page.getByRole('button', { name: 'Vis mig hvordan' }).first().click();
+  await expect(page.locator('#guide-title')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Åbn Discords lydindstillinger' })).toBeFocused();
+});
+
+test('a microphone set back from the cable is named, with a way to choose another', async ({ page }) => {
+  await page.goto('/?scenario=main-mic-fixed&theme=light&freeze=1');
+  await expect(page.getByText('Nu er »Mikrofon (Logitech BRIO)« Windows’ mikrofon.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Vælg en anden mikrofon' }).first().click();
+  await expect(page.getByRole('combobox', { name: 'Din mikrofon' })).toBeFocused();
+});

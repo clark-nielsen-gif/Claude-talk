@@ -73,7 +73,7 @@ export function Settings() {
   const [confirmRestore, setConfirmRestore] = useState(false);
   useEffect(() => {
     if (!confirmRestore) return;
-    const id = setTimeout(() => setConfirmRestore(false), 6000);
+    const id = setTimeout(() => setConfirmRestore(false), 20000);
     return () => clearTimeout(id);
   }, [confirmRestore]);
   const picker = (key: keyof Hotkeys, label: string) => (

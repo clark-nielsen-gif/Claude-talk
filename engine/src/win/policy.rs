@@ -640,11 +640,17 @@ pub fn set_device_rate(endpoint_id: &str, rate: u32) -> windows::core::Result<()
 }
 
 /// The device Windows last made the default for `role` (0 console,
-/// 1 multimedia, 2 communications), as an endpoint id, leaving out
-/// `exclude`; also a device that is unplugged right now. Windows keeps the
-/// time of each default change per device (`Role:N`, a SYSTEMTIME) under
-/// HKLM\…\MMDevices\Audio\{Render|Capture}\{guid}, readable by every user.
-pub fn last_default_by_windows(render: bool, role: usize, exclude: &[String]) -> Option<String> {
+/// 1 multimedia, 2 communications), as an endpoint id, among those `accept`
+/// takes (given the id and the device's name); also a device that is
+/// unplugged right now, never a disabled one. Windows keeps the time of each
+/// default change per device (`Role:N`, a SYSTEMTIME) under
+/// HKLM\…\MMDevices\Audio\{Render|Capture}\{guid}, readable by every user;
+/// with no default of its own left, Windows falls back to the newest of them.
+pub fn last_default_by_windows(
+    render: bool,
+    role: usize,
+    accept: &dyn Fn(&str, &str) -> bool,
+) -> Option<String> {
     use windows::Win32::System::Registry::*;
     let flow = if render { "Render" } else { "Capture" };
     let prefix = if render {
@@ -691,7 +697,62 @@ pub fn last_default_by_windows(render: bool, role: usize, exclude: &[String]) ->
         i += 1;
         let guid = String::from_utf16_lossy(&name[..len as usize]);
         let id = format!("{prefix}{guid}");
-        if exclude.iter().any(|e| e.eq_ignore_ascii_case(&id)) {
+        // DEVICE_STATE_DISABLED (2): the user turned it off
+        let mut st = 0u32;
+        let mut slen = 4u32;
+        let r = unsafe {
+            RegGetValueW(
+                root,
+                &HSTRING::from(&guid),
+                &HSTRING::from("DeviceState"),
+                RRF_RT_REG_DWORD,
+                None,
+                Some((&mut st as *mut u32).cast()),
+                Some(&mut slen),
+            )
+        };
+        if r.is_err() || st & 2 != 0 {
+            continue;
+        }
+        // the name as Windows shows it: "Speakers (Realtek(R) Audio)"
+        // (PKEY_Device_DeviceDesc and the interface's friendly name; the
+        // full friendly name is composed at run time and not always stored)
+        let props = HSTRING::from(format!(r"{guid}\Properties"));
+        let text = |value: &str| -> String {
+            let mut buf = [0u16; 512];
+            let mut blen = (buf.len() * 2) as u32;
+            let r = unsafe {
+                RegGetValueW(
+                    root,
+                    &props,
+                    &HSTRING::from(value),
+                    RRF_RT_REG_SZ,
+                    None,
+                    Some(buf.as_mut_ptr().cast()),
+                    Some(&mut blen),
+                )
+            };
+            if r.is_err() {
+                return String::new();
+            }
+            let n = (blen as usize / 2).min(buf.len());
+            String::from_utf16_lossy(&buf[..n])
+                .trim_end_matches('\0')
+                .to_string()
+        };
+        let full = text("{a45c254e-df1c-4efd-8020-67d146a850e0},14");
+        let friendly = if !full.is_empty() {
+            full
+        } else {
+            let desc = text("{a45c254e-df1c-4efd-8020-67d146a850e0},2");
+            let iface = text("{b3f8fa53-0004-438e-9003-51a46e139bfc},6");
+            if iface.is_empty() {
+                desc
+            } else {
+                format!("{desc} ({iface})")
+            }
+        };
+        if !accept(&id, &friendly) {
             continue;
         }
         let mut data = [0u8; 16];
