@@ -1,0 +1,97 @@
+{
+  "pass": false,
+  "to_claude": {
+    "page": {
+      "errors": [],
+      "impulseTimes": [],
+      "levels": {
+        "1000": -20.2,
+        "2500": -74.9,
+        "3000": -80.2,
+        "440": -91.9
+      },
+      "rate": 48000,
+      "samples": 143360,
+      "steps": [
+        {
+          "name": "voice",
+          "state": "running"
+        },
+        {
+          "name": "permission",
+          "state": "granted"
+        },
+        {
+          "audioinput": [
+            "Claude Talk|default",
+            "Claude Talk|claude-talk"
+          ],
+          "name": "devices"
+        },
+        {
+          "label": "Claude Talk",
+          "name": "track",
+          "settings": {
+            "autoGainControl": false,
+            "channelCount": 1,
+            "deviceId": "claude-talk",
+            "echoCancellation": false,
+            "groupId": "claude-talk",
+            "latency": 0.01,
+            "noiseSuppression": false,
+            "sampleRate": 48000,
+            "sampleSize": 32
+          },
+          "state": "live"
+        },
+        {
+          "name": "second_call_ok"
+        },
+        {
+          "name": "analysis_context",
+          "state": "running"
+        },
+        {
+          "1000": -20.2,
+          "2500": -74.9,
+          "3000": -80.2,
+          "440": -91.9,
+          "name": "levels"
+        },
+        {
+          "bytes": 36015,
+          "name": "mediarecorder"
+        },
+        {
+          "name": "webrtc",
+          "remoteState": "live",
+          "totalAudioEnergy": 0
+        },
+        {
+          "name": "stopped"
+        }
+      ]
+    },
+    "pass": false
+  },
+  "to_discord": {
+    "device": "Claude Talk – til Discord (VB-Audio)",
+    "diag": {
+      "capture_peak_last": 0.33675384521484375,
+      "captured_frames": 181440,
+      "discontinuities": 1,
+      "overflow": 0,
+      "recorded_peak": 0.33697378635406494,
+      "silence_filled": 0,
+      "tap_buffered_ms": 36.5625,
+      "tap_underrun": 10896
+    },
+    "levels_db": {
+      "1000": -87.4,
+      "2500": -83.9,
+      "3000": -85.3,
+      "440": -10.5
+    },
+    "pass": false
+  }
+}

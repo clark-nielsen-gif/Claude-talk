@@ -1,0 +1,21 @@
+1795688085.438 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795688092.634 WARN  claude_talk::audio::imp: TEST MODE: microphone replaced by program fakemic.exe
+1795688092.650 INFO  claude_talk::audio::imp: audio engine started
+1795688092.751 INFO  claude_talk::discord: Discord's microphone set to Claude Talk (1 processes)
+1795688092.754 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 4940, hr 0x00000000)
+1795688092.754 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795688092.754 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 7352, hr 0x00000000)
+1795688092.841 INFO  claude_talk::discord: default output is now speakers
+1795688092.841 INFO  ct_engine::win::host: echo reduction on
+1795688092.841 INFO  claude_talk::discord: Discord microphone: Unknown
+1795688093.923 INFO  claude_talk::claude_window::win: Claude window browser process: 7488
+1795688094.166 INFO  claude_talk::audio::imp: source 2 'Claude' -> Starting (device '', pid 7488, hr 0x00000000)
+1795688094.199 INFO  claude_talk::audio::imp: source 2 'Claude' -> Running (device '', pid 7488, hr 0x00000000)
+1795688094.778 INFO  claude_talk::claude_window: bridge source mode: generator
+1795688094.779 INFO  claude_talk::claude_window: Claude window microphone in use
+1795688094.779 INFO  claude_talk::claude_window: Claude window microphone in use
+1795688096.350 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":75360,"mode":"generator","type":"stats"}
+1795688098.351 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":171360,"mode":"generator","type":"stats"}
+1795688100.352 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":266400,"mode":"generator","type":"stats"}
+1795688102.351 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":363360,"mode":"generator","type":"stats"}
+1795688103.855 INFO  claude_talk::claude_window: Claude window microphone released
