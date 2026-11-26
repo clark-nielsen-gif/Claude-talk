@@ -1,0 +1,12 @@
+1795708112.840 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795708112.867 INFO  claude_talk::audio::imp: audio engine started
+1795708112.867 INFO  claude_talk::updates: updates: not configured in this build
+1795708112.867 INFO  claude_talk::autostart: autostart on
+1795708113.071 INFO  claude_talk::discord: Discord microphone: Unknown
+1795708113.123 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> WaitingForDevice (device '', pid 0, hr 0x80070490)
+1795708113.123 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795708113.131 INFO  claude_talk::audio::imp: source 3 'Discord' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795708113.381 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Paused (device '', pid 0, hr 0x80070490)
+1795708117.890 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-120 src1=-120 src2=-120 src3=-120] routes [1>101 buf=12/20ms under=0 drift=600; 1>102 buf=8/20ms under=480 drift=-296; 2>101 buf=7/20ms under=0 drift=-688; 3>102 buf=6/20ms under=960 drift=588] echo None
+1795708122.902 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-120 src1=-120 src2=-120 src3=-120] routes [1>101 buf=13/20ms under=0 drift=279; 1>102 buf=12/20ms under=480 drift=-131; 2>101 buf=10/20ms under=0 drift=-283; 3>102 buf=14/20ms under=960 drift=200] echo None
+1795708127.912 DEBUG claude_talk::audio::imp: levels dBFS [out101=-120 out102=-120 src1=-120 src2=-120 src3=-120] routes [1>101 buf=14/20ms under=0 drift=-64; 1>102 buf=13/20ms under=480 drift=41; 2>101 buf=7/20ms under=0 drift=117; 3>102 buf=6/20ms under=960 drift=-71] echo None
