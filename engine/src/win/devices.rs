@@ -69,10 +69,41 @@ pub enum DeviceSelector {
     FirstMatching(Flow, Vec<String>),
 }
 
-/// Name fragments of the virtual devices Claude Talk itself feeds. They are
-/// never used as the user's microphone.
-pub const OWN_VIRTUAL_DEVICES: &[&str] =
-    &["claude talk", "vb-audio", "cable output", "cable input"];
+/// Name fragments of the virtual devices Claude Talk itself feeds (our names
+/// after renaming, or VB-CABLE's own names). Only VB-CABLE itself matches:
+/// VB-CABLE A/B, Hi-Fi Cable and VoiceMeeter keep their own roles.
+pub const OWN_VIRTUAL_DEVICES: &[&str] = &["claude talk", "(vb-audio virtual cable)"];
+
+/// Inputs that carry what the computer plays rather than a voice. They are
+/// never picked as the microphone and cannot be added as a mixer source
+/// (they would let people hear themselves).
+pub const NOT_A_MICROPHONE: &[&str] = &[
+    "claude talk",
+    "(vb-audio virtual cable)",
+    "stereo mix",
+    "stereomix",
+    "what u hear",
+    "wave out",
+    "loopback",
+    "rec. playback",
+    "mix (",
+];
+
+/// Our virtual microphone (Discord records it), most preferred first.
+pub const CABLE_CAPTURE_PATTERNS: &[&str] = &[
+    "claude talk – til discord",
+    "cable output (vb-audio virtual cable)",
+];
+/// The playback side of the cable (we play into it). The trailing " (" keeps
+/// the 16-channel twin ("… 16ch") out.
+pub const CABLE_RENDER_PATTERNS: &[&str] = &[
+    "claude talk – intern (",
+    "cable input (vb-audio virtual cable)",
+];
+
+pub fn patterns(p: &[&str]) -> Vec<String> {
+    p.iter().map(|s| s.to_string()).collect()
+}
 
 fn excluded(name: &str, patterns: &[String]) -> bool {
     let n = name.to_lowercase();

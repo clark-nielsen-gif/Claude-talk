@@ -14,6 +14,8 @@ pub struct Inner {
     /// Discord records from our cable: 0 unknown, 1 yes, 2 no (see discord.rs).
     pub discord_uses_cable: AtomicU8,
     pub discord_needs_restart: AtomicBool,
+    /// Discord is recording right now (in a call or a voice test).
+    pub discord_recording: AtomicBool,
     /// The default output is speakers (sound can reach the microphone).
     pub speakers: AtomicBool,
     /// While Some, the Claude bridge appends what it sends (self-test).
@@ -34,6 +36,7 @@ impl Inner {
             ptt_down: AtomicBool::new(false),
             discord_uses_cable: AtomicU8::new(0),
             discord_needs_restart: AtomicBool::new(false),
+            discord_recording: AtomicBool::new(false),
             speakers: AtomicBool::new(false),
             bridge_probe: Mutex::new(None),
             #[cfg(windows)]

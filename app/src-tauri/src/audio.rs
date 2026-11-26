@@ -96,13 +96,16 @@ mod imp {
     /// Applies config switches (big switch, mutes, push-to-talk) to the routes.
     pub fn apply_switches(app: &AppHandle) {
         let state = app.state::<AppState>();
+        // The audio lock first, then the newest settings: concurrent callers
+        // (watcher, hotkeys, tray, UI) apply one after another, each with the
+        // settings as they are at that moment.
+        let mut guard = state.audio.lock().unwrap_or_else(|p| p.into_inner());
         let cfg = state
             .config
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .clone();
         let ptt_down = state.ptt_down.load(Ordering::Relaxed);
-        let mut guard = state.audio.lock().unwrap_or_else(|p| p.into_inner());
         let Some(host) = guard.as_mut() else { return };
         let on = cfg.claude_in_discord;
         host.set_source_muted(ids::MIC, cfg.mic_muted);
@@ -150,6 +153,32 @@ mod imp {
             _ => echo,
         };
         host.set_echo_reduction(echo);
+    }
+
+    /// Opens the microphone only while someone can hear it: Discord is
+    /// recording, the Claude page uses it, Claude runs in another program,
+    /// or Claude Talk's window is open (its "we hear you" meter). Otherwise
+    /// the device stays closed – Windows' microphone indicator goes off and
+    /// Bluetooth headsets keep their good sound.
+    pub fn refresh_mic(app: &AppHandle) {
+        let state = app.state::<AppState>();
+        let window_open = app
+            .get_webview_window("main")
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false);
+        let external = state
+            .config
+            .lock()
+            .map(|c| c.external_claude.is_some())
+            .unwrap_or(false);
+        let needed = window_open
+            || external
+            || state.discord_recording.load(Ordering::Relaxed)
+            || state.claude_mic_active.load(Ordering::Relaxed);
+        let guard = state.audio.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(host) = guard.as_ref() {
+            host.set_source_paused(ids::MIC, !needed);
+        }
     }
 
     fn level(peak: f32, rms: f32) -> Level {
@@ -296,9 +325,11 @@ mod imp {
 }
 
 #[cfg(windows)]
-pub use imp::{apply_switches, start};
+pub use imp::{apply_switches, refresh_mic, start};
 
 #[cfg(not(windows))]
 pub fn start(_app: &AppHandle) {}
 #[cfg(not(windows))]
 pub fn apply_switches(_app: &AppHandle) {}
+#[cfg(not(windows))]
+pub fn refresh_mic(_app: &AppHandle) {}

@@ -64,9 +64,7 @@ pub mod imp {
     use super::*;
     use ct_engine::graph::{ids, Output, Party, Route, Source};
     use ct_engine::win::devices::{self, DeviceSelector, Flow};
-    use ct_engine::win::host::{
-        discord_executables, is_own_device, AudioHost, OutputKind, SourceKind,
-    };
+    use ct_engine::win::host::{discord_executables, AudioHost, OutputKind, SourceKind};
     use ct_engine::win::stream::ProcessTarget;
     use std::collections::BTreeSet;
 
@@ -133,7 +131,7 @@ pub mod imp {
         let current: Vec<(u32, u32)> = host
             .graph()
             .routes()
-            .filter(|(s, _, _)| *s < INTERNAL)
+            .filter(|(s, o, _)| *s < INTERNAL && !is_external(*s, *o))
             .map(|(s, o, _)| (s, o))
             .collect();
         for (s, o) in current {
@@ -194,13 +192,19 @@ pub mod imp {
     pub fn routes_of(host: &AudioHost) -> Vec<MixerRoute> {
         host.graph()
             .routes()
-            .filter(|(s, _, _)| *s < INTERNAL)
+            .filter(|(s, o, _)| *s < INTERNAL && !is_external(*s, *o))
             .map(|(source, output, r)| MixerRoute {
                 source,
                 output,
                 gain_db: r.gain_db,
             })
             .collect()
+    }
+
+    /// Routes of "Claude in another program": owned by that setting, never
+    /// by presets or the saved routing.
+    fn is_external(s: u32, o: u32) -> bool {
+        s == EXTERNAL_SRC || o == EXTERNAL_OUT
     }
 
     /// Output to the extra cable (Claude in another program hears it) and
@@ -252,11 +256,18 @@ pub mod imp {
     }
 
     pub fn choices() -> Choices {
-        let devs = |flow| {
+        // Inputs: real microphones only – "Stereo Mix" and similar carry what
+        // the computer plays (including Claude and Discord) and would let
+        // people hear themselves. Outputs: anything but our own cable.
+        let pick = |flow, avoid: &[&str]| {
+            let avoid = ct_engine::win::devices::patterns(avoid);
             devices::list(flow)
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|e| !is_own_device(&e.name))
+                .filter(|e| {
+                    let n = e.name.to_lowercase();
+                    !avoid.iter().any(|p| n.contains(p.as_str()))
+                })
                 .map(|e| Choice {
                     value: e.id,
                     label: e.name,
@@ -281,9 +292,9 @@ pub mod imp {
         }
         programs.sort_by_key(|a| a.label.to_lowercase());
         Choices {
-            inputs: devs(Flow::Capture),
+            inputs: pick(Flow::Capture, ct_engine::win::devices::NOT_A_MICROPHONE),
             programs,
-            outputs: devs(Flow::Render),
+            outputs: pick(Flow::Render, ct_engine::win::devices::OWN_VIRTUAL_DEVICES),
         }
     }
 }
@@ -292,10 +303,9 @@ pub mod imp {
 pub const EXTERNAL_PROGRAMS: [&str; 3] = ["claude.exe", "chrome.exe", "msedge.exe"];
 
 /// Turns "Use Claude in Chrome or the app" on (with that program) or off.
-#[tauri::command]
-pub fn set_external_claude(
-    app: AppHandle,
-    state: State<AppState>,
+fn set_external_claude_blocking(
+    app: &AppHandle,
+    state: &AppState,
     exe: Option<String>,
 ) -> Result<(), String> {
     let exe = exe.map(|e| e.to_lowercase());
@@ -315,7 +325,7 @@ pub fn set_external_claude(
         {
             imp::set_external_claude(h, exe.as_deref())?;
         }
-        crate::audio::apply_switches(&app);
+        crate::audio::apply_switches(app);
     }
     #[cfg(not(windows))]
     let _ = &app;
@@ -325,7 +335,7 @@ pub fn set_external_claude(
         .unwrap_or_else(|p| p.into_inner())
         .external_claude = exe;
     state.save_config();
-    remember_routes(&state);
+    remember_routes(state);
     Ok(())
 }
 
@@ -367,9 +377,8 @@ pub fn mixer_choices() -> Choices {
 }
 
 /// `kind`: "input" (value = device id) or "program" (value = exe name).
-#[tauri::command]
-pub fn add_mixer_source(
-    state: State<AppState>,
+fn add_mixer_source_blocking(
+    state: &AppState,
     kind: String,
     value: String,
     label: String,
@@ -408,12 +417,11 @@ pub fn add_mixer_source(
         .mixer
         .sources
         .push(src);
-    remember_routes(&state);
+    remember_routes(state);
     Ok(id)
 }
 
-#[tauri::command]
-pub fn remove_mixer_source(state: State<AppState>, id: u32) -> Result<(), String> {
+fn remove_mixer_source_blocking(state: &AppState, id: u32) -> Result<(), String> {
     if !is_added_source(id) {
         return Err("error.internal".into());
     }
@@ -433,13 +441,12 @@ pub fn remove_mixer_source(state: State<AppState>, id: u32) -> Result<(), String
         .mixer
         .sources
         .retain(|s| s.id != id);
-    remember_routes(&state);
+    remember_routes(state);
     Ok(())
 }
 
-#[tauri::command]
-pub fn add_mixer_output(
-    state: State<AppState>,
+fn add_mixer_output_blocking(
+    state: &AppState,
     device_id: String,
     label: String,
 ) -> Result<u32, String> {
@@ -471,12 +478,11 @@ pub fn add_mixer_output(
         .mixer
         .outputs
         .push(out);
-    remember_routes(&state);
+    remember_routes(state);
     Ok(id)
 }
 
-#[tauri::command]
-pub fn remove_mixer_output(state: State<AppState>, id: u32) -> Result<(), String> {
+fn remove_mixer_output_blocking(state: &AppState, id: u32) -> Result<(), String> {
     if !is_added_output(id) {
         return Err("error.internal".into());
     }
@@ -496,7 +502,7 @@ pub fn remove_mixer_output(state: State<AppState>, id: u32) -> Result<(), String
         .mixer
         .outputs
         .retain(|o| o.id != id);
-    remember_routes(&state);
+    remember_routes(state);
     Ok(())
 }
 
@@ -519,8 +525,7 @@ pub fn save_preset(state: State<AppState>, name: String) -> Result<(), String> {
 }
 
 /// Switches to a saved preset, or to the standard routing ("standard").
-#[tauri::command]
-pub fn load_preset(app: AppHandle, state: State<AppState>, name: String) -> Result<(), String> {
+fn load_preset_blocking(app: &AppHandle, state: &AppState, name: String) -> Result<(), String> {
     let (from, to) = {
         let c = state.config.lock().unwrap_or_else(|p| p.into_inner());
         let to = if name == STANDARD {
@@ -544,7 +549,7 @@ pub fn load_preset(app: AppHandle, state: State<AppState>, name: String) -> Resu
         {
             imp::switch(h, &from, &to);
         }
-        crate::audio::apply_switches(&app);
+        crate::audio::apply_switches(app);
     }
     #[cfg(not(windows))]
     let _ = (&app, &from);
@@ -579,4 +584,67 @@ mod tests {
         assert!(is_added_source(200) && !is_added_source(3) && !is_added_source(900));
         assert!(is_added_output(300) && !is_added_output(101));
     }
+}
+
+// The commands below run on a worker thread: closing audio streams can take
+// a moment, and the window must not freeze meanwhile.
+async fn off_main<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|_| "error.internal".to_string())?
+}
+
+#[tauri::command]
+pub async fn set_external_claude(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    exe: Option<String>,
+) -> Result<(), String> {
+    let st = state.inner().clone();
+    off_main(move || set_external_claude_blocking(&app, &st, exe)).await
+}
+
+#[tauri::command]
+pub async fn add_mixer_source(
+    state: State<'_, AppState>,
+    kind: String,
+    value: String,
+    label: String,
+) -> Result<u32, String> {
+    let st = state.inner().clone();
+    off_main(move || add_mixer_source_blocking(&st, kind, value, label)).await
+}
+
+#[tauri::command]
+pub async fn remove_mixer_source(state: State<'_, AppState>, id: u32) -> Result<(), String> {
+    let st = state.inner().clone();
+    off_main(move || remove_mixer_source_blocking(&st, id)).await
+}
+
+#[tauri::command]
+pub async fn add_mixer_output(
+    state: State<'_, AppState>,
+    device_id: String,
+    label: String,
+) -> Result<u32, String> {
+    let st = state.inner().clone();
+    off_main(move || add_mixer_output_blocking(&st, device_id, label)).await
+}
+
+#[tauri::command]
+pub async fn remove_mixer_output(state: State<'_, AppState>, id: u32) -> Result<(), String> {
+    let st = state.inner().clone();
+    off_main(move || remove_mixer_output_blocking(&st, id)).await
+}
+
+#[tauri::command]
+pub async fn load_preset(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<(), String> {
+    let st = state.inner().clone();
+    off_main(move || load_preset_blocking(&app, &st, name)).await
 }

@@ -8,7 +8,7 @@ const scenarios = [
   'main-ok', 'main-off', 'main-muted', 'main-claude-closed', 'main-claude-not-listening',
   'main-discord-closed', 'main-discord-wrong-mic', 'main-discord-restart', 'main-speakers', 'main-update',
   'error-mic-blocked', 'error-mic-missing', 'error-cable-missing', 'error-unsupported',
-  'advanced', 'advanced-add', 'settings', 'settings-extra-cable', 'help',
+  'advanced', 'advanced-add', 'settings', 'advanced-extra-cable', 'help',
 ];
 const themes = ['light', 'dark'] as const;
 const scales = [1, 1.5];
@@ -26,7 +26,7 @@ for (const scale of scales) {
           await page.evaluate(() => document.fonts.ready);
           if (s === 'onboarding-setup') await page.waitForTimeout(1500);
           if (s === 'main-discord-wrong-mic') await page.getByRole('button', { name: /Vis mig hvordan/ }).click();
-          if (s === 'settings-extra-cable') await page.getByRole('heading', { name: 'Claude i et andet program' }).scrollIntoViewIfNeeded();
+          if (s === 'advanced-extra-cable') await page.getByRole('heading', { name: 'Claude i et andet program' }).scrollIntoViewIfNeeded();
           if (s === 'advanced-add') await page.getByRole('button', { name: 'Tilføj kilde' }).click();
           if (s === 'help') await page.getByRole('button', { name: 'Kør selvtest' }).click().then(() => page.waitForTimeout(600));
           await page.waitForTimeout(250);

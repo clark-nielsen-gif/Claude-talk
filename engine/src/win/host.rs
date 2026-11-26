@@ -37,14 +37,12 @@ pub fn discord_executables() -> Vec<String> {
 
 /// Render endpoint names of the virtual cable, most preferred first.
 pub fn cable_render_patterns() -> Vec<String> {
-    [
-        "claude talk – intern",
-        "cable input",
-        "vb-audio virtual cable",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect()
+    devices::patterns(devices::CABLE_RENDER_PATTERNS)
+}
+
+/// Capture endpoint names of the virtual cable (Discord's microphone).
+pub fn cable_capture_patterns() -> Vec<String> {
+    devices::patterns(devices::CABLE_CAPTURE_PATTERNS)
 }
 
 #[derive(Clone, Debug)]
@@ -73,7 +71,7 @@ pub struct HostConfig {
 
 impl HostConfig {
     pub fn standard(claude_pid: Arc<AtomicU32>) -> Self {
-        let own: Vec<String> = OWN_VIRTUAL_DEVICES.iter().map(|s| s.to_string()).collect();
+        let own: Vec<String> = devices::patterns(devices::NOT_A_MICROPHONE);
         HostConfig {
             mic: SourceKind::Microphone(DeviceSelector::DefaultExcluding(Flow::Capture, own)),
             to_discord: DeviceSelector::FirstMatching(Flow::Render, cable_render_patterns()),
@@ -164,6 +162,8 @@ pub struct AudioHost {
 /// Internal ids of the echo-reduction stage (never in the routing graph).
 const AEC_MIC_IN: OutputId = 9001;
 const AEC_REF_IN: OutputId = 9002;
+/// Source ids from here are internal (self-test tones): never echo references.
+const INTERNAL_SOURCES: SourceId = 900;
 /// Reference buffer for echo reduction: short, so the reference reaches the
 /// canceller before the echo does (speaker + microphone latency is longer).
 const AEC_REF_BUFFER_MS: f64 = 10.0;
@@ -174,6 +174,8 @@ const AEC_REF_BUFFER_MS: f64 = 10.0;
 struct AecStage {
     processed: FanoutHandle,
     ref_in: MixerHandle,
+    /// sources feeding the reference (everything that is not the user)
+    reference: Vec<SourceId>,
     stop: Arc<std::sync::atomic::AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -316,7 +318,9 @@ impl AudioHost {
     pub fn add_source(&mut self, spec: Source, kind: SourceKind) -> Result<(), Rejection> {
         let id = spec.id;
         // echo reduction holds the old streams of these: rebuild it around the new one
-        let aec_again = matches!(id, ids::MIC | ids::CLAUDE | ids::DISCORD) && self.aec.is_some();
+        // echo reduction holds the microphone and every reference source:
+        // rebuild it around the new set
+        let aec_again = self.aec.is_some() && id < INTERNAL_SOURCES;
         if aec_again {
             self.set_echo_reduction(false);
         }
@@ -386,7 +390,8 @@ impl AudioHost {
     }
 
     pub fn remove_source(&mut self, id: SourceId) {
-        if id == ids::MIC || id == ids::CLAUDE || id == ids::DISCORD {
+        let aec_again = self.aec.is_some() && id < INTERNAL_SOURCES;
+        if aec_again {
             self.set_echo_reduction(false);
         }
         let outs: Vec<OutputId> = self
@@ -400,6 +405,9 @@ impl AudioHost {
         }
         self.graph.remove_source(id);
         self.sources.remove(&id);
+        if aec_again {
+            self.set_echo_reduction(true);
+        }
     }
 
     pub fn remove_output(&mut self, id: OutputId) {
@@ -482,7 +490,7 @@ impl AudioHost {
             if let Some(mic) = self.sources.get_mut(&ids::MIC) {
                 mic.handle.remove_output(AEC_MIC_IN);
             }
-            for s in [ids::CLAUDE, ids::DISCORD] {
+            for s in stage.reference.clone() {
                 if let Some(src) = self.sources.get_mut(&s) {
                     disconnect(&mut src.handle, &mut stage.ref_in);
                 }
@@ -506,8 +514,18 @@ impl AudioHost {
         let mut raw = connect_raw(&mut mic.handle, AEC_MIC_IN);
         let (mut ref_mix, mut ref_in) = OutputMixer::new(AEC_REF_IN, 1, FRAME);
         let (mut fanout, processed) = SourceFanout::new(ids::MIC, ENGINE_RATE);
-        for s in [ids::CLAUDE, ids::DISCORD] {
-            if let Some(src) = self.sources.get_mut(&s) {
+        // Everything that may come out of the speakers and is not the user:
+        // Claude, Discord, Claude in another program, added programs.
+        let reference: Vec<SourceId> = self
+            .graph
+            .sources()
+            .filter(|s| {
+                s.id != ids::MIC && s.id < INTERNAL_SOURCES && !s.parties.contains(&Party::User)
+            })
+            .map(|s| s.id)
+            .collect();
+        for s in &reference {
+            if let Some(src) = self.sources.get_mut(s) {
                 connect(
                     &mut src.handle,
                     &mut ref_in,
@@ -522,6 +540,8 @@ impl AudioHost {
             .name("echo-reduction".into())
             .spawn(move || {
                 super::high_res_timer();
+                let _mmcss = super::stream::Mmcss::enter();
+                crate::flush_denormals();
                 // created here: the AEC3 graph is bound to its thread
                 let mut reducer = match EchoReducer::new() {
                     Ok(r) => Some(r),
@@ -572,6 +592,7 @@ impl AudioHost {
         Ok(AecStage {
             processed,
             ref_in,
+            reference,
             stop,
             thread: Some(thread),
         })
@@ -637,6 +658,36 @@ impl AudioHost {
         for (s, o) in before.difference(&after) {
             self.unwire(*s, *o);
         }
+    }
+
+    /// Closes a source's device while nobody needs it (true), or opens it
+    /// again (false). Its routes keep running with silence.
+    pub fn set_source_paused(&self, id: SourceId, paused: bool) {
+        if let Some(st) = self.sources.get(&id).and_then(|s| s.stream.as_ref()) {
+            st.set_paused(paused);
+        }
+    }
+
+    /// Makes one source reopen its device (e.g. a new default microphone).
+    pub fn restart_source(&self, id: SourceId) {
+        if let Some(st) = self.sources.get(&id).and_then(|s| s.stream.as_ref()) {
+            st.request_restart();
+        }
+    }
+
+    /// The device a source records from right now ("" if none).
+    pub fn source_device(&self, id: SourceId) -> String {
+        self.sources
+            .get(&id)
+            .and_then(|s| s.stream.as_ref())
+            .map(|st| {
+                st.status
+                    .device_name
+                    .lock()
+                    .map(|n| n.clone())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default()
     }
 
     /// Makes a stream reopen its device (default device changed, etc.).
@@ -738,7 +789,7 @@ pub fn is_own_device(name: &str) -> bool {
 }
 
 /// Name fragments of other virtual cables a user may have installed
-/// themselves (VB-CABLE A/B/C/D, VoiceMeeter, Hi-Fi Cable). With one of these,
+/// themselves (VB-CABLE A/B/C/D, Hi-Fi Cable). With one of these,
 /// Claude can also be used in another program ("Claude in Chrome or the app").
 pub const EXTRA_CABLE_PATTERNS: [&str; 6] = [
     "cable-a",

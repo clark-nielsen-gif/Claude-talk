@@ -124,6 +124,9 @@ pub struct MixerHandle {
     pub params: Arc<GainParams>,
     pub stats: Arc<OutputStats>,
     commands: rtrb::Producer<MixerCommand>,
+    /// Commands the audio thread had no room for yet (its device may be
+    /// gone for a while); sent in order before anything new.
+    pending: std::collections::VecDeque<MixerCommand>,
     garbage: rtrb::Consumer<Box<SourceTap>>,
     blocks_per_second: f64,
 }
@@ -137,8 +140,8 @@ impl OutputMixer {
         block_frames: usize,
     ) -> (OutputMixer, MixerHandle) {
         TruePeakLimiter::warm_up();
-        let (cmd_tx, cmd_rx) = rtrb::RingBuffer::new(64);
-        let (gb_tx, gb_rx) = rtrb::RingBuffer::new(64);
+        let (cmd_tx, cmd_rx) = rtrb::RingBuffer::new(256);
+        let (gb_tx, gb_rx) = rtrb::RingBuffer::new(256);
         let params = GainParams::new(0.0, false);
         let stats = Arc::new(OutputStats::default());
         let bps = ENGINE_RATE as f64 / block_frames.max(1) as f64;
@@ -160,6 +163,7 @@ impl OutputMixer {
             params,
             stats,
             commands: cmd_tx,
+            pending: Default::default(),
             garbage: gb_rx,
             blocks_per_second: bps,
         };
@@ -294,14 +298,35 @@ impl MixerHandle {
     /// control thread (e.g. with the meter timer).
     pub fn collect_garbage(&mut self) {
         while self.garbage.pop().is_ok() {}
+        self.flush();
     }
 
-    pub fn remove_source(&mut self, source: SourceId) -> bool {
-        self.commands.push(MixerCommand::RemoveTap(source)).is_ok()
+    /// Sends queued commands while there is room.
+    fn flush(&mut self) {
+        while let Some(c) = self.pending.pop_front() {
+            if let Err(rtrb::PushError::Full(c)) = self.commands.push(c) {
+                self.pending.push_front(c);
+                break;
+            }
+        }
     }
 
-    fn add_tap(&mut self, tap: Box<SourceTap>) -> bool {
-        self.commands.push(MixerCommand::AddTap(tap)).is_ok()
+    /// Never loses a command: what does not fit now is sent later, in order.
+    fn send(&mut self, cmd: MixerCommand) {
+        self.flush();
+        if !self.pending.is_empty() {
+            self.pending.push_back(cmd);
+        } else if let Err(rtrb::PushError::Full(c)) = self.commands.push(cmd) {
+            self.pending.push_back(c);
+        }
+    }
+
+    pub fn remove_source(&mut self, source: SourceId) {
+        self.send(MixerCommand::RemoveTap(source));
+    }
+
+    fn add_tap(&mut self, tap: Box<SourceTap>) {
+        self.send(MixerCommand::AddTap(tap));
     }
 
     pub fn blocks_per_second(&self) -> f64 {
@@ -327,14 +352,15 @@ pub struct FanoutHandle {
     pub params: Arc<GainParams>,
     pub stats: Arc<SourceStats>,
     commands: rtrb::Producer<FanoutCommand>,
+    pending: std::collections::VecDeque<FanoutCommand>,
     garbage: rtrb::Consumer<Box<rtrb::Producer<f32>>>,
 }
 
 impl SourceFanout {
     /// `rate` is the capture device's sample rate.
     pub fn new(source: SourceId, rate: u32) -> (SourceFanout, FanoutHandle) {
-        let (cmd_tx, cmd_rx) = rtrb::RingBuffer::new(64);
-        let (gb_tx, gb_rx) = rtrb::RingBuffer::new(64);
+        let (cmd_tx, cmd_rx) = rtrb::RingBuffer::new(256);
+        let (gb_tx, gb_rx) = rtrb::RingBuffer::new(256);
         let params = GainParams::new(0.0, false);
         let stats = Arc::new(SourceStats::default());
         (
@@ -354,6 +380,7 @@ impl SourceFanout {
                 params,
                 stats,
                 commands: cmd_tx,
+                pending: Default::default(),
                 garbage: gb_rx,
             },
         )
@@ -435,6 +462,12 @@ impl SourceFanout {
                     }
                 }
             }
+            // a broken driver or program must not put NaN/Inf into the mix
+            for v in conv.iter_mut() {
+                if !v.is_finite() {
+                    *v = 0.0;
+                }
+            }
             self.gain.set_target(self.params.linear());
             self.gain.apply(conv, ENGINE_CHANNELS);
             self.stats.meter.feed(conv);
@@ -464,11 +497,30 @@ impl SourceFanout {
 impl FanoutHandle {
     pub fn collect_garbage(&mut self) {
         while self.garbage.pop().is_ok() {}
+        self.flush();
     }
-    pub fn remove_output(&mut self, output: OutputId) -> bool {
-        self.commands
-            .push(FanoutCommand::RemoveOutput(output))
-            .is_ok()
+
+    fn flush(&mut self) {
+        while let Some(c) = self.pending.pop_front() {
+            if let Err(rtrb::PushError::Full(c)) = self.commands.push(c) {
+                self.pending.push_front(c);
+                break;
+            }
+        }
+    }
+
+    /// Never loses a command: what does not fit now is sent later, in order.
+    fn send(&mut self, cmd: FanoutCommand) {
+        self.flush();
+        if !self.pending.is_empty() {
+            self.pending.push_back(cmd);
+        } else if let Err(rtrb::PushError::Full(c)) = self.commands.push(cmd) {
+            self.pending.push_back(c);
+        }
+    }
+
+    pub fn remove_output(&mut self, output: OutputId) {
+        self.send(FanoutCommand::RemoveOutput(output));
     }
 }
 
@@ -503,9 +555,7 @@ pub fn connect(
         in_rate: source.rate,
     });
     output.add_tap(tap);
-    let _ = source
-        .commands
-        .push(FanoutCommand::AddOutput(output.output, Box::new(prod)));
+    source.send(FanoutCommand::AddOutput(output.output, Box::new(prod)));
     stats
 }
 
@@ -516,9 +566,7 @@ pub fn connect(
 pub fn connect_raw(source: &mut FanoutHandle, id: OutputId) -> rtrb::Consumer<f32> {
     let cap = (source.rate as usize / 2).max(MAX_BLOCK) * ENGINE_CHANNELS;
     let (prod, cons) = rtrb::RingBuffer::<f32>::new(cap);
-    let _ = source
-        .commands
-        .push(FanoutCommand::AddOutput(id, Box::new(prod)));
+    source.send(FanoutCommand::AddOutput(id, Box::new(prod)));
     cons
 }
 

@@ -27,58 +27,81 @@ const CAPTURE_NAME: &str = "Claude Talk – til Discord";
 const RENDER_NAME: &str = "Claude Talk – intern";
 const IFACE: &str = "VB-Audio";
 
+/// Kept under Program Files: only administrators can write there, so nobody
+/// can plant or swap the files the elevated installer and uninstaller run.
 fn data_dir() -> PathBuf {
-    std::env::var_os("ProgramData")
+    std::env::var_os("ProgramW6432")
+        .or_else(|| std::env::var_os("ProgramFiles"))
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"))
+        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"))
         .join("Claude Talk")
+        .join("vbcable")
 }
+/// Written when Claude Talk installed VB-CABLE; holds the SHA-256 of the
+/// setup program, checked again before it is run to uninstall.
 fn marker() -> PathBuf {
-    data_dir().join("cable-installed-by-claude-talk")
+    data_dir().join("installed-by-claude-talk")
 }
+const SETUP_EXE: &str = "VBCABLE_Setup_x64.exe";
+const CATALOG: &str = "vbaudio_cable64_win10.cat";
+const WHCP: &str = "Microsoft Windows Hardware Compatibility Publisher";
 
 pub fn install_cable() -> i32 {
     let _com = ComGuard::new();
     log::info!("installer: setting up the virtual microphone");
     let before = defaults();
-    let already = cable_present();
-    if !already {
-        let dir = data_dir().join("vbcable");
-        let _ = std::fs::create_dir_all(&dir);
-        let zip = std::env::temp_dir().join("ClaudeTalk-VBCABLE.zip");
-        if let Err(code) = download(PACKAGE_URL, &zip) {
-            return code;
+    if cable_present() {
+        // Either ours from an earlier install (already renamed), or a VB-CABLE
+        // the user had before: that one keeps its names – we use it as it is.
+        log::info!("installer: VB-CABLE is already installed; nothing to install");
+        if marker().exists() {
+            rename_devices();
         }
-        if !package_ok(&zip) {
-            log::error!("installer: package failed the integrity check");
-            return 3;
-        }
-        if let Err(e) = extract(&zip, &dir) {
-            log::error!("installer: extract: {e}");
-            return 5;
-        }
-        let setup = dir.join("VBCABLE_Setup_x64.exe");
-        if !authenticode_valid(&setup) {
-            log::error!("installer: setup program signature invalid");
-            return 3;
-        }
-        match run_with_timeout(&setup, &["-i", "-h"], Duration::from_secs(180)) {
-            Some(code) => log::info!("installer: VB-CABLE setup exit {code}"),
-            None => {
-                log::error!("installer: VB-CABLE setup did not finish");
-                return 4;
-            }
-        }
-        let _ = std::fs::write(marker(), b"1");
-        // the endpoints appear a moment after the driver loads
-        let t0 = Instant::now();
-        while !cable_present() && t0.elapsed() < Duration::from_secs(20) {
-            std::thread::sleep(Duration::from_millis(500));
-        }
-        if !cable_present() {
-            log::error!("installer: driver installed but no endpoints appeared");
+        restore_defaults(&before);
+        return 0;
+    }
+    let dir = data_dir();
+    let _ = std::fs::remove_dir_all(&dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        log::error!("installer: {}: {e}", dir.display());
+        return 5;
+    }
+    let zip = dir.join("VBCABLE_Driver_Pack.zip");
+    if let Err(code) = download(PACKAGE_URL, &zip) {
+        return code;
+    }
+    let hash_ok = sha256_hex(&zip).is_some_and(|h| h == KNOWN_SHA256);
+    if let Err(e) = extract(&zip, &dir) {
+        log::error!("installer: extract: {e}");
+        return 5;
+    }
+    let _ = std::fs::remove_file(&zip);
+    let setup = dir.join(SETUP_EXE);
+    // The tested package (exact hash), or a newer one from VB-Audio whose
+    // driver catalog is signed by Microsoft's hardware program; the setup
+    // program must carry a valid signature either way.
+    let catalog_ok = signer_name(&dir.join(CATALOG)).is_some_and(|n| n.contains(WHCP));
+    if !(hash_ok || catalog_ok) || signer_name(&setup).is_none() {
+        log::error!("installer: package failed the checks (hash {hash_ok}, catalog {catalog_ok})");
+        let _ = std::fs::remove_dir_all(&dir);
+        return 3;
+    }
+    match run_with_timeout(&setup, &["-i", "-h"], Duration::from_secs(180)) {
+        Some(code) => log::info!("installer: VB-CABLE setup exit {code}"),
+        None => {
+            log::error!("installer: VB-CABLE setup did not finish");
             return 4;
         }
+    }
+    let _ = std::fs::write(marker(), sha256_hex(&setup).unwrap_or_default());
+    // the endpoints appear a moment after the driver loads
+    let t0 = Instant::now();
+    while !cable_present() && t0.elapsed() < Duration::from_secs(20) {
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    if !cable_present() {
+        log::error!("installer: driver installed but no endpoints appeared");
+        return 4;
     }
     rename_devices();
     restore_defaults(&before);
@@ -99,14 +122,20 @@ pub fn uninstall_cleanup() -> i32 {
             "/f",
         ])
         .status();
-    if marker().exists() {
-        let setup = data_dir().join("vbcable").join("VBCABLE_Setup_x64.exe");
-        if setup.exists() {
+    // VB-CABLE is removed only if Claude Talk installed it, and only with
+    // the very setup program that installed it.
+    if let Ok(expected) = std::fs::read_to_string(marker()) {
+        let setup = data_dir().join(SETUP_EXE);
+        let same =
+            !expected.trim().is_empty() && sha256_hex(&setup).is_some_and(|h| h == expected.trim());
+        if same && signer_name(&setup).is_some() {
             let code = run_with_timeout(&setup, &["-u", "-h"], Duration::from_secs(180));
             log::info!("uninstall: VB-CABLE removal exit {code:?}");
+        } else {
+            log::warn!("uninstall: VB-CABLE setup program changed or missing; not run");
         }
-        let _ = std::fs::remove_dir_all(data_dir());
     }
+    let _ = std::fs::remove_dir_all(data_dir());
     0
 }
 
@@ -155,23 +184,6 @@ fn sha256_hex(path: &Path) -> Option<String> {
         .map(|l| l.trim().replace(' ', "").to_lowercase())
 }
 
-fn package_ok(zip: &Path) -> bool {
-    match sha256_hex(zip) {
-        Some(h) if h == KNOWN_SHA256 => true,
-        Some(h) => {
-            // VB-Audio may publish an updated pack under the same name; the
-            // setup program and catalog are still checked for a valid
-            // signature after extraction, and Windows itself only loads a
-            // Microsoft-signed driver.
-            log::warn!(
-                "installer: package hash {h} differs from the tested one; relying on signatures"
-            );
-            true
-        }
-        None => false,
-    }
-}
-
 fn extract(zip: &Path, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let mut a = zip::ZipArchive::new(std::fs::File::open(zip)?)?;
     for i in 0..a.len() {
@@ -192,11 +204,18 @@ fn extract(zip: &Path, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Authenticode check with WinVerifyTrust (no UI, revocation from cache).
-fn authenticode_valid(file: &Path) -> bool {
+/// Verifies a file's signature with WinVerifyTrust (no UI, revocation from
+/// cache) and returns the signer's name, or `None` if it is not validly signed.
+fn signer_name(file: &Path) -> Option<String> {
     use windows::core::{GUID, HSTRING, PCWSTR};
     use windows::Win32::Foundation::HWND;
+    use windows::Win32::Security::Cryptography::{
+        CertGetNameStringW, CERT_NAME_SIMPLE_DISPLAY_TYPE,
+    };
     use windows::Win32::Security::WinTrust::*;
+    if !file.exists() {
+        return None;
+    }
     let path = HSTRING::from(file.as_os_str());
     let mut fi = WINTRUST_FILE_INFO {
         cbStruct: std::mem::size_of::<WINTRUST_FILE_INFO>() as u32,
@@ -214,22 +233,39 @@ fn authenticode_valid(file: &Path) -> bool {
     };
     data.Anonymous.pFile = &mut fi;
     let mut action: GUID = WINTRUST_ACTION_GENERIC_VERIFY_V2;
-    let r = unsafe {
-        WinVerifyTrust(
-            HWND(-1isize as *mut _),
-            &mut action,
-            &mut data as *mut _ as *mut _,
-        )
-    };
+    let hwnd = HWND(-1isize as *mut _);
+    let r = unsafe { WinVerifyTrust(hwnd, &mut action, &mut data as *mut _ as *mut _) };
+    let mut name = None;
+    if r == 0 {
+        unsafe {
+            let prov = WTHelperProvDataFromStateData(data.hWVTStateData);
+            if !prov.is_null() {
+                let signer = WTHelperGetProvSignerFromChain(prov, 0, false, 0);
+                if !signer.is_null() && !(*signer).pasCertChain.is_null() {
+                    let cert = (*(*signer).pasCertChain).pCert;
+                    let mut buf = [0u16; 256];
+                    let n = CertGetNameStringW(
+                        cert,
+                        CERT_NAME_SIMPLE_DISPLAY_TYPE,
+                        0,
+                        None,
+                        Some(&mut buf),
+                    );
+                    if n > 1 {
+                        name = Some(String::from_utf16_lossy(&buf[..n as usize - 1]));
+                    }
+                }
+            }
+        }
+        // a valid signature whose name could not be read still counts
+        name = name.or(Some(String::new()));
+    }
     data.dwStateAction = WTD_STATEACTION_CLOSE;
-    unsafe {
-        WinVerifyTrust(
-            HWND(-1isize as *mut _),
-            &mut action,
-            &mut data as *mut _ as *mut _,
-        )
-    };
-    r == 0
+    unsafe { WinVerifyTrust(hwnd, &mut action, &mut data as *mut _ as *mut _) };
+    if let Some(n) = &name {
+        log::info!("installer: {} signed by '{n}'", file.display());
+    }
+    name
 }
 
 fn run_with_timeout(exe: &Path, args: &[&str], limit: Duration) -> Option<i32> {
@@ -258,13 +294,20 @@ fn rename_devices() {
     };
     rename(
         Flow::Capture,
-        vec!["cable output".into(), "claude talk".into()],
+        devices::patterns(devices::CABLE_CAPTURE_PATTERNS),
         CAPTURE_NAME,
     );
-    rename(Flow::Render, vec!["cable input".into()], RENDER_NAME);
     rename(
         Flow::Render,
-        vec!["cable in 16".into()],
+        devices::patterns(devices::CABLE_RENDER_PATTERNS),
+        RENDER_NAME,
+    );
+    rename(
+        Flow::Render,
+        vec![
+            "cable in 16ch (vb-audio virtual cable)".into(),
+            "claude talk – intern 16ch".into(),
+        ],
         &format!("{RENDER_NAME} 16ch"),
     );
 }

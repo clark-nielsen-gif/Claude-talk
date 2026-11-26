@@ -202,4 +202,6 @@
   setInterval(() => { if (liveClones > 0) post({ type: 'stats', framesIn, dropped, mode: source && source.mode }); }, 2000);
   Object.defineProperty(window, '__claudeTalkBridge', { value: true });
   post({ type: 'ready' });
+  // leaving the page (reload, navigation) ends its microphone use
+  addEventListener('pagehide', () => { if (liveClones > 0) { liveClones = 0; post({ type: 'mic', active: false }); } });
 })();

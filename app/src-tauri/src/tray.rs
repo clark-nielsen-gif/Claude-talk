@@ -96,6 +96,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             "switch" => {
                 if let Ok(mut c) = state.config.lock() {
                     c.claude_in_discord = !c.claude_in_discord;
+                    if c.claude_in_discord {
+                        c.route_discord = true; // as in the main window
+                    }
                 }
                 after_change(app);
             }

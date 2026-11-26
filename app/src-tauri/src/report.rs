@@ -4,11 +4,28 @@
 use std::io::Write;
 use tauri::AppHandle;
 
-pub fn save(_app: &AppHandle) -> Result<String, Box<dyn std::error::Error>> {
-    let desktop = std::env::var_os("USERPROFILE")
+/// The user's real Desktop (it may live in OneDrive or elsewhere).
+fn desktop_dir() -> std::path::PathBuf {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Com::CoTaskMemFree;
+        use windows::Win32::UI::Shell::{FOLDERID_Desktop, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+        if let Ok(p) = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, None) {
+            let path = p.to_string().ok().map(std::path::PathBuf::from);
+            CoTaskMemFree(Some(p.0 as *const _));
+            if let Some(path) = path {
+                return path;
+            }
+        }
+    }
+    std::env::var_os("USERPROFILE")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("Desktop");
+        .join("Desktop")
+}
+
+pub fn save(_app: &AppHandle) -> Result<String, Box<dyn std::error::Error>> {
+    let desktop = desktop_dir();
     let dir = if desktop.is_dir() {
         desktop
     } else {

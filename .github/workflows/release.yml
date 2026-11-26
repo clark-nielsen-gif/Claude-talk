@@ -91,6 +91,19 @@ jobs:
         if: ${{ steps.signpath.outcome == 'success' }}
         shell: powershell
         run: Copy-Item dist-signed/ClaudeTalk-Setup.exe dist-release/ClaudeTalk-Setup.exe -Force
+      - name: Update signature for the code-signed installer
+        # code signing changed the file, so the update signature made by
+        # tauri build no longer matches: sign the final file again
+        if: ${{ steps.signpath.outcome == 'success' && hashFiles('dist-release/ClaudeTalk-Setup.exe.sig') != '' }}
+        working-directory: app
+        shell: powershell
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          Remove-Item ../dist-release/ClaudeTalk-Setup.exe.sig
+          npx tauri signer sign ../dist-release/ClaudeTalk-Setup.exe
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path ../dist-release/ClaudeTalk-Setup.exe.sig)) { throw 'update signing failed' }
       - name: Update manifest (latest.json)
         if: ${{ hashFiles('dist-release/ClaudeTalk-Setup.exe.sig') != '' }}
         shell: powershell

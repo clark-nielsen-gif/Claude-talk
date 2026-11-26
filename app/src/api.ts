@@ -79,10 +79,10 @@ const defaultConfig: Config = {
   version: 1, language: (params.get('lang') as 'da' | 'en') ?? 'da', theme: (params.get('theme') as Theme) ?? 'light',
   autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off',
   micMuted: scenario === 'main-muted', claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
-  hotkeys: { muteClaudeToDiscord: 'Ctrl+Alt+D', muteMic: 'Ctrl+Alt+M', pushToTalkClaude: 'Ctrl+Alt+Space' },
+  hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F12' },
   advancedUnlocked: false,
   presets: [{ name: 'Musik' }],
-  externalClaude: scenario === 'settings-extra-cable' ? 'chrome.exe' : null,
+  externalClaude: scenario === 'advanced-extra-cable' ? 'chrome.exe' : null,
 };
 
 function scenarioStatus(t: number): AudioStatus {
@@ -114,7 +114,7 @@ function scenarioStatus(t: number): AudioStatus {
 const scenarioInfo: AppInfo = {
   version: '1.0.0', windowsBuild: scenario === 'error-unsupported' ? 19045 : 26100,
   supported: scenario !== 'error-unsupported', cableInstalled: scenario !== 'error-cable-missing', testMode: false,
-  extraCable: scenario === 'settings-extra-cable' ? { name: 'CABLE-A Input (VB-Audio Cable A)', output: 'CABLE-A Output (VB-Audio Cable A)' } : null,
+  extraCable: scenario === 'advanced-extra-cable' ? { name: 'CABLE-A Input (VB-Audio Cable A)', output: 'CABLE-A Output (VB-Audio Cable A)' } : null,
 };
 
 let mockConfig = { ...defaultConfig };
@@ -135,7 +135,7 @@ export const api = {
   async openClaude(): Promise<void> {
     if (inTauri) await invoke('open_claude');
   },
-  async openPlace(place: 'discordVoice' | 'micPrivacy' | 'soundSettings' | 'vbAudio' | 'vbAudioDonate' | 'logs' | 'windowsUpdate' | 'download'): Promise<void> {
+  async openPlace(place: 'discordVoice' | 'micPrivacy' | 'soundSettings' | 'vbAudio' | 'vbAudioDonate' | 'logs' | 'windowsUpdate' | 'download' | 'support'): Promise<void> {
     if (inTauri) await invoke('open_place', { place });
   },
   async saveReport(): Promise<string> {

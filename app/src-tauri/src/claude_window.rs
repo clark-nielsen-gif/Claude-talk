@@ -159,23 +159,31 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Sends the engine's "Til Claude" mix to the Claude window, 10 ms at a time,
-/// clocked by the system timer (the bridge is our virtual microphone clock).
+/// Sends the engine's "Til Claude" mix to the Claude window, 10 ms at a time.
+///
+/// Two threads: the clock thread is the virtual microphone's clock (Pro
+/// Audio priority, no allocation) and only mixes into a lock-free ring; the
+/// sender thread encodes the blocks and hands them to the window, with at
+/// most a few posts in flight so a busy UI thread cannot pile them up.
 pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
+    const BLOCK: usize = 480;
+    const MAX_IN_FLIGHT: u32 = 4;
+    // 200 ms of room; the sender keeps it nearly empty
+    let (mut tx, mut rx) = rtrb::RingBuffer::<f32>::new(BLOCK * 20);
+    let state = app.state::<AppState>().inner().clone();
+    let clock_state = state.clone();
     std::thread::Builder::new()
-        .name("claude-bridge".into())
+        .name("claude-bridge-clock".into())
         .spawn(move || {
             #[cfg(windows)]
             let _period = win::TimerResolution::new();
-            const BLOCK: usize = 480;
+            #[cfg(windows)]
+            let _mmcss = ct_engine::win::stream::Mmcss::enter();
+            ct_engine::flush_denormals();
             let mut buf = vec![0f32; BLOCK];
             let start = Instant::now();
             let mut sent: u64 = 0;
-            let state = app.state::<AppState>().inner().clone();
-            loop {
-                if state.shutting_down.load(Ordering::Relaxed) {
-                    break;
-                }
+            while !clock_state.shutting_down.load(Ordering::Relaxed) {
                 let due = (start.elapsed().as_secs_f64() * 48_000.0) as u64;
                 if due < sent + BLOCK as u64 {
                     std::thread::sleep(Duration::from_millis(1));
@@ -187,25 +195,65 @@ pub fn spawn_bridge(app: AppHandle, mut mixer: ct_engine::mixer::OutputMixer) {
                 }
                 mixer.render(&mut buf);
                 sent += BLOCK as u64;
+                if let Ok(mut chunk) = tx.write_chunk(BLOCK) {
+                    let (a, b) = chunk.as_mut_slices();
+                    a.copy_from_slice(&buf[..a.len()]);
+                    b.copy_from_slice(&buf[a.len()..]);
+                    chunk.commit_all();
+                }
+            }
+        })
+        .expect("spawn bridge clock");
+    std::thread::Builder::new()
+        .name("claude-bridge".into())
+        .spawn(move || {
+            #[cfg(windows)]
+            let _period = win::TimerResolution::new();
+            let in_flight = Arc::new(std::sync::atomic::AtomicU32::new(0));
+            let mut block = vec![0f32; BLOCK];
+            let mut bytes = vec![0u8; BLOCK * 4];
+            let mut text = String::with_capacity(8 + BLOCK * 4 * 4 / 3 + 4);
+            while !state.shutting_down.load(Ordering::Relaxed) {
+                let Ok(chunk) = rx.read_chunk(BLOCK) else {
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
+                };
+                let (a, b) = chunk.as_slices();
+                block[..a.len()].copy_from_slice(a);
+                block[a.len()..].copy_from_slice(b);
+                chunk.commit_all();
                 if let Ok(mut probe) = state.bridge_probe.try_lock() {
                     if let Some(v) = probe.as_mut() {
-                        v.extend_from_slice(&buf);
+                        v.extend_from_slice(&block);
                     }
                 }
                 if !state.claude_mic_active.load(Ordering::Relaxed) {
                     continue;
                 }
-                let bytes: Vec<u8> = buf.iter().flat_map(|v| v.to_le_bytes()).collect();
-                let msg = format!(
-                    "ct:a:{}",
-                    base64::engine::general_purpose::STANDARD.encode(bytes)
-                );
+                if in_flight.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
+                    continue; // the page side covers a dropped block with silence
+                }
+                for (d, v) in bytes.chunks_exact_mut(4).zip(&block) {
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
+                text.clear();
+                text.push_str("ct:a:");
+                base64::engine::general_purpose::STANDARD.encode_string(&bytes, &mut text);
                 #[cfg(windows)]
                 {
-                    let _ = app.run_on_main_thread(move || win::post(&msg));
+                    let msg = text.clone();
+                    let counter = in_flight.clone();
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    if app
+                        .run_on_main_thread(move || {
+                            win::post(&msg);
+                            counter.fetch_sub(1, Ordering::Relaxed);
+                        })
+                        .is_err()
+                    {
+                        in_flight.fetch_sub(1, Ordering::Relaxed);
+                    }
                 }
-                #[cfg(not(windows))]
-                drop(msg);
             }
         })
         .expect("spawn bridge");
@@ -340,12 +388,20 @@ mod win {
                 })),
                 &mut token,
             );
+            let fail_app = app2.clone();
             let _ = core.add_ProcessFailed(
-                &webview2_com::ProcessFailedEventHandler::create(Box::new(|_, args| {
+                &webview2_com::ProcessFailedEventHandler::create(Box::new(move |_, args| {
                     if let Some(args) = args {
                         let mut kind = Default::default();
                         args.ProcessFailedKind(&mut kind)?;
                         log::warn!("Claude window: a WebView2 process failed (kind {})", kind.0);
+                        // The browser process is gone: forget its id so a new
+                        // program that gets the same id is never recorded.
+                        if kind.0 == 0 {
+                            let st = fail_app.state::<AppState>();
+                            st.claude_pid.store(0, Ordering::Relaxed);
+                            st.claude_mic_active.store(false, Ordering::Relaxed);
+                        }
                     }
                     Ok(())
                 })),
@@ -379,6 +435,7 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
         Some("mic") => {
             let active = v.get("active").and_then(|a| a.as_bool()).unwrap_or(false);
             state.claude_mic_active.store(active, Ordering::Relaxed);
+            crate::audio::refresh_mic(app);
             log::info!(
                 "Claude window microphone {}",
                 if active { "in use" } else { "released" }
@@ -389,6 +446,9 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
             );
         }
         Some("ready") => {
+            // a new page: it has not asked for the microphone yet
+            state.claude_mic_active.store(false, Ordering::Relaxed);
+            crate::audio::refresh_mic(app);
             let _ = app.emit("claude-window", serde_json::json!({"open": true}));
         }
         Some("source") => log::info!(

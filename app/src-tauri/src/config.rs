@@ -16,9 +16,11 @@ pub struct Hotkeys {
 impl Default for Hotkeys {
     fn default() -> Self {
         Hotkeys {
-            mute_claude_to_discord: "Ctrl+Alt+D".into(),
-            mute_mic: "Ctrl+Alt+M".into(),
-            push_to_talk_claude: "Ctrl+Alt+Space".into(),
+            // Function keys: Ctrl+Alt+letter is AltGr+letter on Danish and
+            // many other keyboards (Ctrl+Alt+M types µ).
+            mute_claude_to_discord: "Ctrl+Shift+F9".into(),
+            mute_mic: "Ctrl+Shift+F10".into(),
+            push_to_talk_claude: "Ctrl+Shift+F12".into(),
         }
     }
 }
@@ -164,6 +166,9 @@ impl Config {
     fn migrate(mut self) -> Config {
         // Version 1 is the first format; future versions convert here.
         if self.version > CONFIG_VERSION {
+            // keep the newer file: going back to that version restores it
+            let path = crate::paths::config_file();
+            let _ = std::fs::copy(&path, path.with_extension("json.newer"));
             log::warn!(
                 "config.json is from a newer Claude Talk (v{}); unknown settings are ignored",
                 self.version

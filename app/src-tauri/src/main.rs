@@ -31,6 +31,9 @@ pub fn shutdown(app: &AppHandle) {
         // dropping the host stops and joins every audio thread
         let host = st.audio.lock().ok().and_then(|mut g| g.take());
         drop(host);
+        // Nothing feeds Discord's microphone any more: give Discord its own
+        // microphone back (the next start points it at Claude Talk again).
+        discord::restore();
     }
     log::info!("Claude Talk quit");
     log::logger().flush();
@@ -39,12 +42,6 @@ pub fn shutdown(app: &AppHandle) {
 
 fn main() {
     logging::init();
-    // Used by the uninstaller: give Discord its own microphone back, then exit.
-    if std::env::args().any(|a| a == "--restore-audio") {
-        discord::restore();
-        log::logger().flush();
-        return;
-    }
     // Run elevated by the NSIS installer / uninstaller.
     #[cfg(windows)]
     for (flag, f) in [

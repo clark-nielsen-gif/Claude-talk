@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api, type AppInfo, type EchoMode, type Hotkeys, type Theme } from '../api';
+import { api, type EchoMode, type Hotkeys, type Theme } from '../api';
 import { Switch } from '../components';
 import { useApp, useT } from '../context';
-import { fill } from '../i18n';
 
 /** Records a key combination like "Ctrl+Alt+D". */
 function KeyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -16,7 +15,10 @@ function KeyPicker({ value, onChange }: { value: string; onChange: (v: string) =
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
       const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean) as string[];
       if (mods.length === 0) return; // a global shortcut needs a modifier
-      const key = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : e.code === 'Space' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.code;
+      // letters, digits, F-keys and Space only: other keys (Æ, Ø, Å, "+")
+      // cannot be registered as global shortcuts reliably
+      const key = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : e.code === 'Space' ? 'Space' : /^F\d{1,2}$/.test(e.code) ? e.code : null;
+      if (!key) return;
       onChange([...mods, key].join('+'));
       setListening(false);
     };
@@ -31,19 +33,10 @@ function KeyPicker({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-export function Settings({ info }: { info: AppInfo }) {
+export function Settings() {
   const t = useT();
   const { config, update, toast } = useApp();
-  const [external, setExternal] = useState<string | null>(config.externalClaude ?? null);
-  const chooseExternal = async (v: string) => {
-    const exe = v === 'off' ? null : v;
-    try {
-      await api.setExternalClaude(exe);
-      setExternal(exe);
-    } catch {
-      toast(t.errors.generic);
-    }
-  };
+
   const hk = (patch: Partial<Hotkeys>) => update({ hotkeys: { ...config.hotkeys, ...patch } });
   const seg = <T extends string>(value: T, options: [T, string][], set: (v: T) => void, label: string) => (
     <div className="segmented" role="group" aria-label={label}>
@@ -88,28 +81,6 @@ export function Settings({ info }: { info: AppInfo }) {
           <Switch on={config.pushToTalk} label={t.settings.pttEnable} onChange={(v) => update({ pushToTalk: v })} />
         </div>
       </div>
-
-      {info.extraCable && (
-        <>
-          <h2 className="section-title">{t.settings.externalTitle}</h2>
-          <div className="panel">
-            <div className="row">
-              <div className="text">
-                <span className="label">{t.settings.externalLabel}</span>
-                <span className="small">{fill(t.settings.externalBody, { cable: info.extraCable.name, mic: info.extraCable.output ?? info.extraCable.name })}</span>
-              </div>
-            </div>
-            <div className="row">
-              {seg<string>(external ?? 'off', [['off', t.settings.externalOff], ['claude.exe', t.settings.externalApp], ['chrome.exe', 'Chrome'], ['msedge.exe', 'Edge']], chooseExternal, t.settings.externalLabel)}
-            </div>
-            {external && (
-              <div className="row">
-                <span className="small">{fill(t.settings.externalHow, { mic: info.extraCable.output ?? info.extraCable.name })}</span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       <div className="panel">
         <div className="row">

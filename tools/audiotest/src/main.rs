@@ -575,7 +575,7 @@ mod imp {
             let cable = record(
                 CaptureTarget::Device(DeviceSelector::FirstMatching(
                     Flow::Capture,
-                    vec!["claude talk – til discord".into(), "claude talk".into()],
+                    ct_engine::win::host::cable_capture_patterns(),
                 )),
                 4.0,
                 |_| {},
@@ -644,13 +644,13 @@ mod imp {
                     CaptureTarget::Process(ProcessTarget::ExeNames(vec!["fakemic.exe".into()])),
                     CaptureTarget::Device(DeviceSelector::FirstMatching(
                         Flow::Capture,
-                        vec!["claude talk – til discord".into(), "claude talk".into()],
+                        ct_engine::win::host::cable_capture_patterns(),
                     )),
                     CaptureTarget::Process(ProcessTarget::ExeNames(vec!["discord.exe".into()])),
                     // what Claude Talk plays into the cable, before VB-CABLE's own buffer
                     CaptureTarget::DeviceLoopback(DeviceSelector::FirstMatching(
                         Flow::Render,
-                        vec!["claude talk – intern".into(), "cable input".into()],
+                        ct_engine::win::host::cable_render_patterns(),
                     )),
                 ],
                 8.0,
@@ -749,7 +749,7 @@ mod imp {
                 let r = record(
                     CaptureTarget::Device(DeviceSelector::FirstMatching(
                         Flow::Capture,
-                        vec!["claude talk – til discord".into(), "claude talk".into()],
+                        ct_engine::win::host::cable_capture_patterns(),
                     )),
                     3.0,
                     |_| {},
@@ -945,7 +945,7 @@ mod imp {
             let cable = record(
                 CaptureTarget::Device(DeviceSelector::FirstMatching(
                     Flow::Capture,
-                    vec!["claude talk – til discord".into(), "claude talk".into()],
+                    ct_engine::win::host::cable_capture_patterns(),
                 )),
                 3.0,
                 |_| {},
@@ -1186,7 +1186,7 @@ mod imp {
         // D. (information) the microphone the engine would pick never is our
         // own cable, and whether the CI sink's virtual mic echoes its speaker
         {
-            let own: Vec<String> = devices::OWN_VIRTUAL_DEVICES
+            let own: Vec<String> = devices::NOT_A_MICROPHONE
                 .iter()
                 .map(|s| s.to_string())
                 .collect();

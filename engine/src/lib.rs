@@ -21,3 +21,15 @@ pub const ENGINE_CHANNELS: usize = 2;
 
 #[cfg(windows)]
 pub mod win;
+
+/// Flushes denormal floats to zero in the calling thread (filters decaying
+/// towards silence would otherwise cost many times the CPU). Call once at
+/// the start of every audio thread.
+pub fn flush_denormals() {
+    #[cfg(target_arch = "x86_64")]
+    #[allow(deprecated)]
+    unsafe {
+        use std::arch::x86_64::{_mm_getcsr, _mm_setcsr};
+        _mm_setcsr(_mm_getcsr() | 0x8040); // FTZ | DAZ
+    }
+}

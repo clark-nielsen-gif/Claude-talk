@@ -26,7 +26,7 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
    - [ ] Din ven hører ikke Claude to gange, og Claude hører ikke sig selv
 10. **Knapperne.** Tryk "Gør Claude stille" og derefter "Slå min mikrofon fra".
     - [ ] Din ven hører ikke Claude, men du gør. Derefter hører hverken din ven eller Claude dig.
-    - [ ] Genvejstasterne Ctrl+Alt+D og Ctrl+Alt+M gør det samme
+    - [ ] Genvejstasterne Ctrl+Shift+F9 og Ctrl+Shift+F10 gør det samme
 11. **Store kontakt fra.** Slå "Claude i Discord" fra.
     - [ ] Din ven hører dig, men ikke Claude. Claude hører hverken dig eller Discord.
 12. **Genstart Discord** midt i opkaldet.

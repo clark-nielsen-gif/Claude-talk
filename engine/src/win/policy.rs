@@ -137,14 +137,12 @@ pub fn interface_path(endpoint_id: &str) -> String {
 
 /// Endpoint id of our virtual microphone (the capture side of the cable).
 pub fn cable_capture_id() -> Option<String> {
-    let patterns = vec![
-        "claude talk – til discord".to_string(),
-        "claude talk".to_string(),
-        "cable output".to_string(),
-    ];
-    devices::resolve(&DeviceSelector::FirstMatching(Flow::Capture, patterns))
-        .ok()
-        .map(|(_, e)| e.id)
+    devices::resolve(&DeviceSelector::FirstMatching(
+        Flow::Capture,
+        devices::patterns(devices::CABLE_CAPTURE_PATTERNS),
+    ))
+    .ok()
+    .map(|(_, e)| e.id)
 }
 
 /// Every running process of the given executables (all of Discord's
@@ -220,33 +218,47 @@ pub fn restore_discord(exes: &[String]) -> usize {
 const STORE: &str =
     r"Software\Microsoft\Internet Explorer\LowRegistry\Audio\PolicyConfig\PropertyStore";
 
+/// Newer Windows (24H2 / Server 2025) keeps per-program devices here: one
+/// subkey per program, one value per role pointing at a device.
+const STORE_NEW: &str = r"Software\Microsoft\Multimedia\Audio\DefaultEndpoint";
+
+/// Removes every stored per-program setting that points at our cable (only
+/// Claude Talk sets those), in both places Windows uses. Other settings –
+/// such as a program's output device – stay untouched.
 fn remove_stored_cable_entries() -> usize {
-    use windows::Win32::System::Registry::*;
     let Some(id) = cable_capture_id() else {
         return 0;
     };
     let id = id.to_lowercase();
-    let mut removed = 0;
-    unsafe {
-        let mut root = HKEY::default();
-        if RegOpenKeyExW(
+    [STORE, STORE_NEW]
+        .iter()
+        .map(|store| unsafe { remove_values_pointing_at(store, &id) })
+        .sum()
+}
+
+unsafe fn remove_values_pointing_at(store: &str, endpoint_id: &str) -> usize {
+    use windows::Win32::System::Registry::*;
+    let mut root = HKEY::default();
+    if unsafe {
+        RegOpenKeyExW(
             HKEY_CURRENT_USER,
-            &HSTRING::from(STORE),
+            &HSTRING::from(store),
             None,
-            KEY_READ | KEY_WRITE,
+            KEY_READ,
             &mut root,
         )
-        .is_err()
-        {
-            return 0;
-        }
-        // subkeys are opaque ids; each has a default value + device values
-        let mut i = 0u32;
-        let mut to_delete = Vec::new();
-        loop {
-            let mut name = [0u16; 512];
-            let mut len = name.len() as u32;
-            if RegEnumKeyExW(
+    }
+    .is_err()
+    {
+        return 0;
+    }
+    let mut subkeys = Vec::new();
+    let mut i = 0u32;
+    loop {
+        let mut name = [0u16; 512];
+        let mut len = name.len() as u32;
+        let r = unsafe {
+            RegEnumKeyExW(
                 root,
                 i,
                 Some(windows::core::PWSTR(name.as_mut_ptr())),
@@ -256,85 +268,73 @@ fn remove_stored_cable_entries() -> usize {
                 None,
                 None,
             )
-            .is_err()
-            {
+        };
+        if r.is_err() {
+            break;
+        }
+        subkeys.push(String::from_utf16_lossy(&name[..len as usize]));
+        i += 1;
+    }
+    let mut removed = 0;
+    for sub in subkeys {
+        let mut key = HKEY::default();
+        if unsafe {
+            RegOpenKeyExW(
+                root,
+                &HSTRING::from(&sub),
+                None,
+                KEY_READ | KEY_SET_VALUE,
+                &mut key,
+            )
+        }
+        .is_err()
+        {
+            continue;
+        }
+        let mut doomed = Vec::new();
+        let mut j = 0u32;
+        loop {
+            let mut vname = [0u16; 1024];
+            let mut vlen = vname.len() as u32;
+            let mut data = vec![0u8; 4096];
+            let mut dlen = data.len() as u32;
+            let r = unsafe {
+                RegEnumValueW(
+                    key,
+                    j,
+                    Some(windows::core::PWSTR(vname.as_mut_ptr())),
+                    &mut vlen,
+                    None,
+                    None,
+                    Some(data.as_mut_ptr()),
+                    Some(&mut dlen),
+                )
+            };
+            if r.is_err() {
                 break;
             }
-            let sub = String::from_utf16_lossy(&name[..len as usize]);
-            let mut key = HKEY::default();
-            if RegOpenKeyExW(root, &HSTRING::from(&sub), None, KEY_READ, &mut key).is_ok() {
-                let mut j = 0u32;
-                loop {
-                    let mut vname = [0u16; 1024];
-                    let mut vlen = vname.len() as u32;
-                    let mut data = vec![0u8; 4096];
-                    let mut dlen = data.len() as u32;
-                    if RegEnumValueW(
-                        key,
-                        j,
-                        Some(windows::core::PWSTR(vname.as_mut_ptr())),
-                        &mut vlen,
-                        None,
-                        None,
-                        Some(data.as_mut_ptr()),
-                        Some(&mut dlen),
-                    )
-                    .is_err()
-                    {
-                        break;
-                    }
-                    let words: Vec<u16> = data[..dlen as usize]
-                        .chunks_exact(2)
-                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                        .collect();
-                    let text = String::from_utf16_lossy(&words).to_lowercase();
-                    let vn = String::from_utf16_lossy(&vname[..vlen as usize]).to_lowercase();
-                    if text.contains(&id) && (vn.contains("discord") || sub_is_discord(key)) {
-                        to_delete.push(sub.clone());
-                        break;
-                    }
-                    j += 1;
-                }
-                let _ = RegCloseKey(key);
+            let words: Vec<u16> = data[..dlen as usize]
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            if String::from_utf16_lossy(&words)
+                .to_lowercase()
+                .contains(endpoint_id)
+            {
+                doomed.push(vname[..vlen as usize].to_vec());
             }
-            i += 1;
+            j += 1;
         }
-        for sub in to_delete {
-            if RegDeleteTreeW(root, &HSTRING::from(&sub)).is_ok() {
+        for mut v in doomed {
+            v.push(0);
+            if unsafe { RegDeleteValueW(key, windows::core::PCWSTR(v.as_ptr())) }.is_ok() {
                 removed += 1;
             }
         }
-        let _ = RegCloseKey(root);
+        let _ = unsafe { RegCloseKey(key) };
     }
+    let _ = unsafe { RegCloseKey(root) };
     removed
-}
-
-/// The key's default value names the program the entry belongs to.
-unsafe fn sub_is_discord(key: windows::Win32::System::Registry::HKEY) -> bool {
-    use windows::Win32::System::Registry::*;
-    let mut data = vec![0u8; 2048];
-    let mut dlen = data.len() as u32;
-    if unsafe {
-        RegQueryValueExW(
-            key,
-            None,
-            None,
-            None,
-            Some(data.as_mut_ptr()),
-            Some(&mut dlen),
-        )
-    }
-    .is_err()
-    {
-        return false;
-    }
-    let words: Vec<u16> = data[..dlen as usize]
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-        .collect();
-    String::from_utf16_lossy(&words)
-        .to_lowercase()
-        .contains("discord")
 }
 
 /// `IPolicyConfig` (undocumented, used by the Sound control panel and many

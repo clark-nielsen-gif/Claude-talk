@@ -51,7 +51,7 @@ $cap = $after | Where-Object { $_.Flow -eq 'Capture' -and $_.FriendlyName -like 
 $ren = $after | Where-Object { $_.Flow -eq 'Render' -and $_.FriendlyName -like "Claude Talk $dash intern*" }
 Check 'discord_microphone_named' ($null -ne $cap) @{ capture = @($cap | ForEach-Object FriendlyName); render = @($ren | ForEach-Object FriendlyName) }
 Check 'cable_render_named' ($null -ne $ren) @($ren | ForEach-Object FriendlyName)
-$marker = Join-Path $env:ProgramData 'Claude Talk\cable-installed-by-claude-talk'
+$marker = Join-Path $env:ProgramFiles 'Claude Talk\vbcable\installed-by-claude-talk'
 Check 'cable_marked_as_ours' (Test-Path $marker) $marker
 # the cable's own driver (MEDIA class), not the audio endpoints Windows creates for it
 $driver = Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceClass -eq 'MEDIA' -and ($_.DeviceName -like '*VB-Audio*' -or $_.Manufacturer -like '*VB-Audio*') } | Select-Object -First 1 DeviceName, DriverVersion, Signer, Manufacturer
@@ -80,13 +80,14 @@ if ($exited) { throw 'the app did not keep running' }
 Start-Sleep 5
 # the program and its WebView2 helpers (none while the Claude window is closed)
 function Tree { Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq $app.Id -or $_.ParentProcessId -eq $app.Id } }
-$cpu0 = (Get-Process -Id (Tree).ProcessId | Measure-Object TotalProcessorTime -Sum).Sum
+function CpuSeconds($p) { ($p | ForEach-Object { $_.TotalProcessorTime.TotalSeconds } | Measure-Object -Sum).Sum }
+$cpu0 = CpuSeconds (Get-Process -Id (Tree).ProcessId)
 $w0 = Get-Date
 Start-Sleep 10
 $procs = Get-Process -Id (Tree).ProcessId
-$cpu1 = ($procs | Measure-Object TotalProcessorTime -Sum).Sum
+$cpu1 = CpuSeconds $procs
 $cores = [Environment]::ProcessorCount
-$cpuPct = [math]::Round(100 * ($cpu1 - $cpu0).TotalSeconds / ((Get-Date) - $w0).TotalSeconds / $cores, 2)
+$cpuPct = [math]::Round(100 * ($cpu1 - $cpu0) / ((Get-Date) - $w0).TotalSeconds / $cores, 2)
 $ramMB = [math]::Round(($procs | Measure-Object WorkingSet64 -Sum).Sum / 1MB, 1)
 Check 'performance' ($startS -lt 2 -and $cpuPct -lt 3 -and $ramMB -lt 150) @{ start_s = $startS; cpu_percent = $cpuPct; ram_mb = $ramMB; processes = $procs.Count; cores = $cores }
 $runKey = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue
@@ -112,7 +113,7 @@ $end = Endpoints
 $r.endpoints_end = $end
 $left = @($end | Where-Object { $_.FriendlyName -like '*Claude Talk*' -or $_.FriendlyName -like '*VB-Audio Virtual Cable*' })
 Check 'virtual_microphone_removed' ($left.Count -eq 0) @($left | ForEach-Object FriendlyName)
-Check 'program_data_removed' (-not (Test-Path $marker)) $marker
+Check 'cable_files_removed' (-not (Test-Path (Split-Path $marker))) (Split-Path $marker)
 
 } catch {
     Check 'script_error' $false ($_ | Out-String)

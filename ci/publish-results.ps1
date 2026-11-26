@@ -18,7 +18,7 @@ try {
     git config user.name 'claude-talk-ci'
     git config user.email 'ci@users.noreply.github.com'
     git add -A
-    git commit -q -m "CI results: $Job (run $($env:GITHUB_RUN_ID))"
+    git commit -q --allow-empty -m "CI results: $Job (run $($env:GITHUB_RUN_ID))"
     $url = "https://x-access-token:$($env:GITHUB_TOKEN)@github.com/$($env:GITHUB_REPOSITORY).git"
     git push -q --force $url "HEAD:refs/heads/$branch"
     Write-Host "Results published to branch $branch"

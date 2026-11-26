@@ -68,6 +68,9 @@ pub enum StreamState {
     WaitingForProcess = 3,
     Failed = 4,
     Stopped = 5,
+    /// Not needed right now: the device is closed (capture streams still
+    /// deliver real-time silence).
+    Paused = 6,
 }
 
 impl StreamState {
@@ -76,6 +79,7 @@ impl StreamState {
             1 => StreamState::Running,
             2 => StreamState::WaitingForDevice,
             3 => StreamState::WaitingForProcess,
+            6 => StreamState::Paused,
             4 => StreamState::Failed,
             5 => StreamState::Stopped,
             _ => StreamState::Starting,
@@ -96,6 +100,8 @@ pub struct StreamStatus {
     /// Set by the control thread to make the stream reopen its device (e.g.
     /// the Windows default device changed).
     pub restart_requested: AtomicBool,
+    /// Set by the control thread: keep the device closed until cleared.
+    pub paused: AtomicBool,
     pub device_name: Mutex<String>,
 }
 
@@ -120,6 +126,13 @@ impl StreamHandle {
     pub fn request_restart(&self) {
         self.status.restart_requested.store(true, Ordering::Relaxed);
         self.wake.set();
+    }
+
+    /// Closes the device (true) or opens it again (false).
+    pub fn set_paused(&self, paused: bool) {
+        if self.status.paused.swap(paused, Ordering::Relaxed) != paused {
+            self.wake.set();
+        }
     }
 }
 
@@ -155,9 +168,10 @@ impl Drop for Event {
     }
 }
 
-struct Mmcss(HANDLE);
+/// The calling thread runs in Windows' "Pro Audio" class while this lives.
+pub struct Mmcss(HANDLE);
 impl Mmcss {
-    fn enter() -> Option<Mmcss> {
+    pub fn enter() -> Option<Mmcss> {
         let mut idx = 0u32;
         unsafe { AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut idx) }
             .ok()
@@ -226,6 +240,9 @@ impl Ctx {
     fn take_restart(&self) -> bool {
         self.status.restart_requested.swap(false, Ordering::Relaxed)
     }
+    fn paused(&self) -> bool {
+        self.status.paused.load(Ordering::Relaxed)
+    }
     /// Sleeps up to `d`, waking early on stop/restart. Returns false on stop.
     fn sleep(&self, d: Duration) -> bool {
         unsafe { WaitForSingleObject(self.wake.0, d.as_millis() as u32) };
@@ -249,12 +266,29 @@ fn supervise(
         .spawn(move || {
             let _com = ComGuard::new();
             let _mmcss = Mmcss::enter();
+            crate::flush_denormals();
             super::high_res_timer(); // the silence feed while waiting is clock-paced
             let mut backoff = Duration::from_millis(100);
             let mut first_wait = true;
             loop {
                 if ctx.stopping() {
                     break;
+                }
+                if ctx.paused() {
+                    // device closed; keep feeding `idle` (real-time silence)
+                    ctx.status.set(StreamState::Paused);
+                    let mut first = true;
+                    while ctx.paused() {
+                        idle(first);
+                        first = false;
+                        if !ctx.sleep(Duration::from_millis(10)) {
+                            break;
+                        }
+                    }
+                    if ctx.stopping() {
+                        break;
+                    }
+                    backoff = Duration::from_millis(100);
                 }
                 ctx.status.set(StreamState::Starting);
                 let started = Instant::now();
@@ -390,14 +424,16 @@ pub fn spawn_render(
 }
 
 #[implement(IActivateAudioInterfaceCompletionHandler, IAgileObject)]
-struct ActivationDone(HANDLE);
+/// Holds its own reference to the event: after a timeout the late callback
+/// must still find a valid handle.
+struct ActivationDone(Arc<Event>);
 
 impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
     fn ActivateCompleted(
         &self,
         _op: Ref<IActivateAudioInterfaceAsyncOperation>,
     ) -> windows::core::Result<()> {
-        unsafe { SetEvent(self.0) }
+        unsafe { SetEvent((self.0).0) }
     }
 }
 
@@ -424,8 +460,8 @@ fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
             pBlobData: &params as *const _ as *mut u8,
         };
     }
-    let done = Event::new()?;
-    let handler: IActivateAudioInterfaceCompletionHandler = ActivationDone(done.0).into();
+    let done = Arc::new(Event::new()?);
+    let handler: IActivateAudioInterfaceCompletionHandler = ActivationDone(done.clone()).into();
     let op = unsafe {
         ActivateAudioInterfaceAsync(
             VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
@@ -530,12 +566,18 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         2
     };
     let mut last_data = Instant::now();
+    // silence fed since the program went quiet: (since, frames sent)
+    let mut quiet: Option<(Instant, u64)> = None;
+    // A quiet program sends no packets; look every 5 ms so the silence that
+    // replaces them is on time (late silence would make the routes underrun
+    // and grow their buffers).
+    let timeout = if fill_silence { 5 } else { 30 };
     let ended = loop {
-        let w = unsafe { WaitForMultipleObjects(&handles[..n_handles], false, 30) };
+        let w = unsafe { WaitForMultipleObjects(&handles[..n_handles], false, timeout) };
         if ctx.stopping() {
             break Ended::Stop;
         }
-        if ctx.take_restart() {
+        if ctx.take_restart() || ctx.paused() {
             break Ended::Restart;
         }
         if n_handles == 3 && w.0 == WAIT_OBJECT_0.0 + 2 {
@@ -580,19 +622,21 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         let now = Instant::now();
         if got {
             last_data = now;
-        } else if fill_silence && w == WAIT_TIMEOUT {
+            quiet = None;
+        } else if fill_silence && now.duration_since(last_data) >= Duration::from_millis(15) {
             // Loopback streams deliver nothing while the program is silent.
-            // Keep the downstream buffers moving with silence so mixing
-            // continues and drift control stays locked.
-            let gap = now.duration_since(last_data);
-            if gap >= Duration::from_millis(30) {
-                let frames = (gap.as_secs_f64() * ENGINE_RATE as f64) as usize;
-                let frames = frames.min(ENGINE_RATE as usize / 10);
+            // Keep the downstream buffers moving with silence, sample for
+            // sample in real time from the last packet, so mixing continues
+            // and drift control stays locked.
+            let (since, sent) = quiet.get_or_insert((last_data, 0));
+            let due = (now.duration_since(*since).as_secs_f64() * ENGINE_RATE as f64) as u64;
+            let frames = due.saturating_sub(*sent).min(ENGINE_RATE as u64 / 10) as usize;
+            if frames > 0 {
                 fanout.push(None, ENGINE_CHANNELS, frames);
+                *sent += frames as u64;
                 ctx.status
                     .silence_filled_frames
                     .fetch_add(frames as u64, Ordering::Relaxed);
-                last_data = now;
             }
         }
     };
@@ -640,13 +684,19 @@ fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended
         Ok(v) => v,
         Err(e) => return e.into(),
     };
+    // Keep 1.5 device periods queued, not the whole buffer (shared-mode
+    // buffers are often ~22 ms; a full one would add that as latency).
+    let mut period_hns = 0i64;
+    let _ = unsafe { client.GetDevicePeriod(Some(&mut period_hns), None) };
+    let period_frames = ((period_hns.max(30_000) as u64 * ENGINE_RATE as u64) / 10_000_000) as u32;
+    let queue_frames = (period_frames + period_frames / 2).min(buffer_frames);
     ctx.status
         .period_frames
-        .store(buffer_frames, Ordering::Relaxed);
-    // pre-roll one buffer of silence so the first period never underruns
+        .store(queue_frames, Ordering::Relaxed);
+    // pre-roll the queue with silence so the first period never underruns
     unsafe {
-        if render.GetBuffer(buffer_frames).is_ok() {
-            let _ = render.ReleaseBuffer(buffer_frames, AUDCLNT_BUFFERFLAGS_SILENT.0 as u32);
+        if render.GetBuffer(queue_frames).is_ok() {
+            let _ = render.ReleaseBuffer(queue_frames, AUDCLNT_BUFFERFLAGS_SILENT.0 as u32);
         }
     }
     if let Err(e) = unsafe { client.Start() } {
@@ -661,7 +711,7 @@ fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended
         if ctx.stopping() {
             break Ended::Stop;
         }
-        if ctx.take_restart() {
+        if ctx.take_restart() || ctx.paused() {
             break Ended::Restart;
         }
         if w == WAIT_TIMEOUT {
@@ -676,7 +726,7 @@ fn run_render(ctx: &Ctx, sel: &DeviceSelector, mixer: &mut OutputMixer) -> Ended
             Ok(p) => p,
             Err(e) => break e.into(),
         };
-        let avail = buffer_frames.saturating_sub(padding);
+        let avail = queue_frames.saturating_sub(padding);
         if avail == 0 {
             continue;
         }

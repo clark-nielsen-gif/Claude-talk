@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api, type Labeled, type Matrix, type MixerChoices } from '../api';
+import { api, type AppInfo, type Labeled, type Matrix, type MixerChoices } from '../api';
 import { Icon, Switch } from '../components';
 import { useApp, useT } from '../context';
 import { fill } from '../i18n';
@@ -63,9 +63,25 @@ function RemoveButton({ item, onRemove }: { item: Labeled; onRemove: () => void 
 }
 
 /** Sources × outputs, a volume per cell. Echo cells are locked, loops refused. */
-export function Advanced() {
+export function Advanced({ info }: { info: AppInfo }) {
   const t = useT();
   const { config, update, toast } = useApp();
+  const [external, setExternal] = useState<string | null>(config.externalClaude ?? null);
+  const chooseExternal = async (v: string) => {
+    const exe = v === 'off' ? null : v;
+    try {
+      await api.setExternalClaude(exe);
+      setExternal(exe);
+      reload();
+    } catch {
+      toast(t.errors.generic);
+    }
+  };
+  const seg = (value: string, options: [string, string][], set: (v: string) => void, label: string) => (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map(([v, l]) => <button key={v} aria-pressed={value === v} onClick={() => set(v)}>{l}</button>)}
+    </div>
+  );
   const [m, setM] = useState<Matrix | null>(null);
   const [adding, setAdding] = useState<null | 'source' | 'output'>(null);
   const [presets, setPresets] = useState(config.presets ?? []);
@@ -120,7 +136,7 @@ export function Advanced() {
                   if (c.state === 'locked' || c.state === 'loop') {
                     return (
                       <td key={o.id}>
-                        <div className="cell locked">{c.state === 'loop' ? t.advanced.loop : fill(t.advanced.locked, { who: c.who ?? '' })}</div>
+                        <div className="cell locked">{c.state === 'loop' ? t.advanced.loop : c.who === 'Du' ? t.advanced.lockedYou : fill(t.advanced.locked, { who: c.who ?? '' })}</div>
                       </td>
                     );
                   }
@@ -184,6 +200,29 @@ export function Advanced() {
           <button type="submit" className="btn secondary" disabled={!presetName.trim()}>{t.advanced.savePreset}</button>
         </form>
       </div>
+
+      {info.extraCable && (
+        <>
+          <h2 className="section-title">{t.settings.externalTitle}</h2>
+          <div className="panel">
+            <div className="row">
+              <div className="text">
+                <span className="label">{t.settings.externalLabel}</span>
+                <span className="small">{fill(t.settings.externalBody, { cable: info.extraCable.name, mic: info.extraCable.output ?? info.extraCable.name })}</span>
+              </div>
+            </div>
+            <div className="row">
+              {seg(external ?? 'off', [['off', t.settings.externalOff], ['claude.exe', t.settings.externalApp], ['chrome.exe', 'Chrome'], ['msedge.exe', 'Edge']], chooseExternal, t.settings.externalLabel)}
+            </div>
+            {external && (
+              <div className="row">
+                <span className="small">{fill(t.settings.externalHow, { mic: info.extraCable.output ?? info.extraCable.name })}</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
 
       <div className="panel">
         <div className="row">

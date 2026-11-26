@@ -159,6 +159,7 @@ pub fn open_place(app: AppHandle, place: String) -> Result<(), String> {
         "vbAudio" => "https://vb-audio.com/Cable/",
         "vbAudioDonate" => "https://shop.vb-audio.com/en/win-apps/11-vb-cable.html",
         "windowsUpdate" => "ms-settings:windowsupdate",
+        "support" => "https://github.com/clark-nielsen-gif/Claude-talk/issues/new",
         "download" => "https://github.com/clark-nielsen-gif/Claude-talk/releases/latest",
         "logs" => {
             return app
@@ -194,6 +195,7 @@ pub fn show_main(app: AppHandle) {
         let _ = w.show();
         let _ = w.set_focus();
     }
+    crate::audio::refresh_mic(&app);
 }
 
 #[tauri::command]

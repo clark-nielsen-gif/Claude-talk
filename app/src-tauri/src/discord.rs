@@ -26,6 +26,11 @@ pub fn spawn_watcher(app: AppHandle) {
             while !state.shutting_down.load(Ordering::Relaxed) {
                 let enabled = state.config.lock().map(|c| c.route_discord).unwrap_or(true);
                 let running = !policy::pids_of(&exes).is_empty();
+                if !enabled && running && policy::discord_routed_to_cable(&exes) == Some(true) {
+                    // "Restore normal sound settings" was pressed while Discord was closed
+                    let n = policy::restore_discord(&exes);
+                    log::info!("Discord's own microphone restored now that it runs ({n})");
+                }
                 if enabled && running {
                     match policy::discord_routed_to_cable(&exes) {
                         Some(false) => match policy::route_discord_to_cable(&exes) {
@@ -55,6 +60,11 @@ pub fn spawn_watcher(app: AppHandle) {
                     sessions::DiscordMic::Unknown => UNKNOWN,
                 };
                 state.discord_uses_cable.store(uses, Ordering::Relaxed);
+                state
+                    .discord_recording
+                    .store(mic != sessions::DiscordMic::Unknown, Ordering::Relaxed);
+                crate::audio::refresh_mic(&app);
+                follow_default_microphone(&state);
                 // Windows says "cable" but Discord still records elsewhere for
                 // a while: Discord picked a specific device or needs a restart.
                 // If its device setting is "Default", a restart fixes it.
@@ -94,6 +104,30 @@ pub fn spawn_watcher(app: AppHandle) {
             }
         })
         .expect("spawn discord watcher");
+}
+
+/// A new default microphone (headset plugged in, chosen in Windows): the
+/// microphone stream moves to it.
+#[cfg(windows)]
+fn follow_default_microphone(state: &crate::state::Inner) {
+    use ct_engine::graph::ids;
+    use ct_engine::win::devices::{self, DeviceSelector, Flow, NOT_A_MICROPHONE};
+    let g = state.audio.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(host) = g.as_ref() else { return };
+    let current = host.source_device(ids::MIC);
+    if current.is_empty() {
+        return; // not running (paused, waiting) or not a device
+    }
+    let wanted = devices::resolve(&DeviceSelector::DefaultExcluding(
+        Flow::Capture,
+        devices::patterns(NOT_A_MICROPHONE),
+    ))
+    .map(|(_, e)| e.name)
+    .unwrap_or_default();
+    if !wanted.is_empty() && wanted != current {
+        log::info!("microphone: default changed, moving from '{current}' to '{wanted}'");
+        host.restart_source(ids::MIC);
+    }
 }
 
 #[cfg(not(windows))]

@@ -32,6 +32,26 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
 
     let _com = ComGuard::new();
     let state = app.state::<AppState>().inner().clone();
+    // The tones would be heard in a call: not while Discord records us.
+    if state
+        .discord_uses_cable
+        .load(std::sync::atomic::Ordering::Relaxed)
+        == crate::discord::YES
+    {
+        return Err("error.selftestInCall".into());
+    }
+    // one at a time (the test sources share their ids)
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if RUNNING.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        return Err("error.selftestRunning".into());
+    }
+    struct Done;
+    impl Drop for Done {
+        fn drop(&mut self) {
+            RUNNING.store(false, std::sync::atomic::Ordering::Release);
+        }
+    }
+    let _done = Done;
     // (route name, party, output, tone)
     let tests = [
         ("micToDiscord", Party::User, ids::TO_DISCORD, 700.0),
@@ -64,11 +84,7 @@ pub fn run(app: &AppHandle) -> Result<Vec<RouteResult>, String> {
     let (fan, mut fan_h) = SourceFanout::new(1, ENGINE_RATE);
     let (mut mix, mut mix_h) = OutputMixer::new(2, ENGINE_CHANNELS, 480);
     connect(&mut fan_h, &mut mix_h, GainParams::new(0.0, false), 30.0);
-    let patterns = vec![
-        "claude talk – til discord".to_string(),
-        "claude talk".to_string(),
-        "cable output".to_string(),
-    ];
+    let patterns = ct_engine::win::host::cable_capture_patterns();
     let cap = spawn_capture(
         "selftest",
         CaptureTarget::Device(DeviceSelector::FirstMatching(Flow::Capture, patterns)),

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type AppInfo, type SelfTestResult } from '../api';
 import { Check } from '../components';
 import { useApp, useT } from '../context';
@@ -16,6 +16,17 @@ export function Help({ info }: { info: AppInfo }) {
   const { status, lang, toast } = useApp();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<SelfTestResult[] | null>(null);
+  // Plain verdict: dropouts in the last ~10 seconds, or a long delay.
+  const history = useRef<{ t: number; x: number }[]>([]);
+  const [choppy, setChoppy] = useState(false);
+  useEffect(() => {
+    if (!status) return;
+    const now = performance.now();
+    const h = history.current.filter((e) => now - e.t < 10_000);
+    h.push({ t: now, x: status.xruns });
+    history.current = h;
+    setChoppy(h[h.length - 1].x - h[0].x > 4800 || status.latencyMs > 80);
+  }, [status]);
 
   return (
     <div className="page">
@@ -26,7 +37,11 @@ export function Help({ info }: { info: AppInfo }) {
           <div className="text"><span className="label">{t.help.selfTest}</span><span className="small">{t.help.selfTestHint}</span></div>
           <button className="btn primary" disabled={running} onClick={async () => {
             setRunning(true);
-            try { setResults(await api.selfTest()); } finally { setRunning(false); }
+            try { setResults(await api.selfTest()); }
+            catch (e) {
+              const key = String(e).replace(/^error\./, '') as keyof typeof t.errors;
+              toast((t.errors[key] as string | undefined) ?? t.errors.generic);
+            } finally { setRunning(false); }
           }}>{running ? t.help.running : t.help.selfTest}</button>
         </div>
         {results && (
@@ -39,16 +54,30 @@ export function Help({ info }: { info: AppInfo }) {
       </div>
 
       <h2 className="section-title">{t.help.health}</h2>
-      <div className="panel stats">
-        <div className="stat"><span className="small">{t.help.latency}</span><span className="value">{status ? `${Math.round(status.latencyMs)} ms` : '–'}</span></div>
-        <div className="stat"><span className="small">{t.help.drift}</span><span className="value">{status ? `${Math.round(status.driftPpm)} ppm` : '–'}</span></div>
-        <div className="stat"><span className="small">{t.help.dropouts}</span><span className="value">{status ? status.xruns : '–'}</span></div>
+      <div className="panel">
+        <div className="row">
+          {!status
+            ? <Check state="wait">{t.help.healthStarting}</Check>
+            : choppy ? <Check state="warn">{t.help.healthChoppy}</Check> : <Check state="ok">{t.help.healthGood}</Check>}
+        </div>
+        <details className="row details">
+          <summary className="small">{t.help.numbers}</summary>
+          <div className="stats">
+            <div className="stat"><span className="small">{t.help.latency}</span><span className="value">{status ? `${Math.round(status.latencyMs)} ms` : '–'}</span></div>
+            <div className="stat"><span className="small">{t.help.drift}</span><span className="value">{status ? `${Math.round(status.driftPpm)} ppm` : '–'}</span></div>
+            <div className="stat"><span className="small">{t.help.dropouts}</span><span className="value">{status ? status.xruns : '–'}</span></div>
+          </div>
+        </details>
       </div>
 
       <div className="panel">
         <div className="row">
           <div className="text"><span className="label">{t.help.report}</span><span className="small">{t.help.reportHint}</span></div>
           <button className="btn secondary" onClick={async () => { try { await api.saveReport(); toast(t.help.reportSaved); } catch { toast(t.errors.report); } }}>{t.help.report}</button>
+        </div>
+        <div className="row">
+          <div className="text"><span className="label">{t.help.contact}</span><span className="small">{t.help.contactHint}</span></div>
+          <button className="btn secondary" onClick={() => api.openPlace('support')}>{t.help.contact}</button>
         </div>
         <div className="row">
           <div className="text"><span className="label">{t.help.logs}</span></div>
