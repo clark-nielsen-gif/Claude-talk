@@ -1,72 +1,50 @@
 # Milestone 0: prove the virtual-device foundation on real Windows runners
-# before anything else is built. Two candidates, tested side by side:
+# before anything else is built.
 #   A) VirtualDrivers "Virtual Audio Driver" (MIT), signed release 25.7.14
 #   B) Official VB-Audio VB-CABLE + Hi-Fi Cable, downloaded from vb-audio.com
-# Each job fails loudly if test signing is on, and uploads a JSON report.
+#
+# Hosted runners boot with test signing ON (image default, cannot be changed
+# without a reboot), so "it installed" proves nothing. Production signing is
+# proven from the signature chain of the packages Windows actually installed
+# (signtool verify /kp + Microsoft/legacy cross-signed chain).
 name: driver-proof
 
 on:
   workflow_dispatch:
   push:
-    paths: ['ci/driver-proof/**', '.github/workflows/driver-proof.yml']
+    paths: ['ci/driver-proof/**', 'ci/publish-results.ps1', '.github/workflows/driver-proof.yml']
 
 permissions:
-  contents: read
+  contents: write   # results are published to ci-results/* branches
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   virtualdrivers:
-    name: A · VirtualDrivers signed (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, windows-2025, windows-2022]
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true   # candidate A is expected to fail; the report is the evidence
+    name: A · VirtualDrivers signed
+    runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
-      - name: Baseline report
-        shell: powershell
-        run: ci/driver-proof/Report-Audio.ps1 -OutFile report-A-before.json -Label baseline
-
       - name: Download signed release 25.7.14
-        env: { GH_TOKEN: '${{ github.token }}' }
         shell: powershell
         run: |
+          New-Item -ItemType Directory results | Out-Null
           gh release download 25.7.14 -R VirtualDrivers/Virtual-Audio-Driver -D vad
-          Get-ChildItem vad | Format-Table Name, Length
           Get-ChildItem vad -Filter *.zip | ForEach-Object { Expand-Archive $_.FullName -DestinationPath vad\x -Force }
-          Get-ChildItem vad -Recurse -Include *.inf, *.sys, *.cat | Format-Table FullName
-
-      - name: Kernel-mode signature proof (independent of runner test signing)
+          Get-ChildItem vad -Recurse -Include *.inf, *.sys, *.cat | Format-Table FullName, Length
+      - name: Kernel-mode signature proof
         shell: powershell
-        continue-on-error: true   # expected to fail; keep going to record install behaviour
-        run: ci/driver-proof/Assert-KernelSignature.ps1 -Path vad -OutFile signature-A.json
-
-      - name: Install two instances
+        run: ci/driver-proof/Assert-KernelSignature.ps1 -Path vad -OutFile results\signature-A.json -NoThrow
+      - name: Target OS range in INF
         shell: powershell
-        run: |
-          $inf = (Get-ChildItem vad -Recurse -Filter VirtualAudioDriver.inf | Select-Object -First 1).FullName
-          pnputil /add-driver $inf /install
-          "pnputil exit=$LASTEXITCODE"
-          ci/driver-proof/RootDevice.ps1 -InfPath $inf -HardwareId 'ROOT\VirtualAudioDriver'
-          ci/driver-proof/RootDevice.ps1 -InfPath $inf -HardwareId 'ROOT\VirtualAudioDriver'
-          Start-Sleep 5
-          Get-PnpDevice | Where-Object HardwareID -contains 'ROOT\VirtualAudioDriver' | ForEach-Object {
-            $code = (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
-            "{0}  status={1}  problem={2}" -f $_.InstanceId, $_.Status, $code
-          }
-
-      - name: Endpoints after install
+        run: Select-String -Path (Get-ChildItem vad -Recurse -Filter *.inf).FullName -Pattern 'NT\$?(ARCH|amd64)' | ForEach-Object Line
+      - name: Publish results
         if: always()
         shell: powershell
-        run: |
-          ci/driver-proof/Report-Audio.ps1 -OutFile report-A-after.json -Label after-install
-          ci/driver-proof/List-Endpoints.ps1 -OutFile endpoints-A.json
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with: { name: 'proof-A-${{ matrix.os }}', path: '*.json' }
+        run: ci/publish-results.ps1 -Folder results -Job 'A-virtualdrivers'
 
   vbaudio:
     name: B · VB-CABLE + Hi-Fi Cable (${{ matrix.os }})
@@ -75,12 +53,15 @@ jobs:
       matrix:
         os: [windows-latest, windows-2025, windows-2022]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
       - name: Baseline report
         shell: powershell
-        run: ci/driver-proof/Report-Audio.ps1 -OutFile report-B-before.json -Label baseline
+        run: |
+          New-Item -ItemType Directory results | Out-Null
+          ci/driver-proof/Report-Audio.ps1 -OutFile results\01-baseline.json -Label baseline
 
       - name: Download official packages from vb-audio.com
         shell: powershell
@@ -88,89 +69,83 @@ jobs:
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack46.zip -OutFile cable.zip
           Invoke-WebRequest https://download.vb-audio.com/Download_CABLE/HiFiCableAsioBridgeSetup_v1007.zip -OutFile hifi.zip
-          Get-FileHash cable.zip, hifi.zip | Format-Table Algorithm, Hash, Path
+          Get-FileHash cable.zip, hifi.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Tee-Object results\sha256.txt
           Expand-Archive cable.zip -DestinationPath vb\cable -Force
           Expand-Archive hifi.zip -DestinationPath vb\hifi -Force
-          Get-ChildItem vb -Recurse | Format-Table FullName, Length
+          Copy-Item vb\cable\vbMmeCable64_win10.inf, vb\cable\readme.txt results\
+          Get-Content vb\cable\vbMmeCable64_win10.inf | Select-String -Pattern 'Manufacturer|NTamd64|ROOT\\|FriendlyName|szPname|DriverVer|Desc' | ForEach-Object Line
 
-      - name: Kernel-mode signature proof (independent of runner test signing)
+      - name: Install VB-CABLE silently, NO publisher pre-trust (detects a hidden driver dialog)
+        id: cable
+        timeout-minutes: 4
+        continue-on-error: true
         shell: powershell
         run: |
-          ci/driver-proof/Assert-KernelSignature.ps1 -Path vb\cable -OutFile signature-B-cable.json
-          ci/driver-proof/Assert-KernelSignature.ps1 -Path vb\hifi -OutFile signature-B-hifi.json
+          $p = Start-Process vb\cable\VBCABLE_Setup_x64.exe -ArgumentList '-i', '-h' -Wait -PassThru
+          "VB-CABLE setup exit=$($p.ExitCode)" | Tee-Object results\cable-install.txt
 
-      - name: Trust VB-Audio as driver publisher (suppresses the Windows Security dialog)
-        shell: powershell
-        run: |
-          $cat = Get-ChildItem vb\cable -Recurse -Filter *.cat | Select-Object -First 1
-          $cert = (Get-AuthenticodeSignature $cat.FullName).SignerCertificate
-          "Publisher: $($cert.Subject)  thumbprint: $($cert.Thumbprint)"
-          $store = New-Object Security.Cryptography.X509Certificates.X509Store 'TrustedPublisher', 'LocalMachine'
-          $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
-          $hcat = Get-ChildItem vb\hifi -Recurse -Filter *.cat -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($hcat) {
-            $h = (Get-AuthenticodeSignature $hcat.FullName).SignerCertificate
-            "Hi-Fi publisher: $($h.Subject)  thumbprint: $($h.Thumbprint)"
-            $store.Open('ReadWrite'); $store.Add($h); $store.Close()
-          }
-
-      - name: Silent install VB-CABLE (-i -h)
-        timeout-minutes: 5
-        shell: powershell
-        run: |
-          $exe = (Get-ChildItem vb\cable -Recurse -Filter 'VBCABLE_Setup_x64.exe').FullName
-          $p = Start-Process $exe -ArgumentList '-i', '-h' -Wait -PassThru
-          "VB-CABLE setup exit=$($p.ExitCode)"
-
-      - name: Silent install Hi-Fi Cable (-i -h)
-        timeout-minutes: 5
-        shell: powershell
-        run: |
-          $exe = Get-ChildItem vb\hifi -Recurse -Filter '*64*.exe' | Select-Object -First 1
-          if (-not $exe) { $exe = Get-ChildItem vb\hifi -Recurse -Filter '*.exe' | Select-Object -First 1 }
-          "Running $($exe.FullName)"
-          $p = Start-Process $exe.FullName -ArgumentList '-i', '-h' -Wait -PassThru
-          "Hi-Fi setup exit=$($p.ExitCode)"
-
-      - name: Endpoints after install
+      - name: Report after VB-CABLE
+        if: always()
         shell: powershell
         run: |
           Start-Sleep 5
-          ci/driver-proof/Report-Audio.ps1 -OutFile report-B-after.json -Label after-install
-          ci/driver-proof/List-Endpoints.ps1 -OutFile endpoints-B-before-rename.json
+          "cable step outcome=${{ steps.cable.outcome }}" | Tee-Object -Append results\cable-install.txt
+          ci/driver-proof/Report-Audio.ps1 -OutFile results\02-after-cable.json -Label after-cable
 
-      - name: Rename capture endpoints to the product names
+      - name: Install Hi-Fi Cable silently, NO publisher pre-trust
+        id: hifi
+        timeout-minutes: 4
+        continue-on-error: true
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
+          $p = Start-Process vb\hifi\HiFiCableAsioBridgeSetup.exe -ArgumentList '-i', '-h' -Wait -PassThru
+          "Hi-Fi setup exit=$($p.ExitCode)" | Tee-Object results\hifi-install.txt
+
+      - name: Report after Hi-Fi Cable
+        if: always()
+        shell: powershell
+        run: |
+          Start-Sleep 5
+          "hifi step outcome=${{ steps.hifi.outcome }}" | Tee-Object -Append results\hifi-install.txt
+          ci/driver-proof/Report-Audio.ps1 -OutFile results\03-after-hifi.json -Label after-hifi
+          ci/driver-proof/List-Endpoints.ps1 -OutFile results\04-endpoints-before-rename.json | Out-Null
+
+      - name: Signature proof of the packages Windows installed
+        if: always()
+        shell: powershell
+        run: |
+          pnputil /enum-drivers | Out-String | Tee-Object results\pnputil-drivers.txt | Out-Null
+          $repo = "$env:SystemRoot\System32\DriverStore\FileRepository"
+          $dirs = Get-ChildItem $repo -Directory | Where-Object {
+            Get-ChildItem $_.FullName -Filter *.inf | Select-String -Pattern 'VB-Audio|Burel' -Quiet
+          }
+          "VB-Audio packages in DriverStore:"; $dirs.FullName
+          ci/driver-proof/Assert-KernelSignature.ps1 -Path $dirs.FullName -OutFile results\05-signature-installed.json
+
+      - name: Rename capture endpoints to the product names
+        if: always()
+        shell: powershell
+        run: |
           ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchInterface 'VB-Audio Virtual Cable' -MatchDeviceDesc 'CABLE Output' `
             -NewDeviceDesc 'Claude Talk – til Discord' -NewInterface ''
           ci/driver-proof/Rename-Endpoint.ps1 -Flow Capture -MatchInterface 'Hi-Fi' -MatchDeviceDesc '.' `
             -NewDeviceDesc 'Claude Talk – til Claude' -NewInterface ''
-          ci/driver-proof/Rename-Endpoint.ps1 -Flow Render -MatchInterface 'VB-Audio Virtual Cable' -MatchDeviceDesc 'CABLE Input' `
-            -NewDeviceDesc 'Claude Talk (intern 1)' -NewInterface ''
-          ci/driver-proof/Rename-Endpoint.ps1 -Flow Render -MatchInterface 'Hi-Fi' -MatchDeviceDesc '.' `
-            -NewDeviceDesc 'Claude Talk (intern 2)' -NewInterface ''
 
       - name: Verify names as apps see them
+        if: always()
         shell: powershell
         run: |
-          $rows = ci/driver-proof/List-Endpoints.ps1 -OutFile endpoints-B-after-rename.json
-          $cap = $rows | Where-Object Flow -eq 'Capture' | ForEach-Object FriendlyName
+          $rows = ci/driver-proof/List-Endpoints.ps1 -OutFile results\06-endpoints-after-rename.json
+          $cap = @($rows | Where-Object Flow -eq 'Capture' | ForEach-Object FriendlyName)
           $ok = $true
           foreach ($want in 'Claude Talk – til Discord', 'Claude Talk – til Claude') {
-            $hit = $cap | Where-Object { $_ -like "$want*" }
-            if ($hit) { "FOUND  '$hit'" } else { "MISSING '$want'"; $ok = $false }
-            if ($hit -and $hit -ne $want) { "NOTE   exact name differs: '$hit'" }
+            $hit = $cap | Where-Object { $_ -like "$want*" } | Select-Object -First 1
+            if ($hit) { "FOUND   '$want' as '$hit'" } else { "MISSING '$want'"; $ok = $false }
           }
+          $_ = $cap | Tee-Object results\capture-names.txt
           if (-not $ok) { throw 'Two renamed virtual microphones were not found.' }
 
-      - name: Names as DirectShow apps see them (Chrome/older apps use this path)
-        shell: powershell
-        run: |
-          choco install ffmpeg -y --no-progress | Out-Null
-          ffmpeg -hide_banner -list_devices true -f dshow -i dummy 2>&1 | Select-String 'audio' | Write-Host
-
-      - uses: actions/upload-artifact@v4
+      - name: Publish results
         if: always()
-        with: { name: 'proof-B-${{ matrix.os }}', path: '*.json' }
+        shell: powershell
+        run: ci/publish-results.ps1 -Folder results -Job 'B-${{ matrix.os }}'
