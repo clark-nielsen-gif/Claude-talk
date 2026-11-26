@@ -221,11 +221,12 @@ pub fn rename(dev: &IMMDevice, description: &str, interface: &str) -> windows::c
         let store = dev.OpenPropertyStore(STGM_READWRITE)?;
         for (key, text) in [(&PKEY_DEVICE_DESC, description), (&PKEY_DEVICE_INTERFACE_NAME, interface)] {
             let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-            let mut v = PROPVARIANT::default();
+            // ManuallyDrop: the string belongs to `wide`, not to COM; letting
+            // PROPVARIANT drop would CoTaskMemFree it.
+            let mut v = std::mem::ManuallyDrop::new(PROPVARIANT::default());
             (*v.Anonymous.Anonymous).vt = VT_LPWSTR;
             (*v.Anonymous.Anonymous).Anonymous.pwszVal = PWSTR(wide.as_ptr() as *mut u16);
-            store.SetValue(key, &v)?;
-            // `wide` is owned by us; do not PropVariantClear.
+            store.SetValue(key, &*v)?;
         }
         store.Commit()
     }

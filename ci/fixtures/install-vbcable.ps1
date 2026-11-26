@@ -7,6 +7,13 @@ New-Item -ItemType Directory -Force $ResultsDir | Out-Null
 # Windows Server images ship with the audio service disabled.
 Set-Service Audiosrv -StartupType Automatic
 Start-Service Audiosrv
+# Server images deny microphone access to desktop apps (privacy setting);
+# allow it as a normal Windows 11 PC does by default.
+$cs = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'
+foreach ($k in "HKLM:\$cs", "HKCU:\$cs", "HKCU:\$cs\NonPackaged") {
+    New-Item -Path $k -Force | Out-Null
+    Set-ItemProperty -Path $k -Name Value -Value 'Allow'
+}
 
 $ProgressPreference = 'SilentlyContinue'
 $zip = Join-Path $env:RUNNER_TEMP 'vbcable.zip'

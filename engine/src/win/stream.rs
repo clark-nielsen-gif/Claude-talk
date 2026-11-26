@@ -312,7 +312,9 @@ fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
             },
         },
     };
-    let mut pv = PROPVARIANT::default();
+    // ManuallyDrop: PROPVARIANT's Drop calls PropVariantClear, which would
+    // try to free `params` (it lives on our stack).
+    let mut pv = std::mem::ManuallyDrop::new(PROPVARIANT::default());
     unsafe {
         (*pv.Anonymous.Anonymous).vt = VT_BLOB;
         (*pv.Anonymous.Anonymous).Anonymous.blob =
@@ -320,7 +322,7 @@ fn activate_process_loopback(pid: u32) -> windows::core::Result<IAudioClient> {
     }
     let done = Event::new()?;
     let handler: IActivateAudioInterfaceCompletionHandler = ActivationDone(done.0).into();
-    let op = unsafe { ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, &IAudioClient::IID, Some(&pv), &handler) }?;
+    let op = unsafe { ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, &IAudioClient::IID, Some(&*pv), &handler) }?;
     if unsafe { WaitForSingleObject(done.0, 5000) } != WAIT_OBJECT_0 {
         return Err(windows::Win32::Foundation::E_ABORT.into());
     }
