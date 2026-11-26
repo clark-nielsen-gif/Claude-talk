@@ -57,18 +57,22 @@ pub fn spawn_watcher(app: AppHandle) {
                 }
                 if enabled && running {
                     match policy::discord_routed_to_cable(&exes) {
-                        Some(false) => match policy::route_discord_to_cable(&exes) {
-                            Ok(n) if n > 0 => {
-                                log::info!(
-                                    "Discord's microphone set to Claude Talk ({n} processes)"
-                                );
-                                routed_since = Some(Instant::now());
-                                routed_pids = pids.clone();
-                                restarted_since_route = false;
+                        // (not while Claude Talk quits: shutdown has just
+                        // given Discord its own microphone back)
+                        Some(false) if !state.shutting_down.load(Ordering::Relaxed) => {
+                            match policy::route_discord_to_cable(&exes) {
+                                Ok(n) if n > 0 => {
+                                    log::info!(
+                                        "Discord's microphone set to Claude Talk ({n} processes)"
+                                    );
+                                    routed_since = Some(Instant::now());
+                                    routed_pids = pids.clone();
+                                    restarted_since_route = false;
+                                }
+                                Ok(_) => {}
+                                Err(e) => log::warn!("could not set Discord's microphone: {e}"),
                             }
-                            Ok(_) => {}
-                            Err(e) => log::warn!("could not set Discord's microphone: {e}"),
-                        },
+                        }
                         Some(true) => {
                             routed_since.get_or_insert_with(Instant::now);
                             if routed_pids.is_empty() {
@@ -79,7 +83,7 @@ pub fn spawn_watcher(app: AppHandle) {
                                 routed_since = Some(Instant::now());
                             }
                         }
-                        None => {}
+                        _ => {}
                     }
                 }
                 if !running {
@@ -291,6 +295,24 @@ pub fn restore_when_discord_starts() -> i32 {
     use ct_engine::win::host::discord_executables;
     use ct_engine::win::{policy, ComGuard};
     let _com = ComGuard::new();
+    // first wait until the Claude Talk that started us has really ended
+    // (until then its "running" mark is still there)
+    if let Some(parent) = std::env::args()
+        .skip_while(|a| a != "--restore-when-discord-starts")
+        .nth(1)
+        .and_then(|p| p.parse::<u32>().ok())
+    {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{
+            OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+        };
+        if let Ok(h) = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, parent) } {
+            unsafe {
+                WaitForSingleObject(h, 60_000);
+                let _ = CloseHandle(h);
+            }
+        }
+    }
     let exes = discord_executables();
     let t0 = Instant::now();
     while t0.elapsed() < Duration::from_secs(12 * 3600) {
@@ -323,6 +345,7 @@ pub fn spawn_restore_helper() {
     if let Ok(exe) = std::env::current_exe() {
         let r = std::process::Command::new(exe)
             .arg("--restore-when-discord-starts")
+            .arg(std::process::id().to_string())
             .creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW)
             .spawn();
         log::info!("restore helper started: {}", r.is_ok());

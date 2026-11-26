@@ -301,7 +301,13 @@ button, select, input { font: inherit; color: inherit; }
 .results { list-style: none; margin: 0; padding: 0 1.25rem 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
 
 @media (max-width: 900px) {
-  .people { grid-template-columns: 1fr; }
+  /* one column: compact cards, and the one that needs attention first */
+  .people { grid-template-columns: 1fr; gap: 0.75rem; }
+  .person { gap: 0.5rem; padding: 1rem 1.25rem; }
+  .person .meter { height: 2.5rem; }
+  .person .sub { min-height: 0; }
+  .person .sub.blank { display: none; }
+  .person.attention { order: -1; }
   .body { grid-template-columns: 10.5rem 1fr; }
 }
 

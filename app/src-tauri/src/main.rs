@@ -92,7 +92,7 @@ pub fn request_quit(app: &AppHandle) {
             match ask_restart_discord(da) {
                 QuitChoice::Cancel => return,
                 QuitChoice::RestartDiscord => {
-                    shutdown_inner(app);
+                    shutdown_inner(app, false);
                     if let Err(e) = discord::restart() {
                         log::warn!("could not restart Discord on quit: {e}");
                     }
@@ -162,13 +162,15 @@ fn ask_restart_discord(da: bool) -> QuitChoice {
 
 /// Stops audio and exits.
 pub fn shutdown(app: &AppHandle) {
-    shutdown_inner(app);
+    shutdown_inner(app, true);
     finish(app);
 }
 
 /// Stops audio and gives Discord its own microphone back. Safe to call more
 /// than once (also runs when Windows ends the session).
-fn shutdown_inner(app: &AppHandle) {
+/// `user_quit`: the user chose to quit (not Windows ending the session or an
+/// installer closing the program), so a restore helper may stay behind.
+fn shutdown_inner(app: &AppHandle, user_quit: bool) {
     let st = app.state::<AppState>();
     if st.shutting_down.swap(true, Ordering::Relaxed) {
         return;
@@ -186,7 +188,7 @@ fn shutdown_inner(app: &AppHandle) {
         let discord_running =
             !ct_engine::win::policy::pids_of(&ct_engine::win::host::discord_executables())
                 .is_empty();
-        if routed && !discord_running {
+        if user_quit && routed && !discord_running {
             discord::spawn_restore_helper();
         }
     }
@@ -339,7 +341,7 @@ fn main() {
             // Windows ends the session (sign-out, shutdown) or the app exits
             // any other way: Discord gets its own microphone back.
             if let tauri::RunEvent::Exit = event {
-                shutdown_inner(app);
+                shutdown_inner(app, false);
             }
         });
 }

@@ -28,6 +28,8 @@ pub struct AudioStatus {
     /// The Claude window is open and its page uses our microphone.
     pub claude_window_open: bool,
     pub claude_listening: bool,
+    /// The Claude window is on claude.ai's login page.
+    pub claude_login: bool,
     /// Discord is running (its sound is being captured).
     pub discord_running: bool,
     /// "yes": Discord records from our cable, "no": another mic, "": unknown.
@@ -367,6 +369,7 @@ mod imp {
             }
             .into();
             st.discord_needs_restart = state.discord_needs_restart.load(Ordering::Relaxed);
+            st.claude_login = state.claude_login.load(Ordering::Relaxed);
             st.output_fixed = state
                 .output_fixed_at
                 .lock()

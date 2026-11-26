@@ -92,6 +92,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
       ? { state: 'wait', text: t.main.claudeNotReady }
       : !s?.claudeWindowOpen
         ? { state: 'wait', text: t.main.claudeNotOpen }
+        : s.claudeLogin
+          ? { state: 'wait', text: t.main.claudeLogIn }
         : !s.claudeListening
           ? { state: 'wait', text: t.main.claudeOpenNotListening }
           : micBroken
@@ -113,6 +115,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
     : discordBroken ? t.main.switchOnFixDiscord
     : !s?.discordRunning ? t.main.switchOnNoDiscord
     : !s.claudeWindowOpen ? t.main.switchOnClaudeClosed
+    : s.claudeLogin ? t.main.switchOnClaudeLogin
     : !s.claudeListening ? t.main.switchOnClaudeNotListening
     : config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
     : config.micMuted ? t.main.switchOnMicMuted
@@ -133,7 +136,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
       {errors}
 
       <div className="people">
-        <section className={`person${config.micMuted ? ' dim' : ''}`} aria-label={t.main.you}>
+        <section className={`person${config.micMuted ? ' dim' : ''}${micBroken ? ' attention' : ''}`} aria-label={t.main.you}>
           <div className="head"><h2>{t.main.you}</h2></div>
           <Meter level={config.micMuted ? quiet : s?.mic ?? quiet} off={config.micMuted || s?.micState !== 'ok'} label={t.main.you} />
           <div className="sub" title={s?.micName}>{s?.micName || ' '}</div>
@@ -151,10 +154,10 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
           </div>
         </section>
 
-        <section className={`person${!on || !s?.claudeWindowOpen ? ' dim' : ''}`} aria-label={t.main.claude}>
+        <section className={`person${!on || !s?.claudeWindowOpen ? ' dim' : ''}${claudeCheck.state === 'warn' ? ' attention' : ''}`} aria-label={t.main.claude}>
           <div className="head"><h2>{t.main.claude}</h2></div>
           <Meter level={on ? s?.claude ?? quiet : quiet} off={!on || !s?.claudeWindowOpen} label={t.main.claude} />
-          <div className="sub">&nbsp;</div>
+          <div className="sub blank">&nbsp;</div>
           <Check state={claudeCheck.state}>{claudeCheck.text}</Check>
           <div className="actions">
             {!s?.claudeWindowOpen
@@ -167,10 +170,10 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
           </div>
         </section>
 
-        <section className={`person${!s?.discordRunning ? ' dim' : ''}`} aria-label={t.main.discord}>
+        <section className={`person${!s?.discordRunning ? ' dim' : ''}${discordCheck.state === 'warn' ? ' attention' : ''}`} aria-label={t.main.discord}>
           <div className="head"><h2>{t.main.discord}</h2></div>
           <Meter level={s?.discord ?? quiet} off={!s?.discordRunning} label={t.main.discord} />
-          <div className="sub">&nbsp;</div>
+          <div className="sub blank">&nbsp;</div>
           <Check state={discordCheck.state}>{discordCheck.text}</Check>
           <div className="actions">
             {discordCheck.fix && <button className="btn primary" onClick={() => setGuide(discordCheck.fix!)}>{discordCheck.fix === 'restart' ? t.guide.restartDiscord : t.main.fixIt}</button>}

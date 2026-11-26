@@ -9,6 +9,8 @@ pub struct Inner {
     pub claude_pid: Arc<AtomicU32>,
     /// The Claude page currently has our microphone open.
     pub claude_mic_active: AtomicBool,
+    /// The Claude window shows claude.ai's login page.
+    pub claude_login: AtomicBool,
     pub shutting_down: AtomicBool,
     pub ptt_down: AtomicBool,
     /// Discord records from our cable: 0 unknown, 1 yes, 2 no (see discord.rs).
@@ -36,6 +38,7 @@ impl Inner {
             config: Mutex::new(config),
             claude_pid: Arc::new(AtomicU32::new(0)),
             claude_mic_active: AtomicBool::new(false),
+            claude_login: AtomicBool::new(false),
             shutting_down: AtomicBool::new(false),
             ptt_down: AtomicBool::new(false),
             discord_uses_cable: AtomicU8::new(0),

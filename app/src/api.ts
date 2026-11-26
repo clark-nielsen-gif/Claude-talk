@@ -54,6 +54,8 @@ export interface AudioStatus {
   micName: string;
   claudeWindowOpen: boolean;
   claudeListening: boolean;
+  /** the Claude window shows claude.ai's login page */
+  claudeLogin: boolean;
   discordRunning: boolean;
   /** 'yes' Discord records our cable, 'no' it records another mic, '' unknown */
   discordUsesCable: 'yes' | 'no' | '';
@@ -109,13 +111,14 @@ function scenarioStatus(t: number): AudioStatus {
   const lv = (a: number, f = 7) => ({ peak: wave(f, a), rms: wave(f, a) * 0.6 });
   const ok: AudioStatus = {
     engineRunning: true, mic: lv(0.5), claude: lv(0.6, 5), discord: lv(0.35, 9), toDiscord: lv(0.6, 6), toClaude: lv(0.45, 8),
-    micState: 'ok', micName: 'Headset-mikrofon (Jabra Evolve2)', claudeWindowOpen: true, claudeListening: true,
+    micState: 'ok', micName: 'Headset-mikrofon (Jabra Evolve2)', claudeWindowOpen: true, claudeListening: true, claudeLogin: false,
     discordRunning: true, discordUsesCable: 'yes', discordNeedsRestart: false, outputFixed: false, hotkeyProblem: '', speakers: false, echoActive: false, cableOk: true,
     latencyMs: 31, driftPpm: -12, xruns: 0,
   };
   const quiet = { peak: 0, rms: 0 };
   switch (scenario) {
     case 'main-claude-closed': return { ...ok, claudeWindowOpen: false, claudeListening: false, claude: quiet };
+    case 'main-claude-login': return { ...ok, claudeListening: false, claudeLogin: true, claude: quiet };
     case 'main-claude-not-listening': return { ...ok, claudeListening: false, claude: quiet };
     case 'main-discord-closed': return { ...ok, discordRunning: false, discordUsesCable: '', discord: quiet };
     case 'main-discord-wrong-mic': return { ...ok, discordUsesCable: 'no' };

@@ -252,6 +252,8 @@
     if (p !== lastPath) {
       lastPath = p;
       if (p === '/new') post({ type: 'fresh' });
+      // only whether this is the login page – no address or content is sent
+      post({ type: 'login', active: p.startsWith('/login') || p.startsWith('/magic-link') });
     }
   }, 700);
 

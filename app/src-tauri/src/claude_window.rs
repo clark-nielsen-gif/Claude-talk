@@ -135,9 +135,25 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
             "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
         );
     }
+    // Fit the screen (a 1366×768 laptop, or 150 % scaling): the message
+    // field and the voice button are at the bottom of the page.
+    let (w, h) = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let size = m.size().to_logical::<f64>(m.scale_factor());
+            // leave room for the taskbar and the title bar
+            (
+                (size.width - 40.0).min(1100.0),
+                (size.height - 120.0).min(820.0),
+            )
+        })
+        .unwrap_or((1100.0, 820.0));
     let window = builder
         .title("Claude")
-        .inner_size(1100.0, 820.0)
+        .inner_size(w.max(520.0), h.max(520.0))
+        .center()
         .min_inner_size(520.0, 520.0)
         .data_directory(data_dir)
         .initialization_script(BRIDGE_JS)
@@ -440,13 +456,12 @@ mod win {
                             .unwrap_or_default();
                         if ok.as_bool() {
                             log::info!("Claude window loaded {host}");
-                            // Claude's login page: explain the e-mail code once
-                            static SHOWN: std::sync::atomic::AtomicBool =
-                                std::sync::atomic::AtomicBool::new(false);
+                            // Claude's login page: explain the e-mail code (each
+                            // time it loads: someone who went astray comes back)
                             let login = url.as_ref().is_some_and(|u| {
                                 super::is_claude_host(u) && u.path().starts_with("/login")
                             });
-                            if login && !SHOWN.swap(true, Ordering::Relaxed) {
+                            if login {
                                 super::show_login_help(&done_app, "start");
                             }
                         } else {
@@ -482,9 +497,14 @@ mod win {
                                     let _ = w.destroy();
                                 }
                             });
-                        } else if let Some(core) = sender {
-                            // the page's renderer crashed or hung: load it again
-                            let _ = core.Reload();
+                        } else if kind.0 == 1 || kind.0 == 2 {
+                            // the page's renderer crashed or hung: load it
+                            // again (GPU, utility or frame processes recover
+                            // by themselves; reloading would end the voice
+                            // conversation)
+                            if let Some(core) = sender {
+                                let _ = core.Reload();
+                            }
                         }
                     }
                     Ok(())
@@ -500,6 +520,7 @@ mod win {
                 let st = app3.state::<AppState>();
                 st.claude_pid.store(0, Ordering::Relaxed);
                 st.claude_mic_active.store(false, Ordering::Relaxed);
+                st.claude_login.store(false, Ordering::Relaxed);
             }
         });
     }
@@ -525,6 +546,10 @@ pub fn on_page_message(app: &AppHandle, text: &str) {
             );
         }
         Some("fresh") => auto_send(app),
+        Some("login") => {
+            let active = v.get("active").and_then(|a| a.as_bool()).unwrap_or(false);
+            state.claude_login.store(active, Ordering::Relaxed);
+        }
         Some("prompt") => {
             let ok = v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
             let reason = v.get("reason").and_then(|x| x.as_str()).unwrap_or("");

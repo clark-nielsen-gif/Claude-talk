@@ -3,8 +3,8 @@
 // we explain the e-mail sign-in instead. Pure DOM, no network, no storage.
 (() => {
   if (window.__claudeTalkLoginHelp) return;
-  const HOW_DA = 'Skriv din e-mail i feltet på Claudes side, og tryk på knappen under det (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden her i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet for her. Du skal kun logge ind én gang.';
-  const HOW_EN = "Type your e-mail address in the field on Claude's page and press the button below it (“Continue with email”). Claude e-mails you a code. Type the code here in the Claude window. Don't click the link in the e-mail: that signs you in in your normal browser instead of here. You only sign in once.";
+  const HOW_DA = 'Skriv din e-mail i feltet på Claudes side, og tryk på knappen under det (den hedder »Continue with email«). Claude sender dig en mail med en kode. Skriv koden her i Claude-vinduet. Tryk ikke på linket i mailen: så logger du ind i din almindelige browser i stedet for her. Har du trykket på linket alligevel? Så kom tilbage hertil, og skriv koden fra mailen her. Du skal kun logge ind én gang.';
+  const HOW_EN = "Type your e-mail address in the field on Claude's page and press the button below it (“Continue with email”). Claude e-mails you a code. Type the code here in the Claude window. Don't click the link in the e-mail: that signs you in in your normal browser instead of here. Did you click the link anyway? Then come back here and type the code from the e-mail. You only sign in once.";
   const TEXT = {
     da: {
       start: { title: 'Log ind på Claude med din e-mail', body: HOW_DA },

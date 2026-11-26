@@ -318,7 +318,16 @@ pub mod imp {
         Choices {
             inputs: pick(Flow::Capture, ct_engine::win::devices::NOT_A_MICROPHONE),
             programs,
-            outputs: pick(Flow::Render, ct_engine::win::devices::OWN_VIRTUAL_DEVICES),
+            // our cable, and the extra cables (Claude's microphone in
+            // Chrome/app mode): never an output "you" listen to
+            outputs: pick(
+                Flow::Render,
+                &[
+                    ct_engine::win::devices::OWN_VIRTUAL_DEVICES,
+                    &ct_engine::win::host::EXTRA_CABLE_PATTERNS[..],
+                ]
+                .concat(),
+            ),
         }
     }
 }
