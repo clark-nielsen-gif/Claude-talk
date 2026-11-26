@@ -107,7 +107,7 @@ mod serve {
         } else if line.starts_with("POST /report") {
             let mut body = vec![0u8; len];
             let _ = reader.read_exact(&mut body);
-            let _ = std::fs::write(&out, &body);
+            let _ = std::fs::write(out, &body);
             println!("report received ({} bytes)", body.len());
             let _ = w.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
         } else if line.starts_with("GET /test.html") {
