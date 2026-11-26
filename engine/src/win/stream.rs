@@ -583,8 +583,12 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
         2
     };
     let mut last_data = Instant::now();
-    // silence fed since the program went quiet: (since, frames sent)
-    let mut quiet: Option<(Instant, u64)> = None;
+    // where the last packet's sound ended, in the packets' clock (100 ns QPC
+    // units). Silence continues from there, not from when the packet was
+    // received: a packet that came late would otherwise move the timeline.
+    let mut last_end = qpc_100ns();
+    // silence fed since the program went quiet: (from, frames sent), QPC
+    let mut quiet: Option<(u64, u64)> = None;
     // how far that silence reached, in the packets' clock (100 ns QPC units):
     // a packet that was only late overlaps it, and the overlap is dropped so
     // the timeline (and the echo reference's delay) does not grow
@@ -648,12 +652,36 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
                         frames as usize * ENGINE_CHANNELS,
                     )
                 };
-                fanout.push(
-                    Some(&samples[skip as usize * ENGINE_CHANNELS..]),
-                    ENGINE_CHANNELS,
-                    keep,
-                );
+                let kept = &samples[skip as usize * ENGINE_CHANNELS..];
+                if skip > 0 {
+                    // sound after silence starts mid-packet: fade it in over
+                    // 1 ms instead of a hard cut (a click)
+                    const FADE: usize = 48;
+                    let n = keep.min(FADE);
+                    let mut head = [0f32; FADE * ENGINE_CHANNELS];
+                    for f in 0..n {
+                        let g = (f + 1) as f32 / (n + 1) as f32;
+                        for c in 0..ENGINE_CHANNELS {
+                            head[f * ENGINE_CHANNELS + c] = kept[f * ENGINE_CHANNELS + c] * g;
+                        }
+                    }
+                    fanout.push(Some(&head[..n * ENGINE_CHANNELS]), ENGINE_CHANNELS, n);
+                    if keep > n {
+                        fanout.push(
+                            Some(&kept[n * ENGINE_CHANNELS..]),
+                            ENGINE_CHANNELS,
+                            keep - n,
+                        );
+                    }
+                } else {
+                    fanout.push(Some(kept), ENGINE_CHANNELS, keep);
+                }
             }
+            last_end = if qpc != 0 {
+                qpc + frames as u64 * 10_000_000 / ENGINE_RATE as u64
+            } else {
+                qpc_100ns()
+            };
             if let Err(e) = unsafe { capture.ReleaseBuffer(frames) } {
                 return finish(&client, e.into());
             }
@@ -668,13 +696,14 @@ fn run_capture(ctx: &Ctx, target: &CaptureTarget, fanout: &mut SourceFanout) -> 
             // Keep the downstream buffers moving with silence, sample for
             // sample in real time from the last packet, so mixing continues
             // and drift control stays locked.
-            let (since, sent) = quiet.get_or_insert((last_data, 0));
-            let due = (now.duration_since(*since).as_secs_f64() * ENGINE_RATE as f64) as u64;
+            let now_qpc = qpc_100ns();
+            let (since, sent) = quiet.get_or_insert((last_end, 0));
+            let due = (now_qpc.saturating_sub(*since) as f64 * ENGINE_RATE as f64 / 1e7) as u64;
             let frames = due.saturating_sub(*sent).min(ENGINE_RATE as u64 / 10) as usize;
             if frames > 0 {
                 fanout.push(None, ENGINE_CHANNELS, frames);
                 *sent += frames as u64;
-                silence_until = Some(qpc_100ns());
+                silence_until = Some(now_qpc);
                 ctx.status
                     .silence_filled_frames
                     .fetch_add(frames as u64, Ordering::Relaxed);

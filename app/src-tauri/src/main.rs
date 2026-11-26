@@ -82,6 +82,12 @@ pub fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
 /// Tray "Quit" and the quit command. In a call, Discord would keep
 /// recording our (now silent) cable until it restarts, so ask first.
 pub fn request_quit(app: &AppHandle) {
+    // a second "Luk Claude Talk" while the first one is still asking (or
+    // already quitting) does nothing: one quit dialog, one Discord restart
+    static QUITTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if QUITTING.swap(true, Ordering::SeqCst) {
+        return;
+    }
     #[cfg(windows)]
     {
         let st = app.state::<AppState>();
@@ -90,7 +96,10 @@ pub fn request_quit(app: &AppHandle) {
         if in_call {
             let da = st.config.lock().map(|c| c.language != "en").unwrap_or(true);
             match ask_restart_discord(da) {
-                QuitChoice::Cancel => return,
+                QuitChoice::Cancel => {
+                    QUITTING.store(false, Ordering::SeqCst);
+                    return;
+                }
                 QuitChoice::RestartDiscord => {
                     shutdown_inner(app, true);
                     if let Err(e) = discord::restart() {

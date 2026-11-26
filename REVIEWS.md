@@ -104,10 +104,11 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | Rolle | Resultat | Vigtigste fund |
 |---|---|---|
 | Kode | 2 major, 3 minor | »Luk, og genstart Discord« gav ikke Discord sin mikrofon tilbage (runde 7-ændringen). Ved Windows-nedlukning blev Discords indstilling bevaret, selv om autostart var slået fra under Windows' startprogrammer. |
-| Lyd | afbrudt | Revieweren stoppede ved kontoens brugsgrænse; fortsættes. |
+| Lyd | 1 major, 2 minor | Runde 7-rettelsen var ikke hel: stilheden blev regnet fra det øjeblik, en pakke blev *modtaget*, ikke fra hvor dens lyd sluttede, og en fast route betalte sin gæld tilbage mod målet i stedet for det niveau, reguleringen faktisk holder. Med 1 % sene pakker faldt ekkodæmpningen til 2 dB i revisorens simulering. |
 | Design | 0 major, 10 minor | **Ren.** |
 | "Min mor" | 1 major, 16 minor | Tauris egne installer-tekster findes ikke på dansk: »Claude Talk is running! Click OK to kill it« ved afinstallation, plus to spørgsmål om data. |
-| "Bryd det" | afbrudt | Som lyd. |
+| "Bryd det" | 0 major, 5 minor | **Ren.** Begge fund fra første gennemgang (genstart af Discord, autostart slået fra i Windows) er rettet. |
 
 **Rettet efter runde 8:** Discord får altid sin mikrofon tilbage, når brugeren selv lukker; om Claude Talk starter med Windows, læses i Windows (Run og StartupApproved); danske tekster til Tauris installer (`installer/Danish.nsh`); kun Tauris egen »Slet også indstillinger og Claude-login«-boks (ét spørgsmål); en fejl ved start af installeren vises som fejl, ikke som »annulleret«; indstillingerne hentes igen efter en afvist genvej; udholdenhedstesten måler CPU og RAM for hele proces-træet.
 
+**Rettet efter runde 8 (lyd og "bryd det"):** stilheden fortsætter fra der, hvor den sidste pakkes lyd sluttede (WASAPI's QPC-tid); en fast route betaler gæld tilbage og starter efter en ny opfyldning ved det niveau, reguleringen holder (mål + en halv blok − kildens alder); lyd efter et overspringet stykke tones ind over 1 ms; ekkodæmperens tidsstempel læses, så en samtidig mikrofonpakke ikke tæller med. Ny test `late_packets.rs` (en model af optagesløjfen, ni scenarier: sene pakker, pauser, ±150 ppm, 3 ms levering, mikrofon i par): referencens forsinkelse holder sig inden for ±1,2 ms. I revisorens simulering fjernes 19–47 dB ekko igen (før 0,5–9,5 dB). Desuden: de sidste syv danske installer-tekster (WebView2), en pakke der er væk hos VB-Audio vises ikke som »ingen internet«, kun én luk-dialog ad gangen, indstillinger læses tilbage efter hver ændring, og højttaler-beskeden siger, at det er Windows' navn for enheden.

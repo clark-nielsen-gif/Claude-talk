@@ -97,3 +97,5 @@ En kilde, man selv tilføjer under **Avanceret** (en ekstra mikrofon eller et pr
 ## K31 – Installation uden for Program Files og pc'er med kun ét USB-headset
 Vælger man en anden installationsmappe end Program Files, kan knappen »Installer Claude Talk-mikrofonen« i programmet ikke bruges (kør installeren igen i stedet). Har pc'en kun ét USB-headset som højttaler, og tages det ud midt i et opkald, kan Windows vælge »Claude Talk – intern« som højttaler. Claude Talk har så ingen anden enhed at sætte tilbage, før headsettet sættes i igen.
 
+## K32 – Sjældne sene pakker og enheder, der kalder sig højttalere
+Kommer Claudes eller Discords lyd af og til over 15 ms for sent fra Windows, har ekkodæmperens reference et kort hul. Forsinkelsen flytter sig ikke længere (testen `late_packets.rs`), men i simuleringen fjernes så »kun« 19–47 dB ekko i stedet for 66 dB, og i værste 2 sekunder ned til ca. 11 dB. Det gælder kun med højttalere. Nogle USB-headsets og skærme med HDMI-lyd melder sig til Windows som »Højttalere«. Claude Talk tror så, at du bruger højttalere, viser en besked om det og slår ekkodæmpning til. Det koster ca. 10 ms ekstra forsinkelse, men giver ikke ekko.

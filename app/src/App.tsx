@@ -54,7 +54,10 @@ export function App() {
 
   const update = useCallback(async (patch: Partial<Config>) => {
     try {
-      setConfig(await api.setConfig(patch));
+      await api.setConfig(patch);
+      // read the settings back instead of using the reply: a hotkey or the
+      // tray may have changed them while this change was on its way
+      setConfig(await api.getConfig());
     } catch (e) {
       const key = String(e).replace(/^error\./, '') as keyof typeof t.errors;
       setToastText(t.errors[key] ?? t.errors.internal);

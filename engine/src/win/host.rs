@@ -607,8 +607,15 @@ impl AudioHost {
                     // not the moment it is processed: a microphone that
                     // delivers several frames at once would otherwise get
                     // a reference that runs dry and moves (round-6 review).
-                    let rest = (raw.slots() / ch) as u64;
-                    let newest = mic_stats.last_push_ns.load(Ordering::Relaxed);
+                    // read both as one: a push between the two reads would
+                    // date this frame a frame too late
+                    let (rest, newest) = loop {
+                        let slots = raw.slots();
+                        let newest = mic_stats.last_push_ns.load(Ordering::Acquire);
+                        if raw.slots() == slots {
+                            break ((slots / ch) as u64, newest);
+                        }
+                    };
                     let recorded = newest.saturating_sub(rest * 1_000_000_000 / ENGINE_RATE as u64);
                     ref_mix.render_at(&mut r, recorded);
                     match reducer.as_mut() {

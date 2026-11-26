@@ -122,9 +122,9 @@ const da = {
   },
 
   notices: {
-    speakersTitle: 'Du bruger højttalere',
-    speakersBody: 'Så kan din mikrofon høre Claude og Discord. Vi har slået ekkodæmpning til, men høretelefoner giver den bedste lyd.',
-    speakersBodyOff: 'Så kan din mikrofon høre Claude og Discord. Brug høretelefoner, eller slå ekkodæmpning til under Indstillinger.',
+    speakersTitle: 'Lyden spiller i højttalere',
+    speakersBody: 'Sådan kalder Windows din lydenhed. Er det rigtige højttalere, kan din mikrofon høre Claude og Discord, så vi har slået ekkodæmpning til. Høretelefoner giver den bedste lyd.',
+    speakersBodyOff: 'Sådan kalder Windows din lydenhed. Er det rigtige højttalere, kan din mikrofon høre Claude og Discord. Brug høretelefoner, eller slå ekkodæmpning til under Indstillinger.',
     dismiss: 'OK',
     outputFixedTitle: 'Vi har sat din lyd tilbage',
     outputFixedBody: 'Windows var sat til at spille lyden i »Claude Talk – intern«, som kun Claude Talk må bruge. Så ville de andre i Discord høre sig selv, og du ville ikke høre noget. Nu spiller lyden igen i dine højttalere eller høretelefoner.',
@@ -397,9 +397,9 @@ const en: Dict = {
     close: 'Close',
   },
   notices: {
-    speakersTitle: 'You’re using speakers',
-    speakersBody: 'Your microphone can hear Claude and Discord. We turned on echo reduction, but headphones sound best.',
-    speakersBodyOff: 'Your microphone can hear Claude and Discord. Use headphones, or turn on echo reduction in Settings.',
+    speakersTitle: 'Sound plays through speakers',
+    speakersBody: 'That’s what Windows calls your sound device. If they really are speakers, your microphone can hear Claude and Discord, so we turned on echo reduction. Headphones sound best.',
+    speakersBodyOff: 'That’s what Windows calls your sound device. If they really are speakers, your microphone can hear Claude and Discord. Use headphones, or turn on echo reduction in Settings.',
     dismiss: 'OK',
     outputFixedTitle: 'We put your sound back',
     outputFixedBody: 'Windows was set to play sound into Claude Talk’s internal device. People in Discord would have heard themselves, and you would have heard nothing. Sound plays through your speakers or headphones again.',

@@ -226,12 +226,32 @@ impl AdaptiveResampler {
         let ch = self.channels;
         let mut stats = PullStats::default();
         let available = ring.slots() / ch;
+        let block_in = (out.len() / ch) as f64 / self.nominal;
+        let mut available = available;
+        // The usual fill of a fixed route: its drift control steers the delay
+        // (fill + input age - half a block) to the target, so the fill sits at
+        // target + block/2 - age, below the target for part of the clock
+        // phases. Judged against the plain target, a late packet's debt would
+        // never be paid, and a re-primed route would start a block late.
+        let steady = (self.target_frames as f64 + block_in / 2.0
+            - self.input_age_s * self.in_rate as f64)
+            .max(0.0) as usize;
 
         if self.priming {
             if available >= self.target_frames {
                 self.priming = false;
                 self.drift.reset();
                 self.fade_in = FADE;
+                if self.fixed && available > steady + CHUNK {
+                    // what piled up while waiting would put the delay off
+                    // target; start where the delay is right
+                    let skip = available - steady;
+                    if let Ok(c) = ring.read_chunk(skip * ch) {
+                        c.commit_all();
+                    }
+                    stats.skipped_frames = skip as u32;
+                    available -= skip;
+                }
             } else {
                 out.fill(0.0);
                 stats.underrun_frames = (out.len() / ch) as u32;
@@ -242,9 +262,7 @@ impl AdaptiveResampler {
         // Latency guard: drift control only corrects slowly (≤0.5 %), so a
         // big backlog (output started late, or stalled) is dropped at once
         // instead of being played late for a minute.
-        let block_in = (out.len() / ch) as f64 / self.nominal;
         let limit = self.target_frames as f64 + (self.target_frames as f64).max(2.0 * block_in);
-        let mut available = available;
         // A fixed route judges by its delay: what was delivered after the
         // moment being rendered (a microphone burst) is not a backlog.
         let ahead = if self.fixed {
@@ -259,15 +277,15 @@ impl AdaptiveResampler {
             if let Ok(c) = ring.read_chunk(skip * ch) {
                 c.commit_all();
             }
-            stats.skipped_frames = skip as u32;
+            stats.skipped_frames += skip as u32;
             available -= skip;
             self.drift.reset();
         }
 
         if self.fixed && self.owed >= 1.0 {
-            // A late packet arrived: the fill is above the target by what was
-            // already played as silence; drop that much.
-            let excess = available.saturating_sub(self.target_frames + ahead);
+            // A late packet arrived: the fill is above its usual level by what
+            // was already played as silence; drop that much.
+            let excess = available.saturating_sub(steady);
             let n = (self.owed as usize).min(excess);
             if n > 0 {
                 if let Ok(c) = ring.read_chunk(n * ch) {

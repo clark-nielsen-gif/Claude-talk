@@ -270,7 +270,16 @@ fn cable_present() -> bool {
 fn download(url: &str, to: &Path) -> Result<(), i32> {
     use windows::core::HSTRING;
     use windows::Win32::System::Com::Urlmon::URLDownloadToFileW;
+    // Urlmon's errors for "could not reach the server". Anything else (the
+    // package was moved, a server error) won't get better by pressing Retry.
+    const NO_CONNECTION: [u32; 4] = [
+        0x800C_0003, // INET_E_NO_SESSION
+        0x800C_0004, // INET_E_CANNOT_CONNECT
+        0x800C_0005, // INET_E_RESOURCE_NOT_FOUND (name lookup failed)
+        0x800C_000B, // INET_E_CONNECTION_TIMEOUT
+    ];
     let _ = std::fs::remove_file(to);
+    let mut offline = true;
     for attempt in 1..=3 {
         let hr = unsafe {
             URLDownloadToFileW(
@@ -285,9 +294,13 @@ fn download(url: &str, to: &Path) -> Result<(), i32> {
             return Ok(());
         }
         log::warn!("installer: download attempt {attempt} failed: {hr:?}");
+        offline = match &hr {
+            Ok(()) => true, // reported success but wrote no file
+            Err(e) => NO_CONNECTION.contains(&(e.code().0 as u32)),
+        };
         std::thread::sleep(Duration::from_secs(2));
     }
-    Err(2)
+    Err(if offline { 2 } else { 5 })
 }
 
 fn sha256_hex(path: &Path) -> Option<String> {
