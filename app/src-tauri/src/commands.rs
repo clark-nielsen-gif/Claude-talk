@@ -218,7 +218,13 @@ pub fn set_microphone(
     };
     state.save_config();
     #[cfg(windows)]
-    ct_engine::win::policy::set_discord_own_input(None);
+    {
+        // the input it replaces is not to be taken back as the user's own
+        if let Some(old) = ct_engine::win::policy::discord_own_input() {
+            ct_engine::win::policy::forget_as_own(&old);
+        }
+        ct_engine::win::policy::set_discord_own_input(None);
+    }
     crate::audio::use_microphone(&app, cfg.microphone.clone());
     if !cfg.route_discord {
         // after "Gendan" Discord uses the user's microphone directly
@@ -242,7 +248,9 @@ pub fn use_discord_output(state: State<AppState>) -> Result<(), String> {
             .ok()
             .and_then(|m| m.as_ref().map(|(id, _, _)| id.clone()))
             .ok_or("error.generic")?;
-        for role in 0..3 {
+        // console and multimedia: what the Claude window plays on (a separate
+        // communications device stays the user's)
+        for role in 0..2 {
             ct_engine::win::policy::set_default_endpoint_role(&id, role)
                 .map_err(|_| "error.generic".to_string())?;
         }

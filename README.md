@@ -55,7 +55,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 
 **De andre kan ikke høre Claude.** Se i feltet med overskriften **Discord** i Claude Talk. Står der et grønt flueben ved »De andre i Discord hører Claude«, så tjek i Discord, at du ikke har slået din mikrofon fra, og at Discord står på »Stemmeaktivitet« (ikke »Tryk for at tale«). Se også i Claude-vinduet, om Claude taler (lydbølgerne bevæger sig). Ellers følg knappen i feltet.
 
-**Hvordan fjerner jeg det igen?** Åbn Windows' **Indstillinger** (tandhjulet i Start-menuen) **→ Apps → Installerede apps**, tryk på **…** ved Claude Talk, vælg **Afinstaller** og **Afinstaller** igen, og svar **Ja** i den gule boks. I det vindue, der så åbner (»Afinstaller Claude Talk«), kan du sætte flueben ved »Slet også indstillinger og Claude-login«, hvis du ikke skal bruge Claude Talk igen (din Claude-konto og dine samtaler bliver ikke slettet). Tryk **Afinstaller** (kører Claude Talk, lukkes det af sig selv). Tryk til sidst **Luk**. Discord får din mikrofon tilbage, og Claude Talk-mikrofonen fjernes. Var Discord lukket, da du afinstallerede, så åbn Discords lydindstillinger bagefter, og tjek, at din mikrofon er valgt som inputenhed.
+**Hvordan fjerner jeg det igen?** Åbn Windows' **Indstillinger** (tandhjulet i Start-menuen) **→ Apps → Installerede apps**, tryk på **…** ved Claude Talk, vælg **Afinstaller** og **Afinstaller** igen, og svar **Ja** i den gule boks. I det vindue, der så åbner (»Afinstaller Claude Talk«), kan du sætte flueben ved »Slet også indstillinger og Claude-login«, hvis du ikke skal bruge Claude Talk igen (din Claude-konto og dine samtaler bliver ikke slettet). Tryk **Afinstaller** (kører Claude Talk, lukkes det; spørger den først, så tryk **OK**). Tryk til sidst **Luk**. Discord får din mikrofon tilbage, og Claude Talk-mikrofonen fjernes. Var Discord lukket, da du afinstallerede, så åbn Discords lydindstillinger bagefter, og tjek, at din mikrofon er valgt som inputenhed.
 
 ## Fejlfinding
 
@@ -63,7 +63,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 |---|---|
 | »Discord bruger en anden mikrofon« | Tryk **Vis mig hvordan**, og vælg **Standard** som inputenhed i Discord (ikke en bestemt mikrofon). Claude Talk har allerede taget den mikrofon, Discord brugte, så de andre hører dig som før. Fluebenet kommer af sig selv. |
 | Mikrofonen under **Dig** er den forkerte | Tryk **Vælg en anden mikrofon**, og vælg din mikrofon under **Din mikrofon**. |
-| »Claude taler et andet sted end Discord« | Tryk på knappen i beskeden, så taler Claude i den samme enhed, som du hører Discord i (f.eks. dit headset). |
+| Jeg kan ikke høre Claude, eller Claude kommer ud af højttalerne | Står der »Claude taler et andet sted end Discord«, så tryk på knappen i beskeden. Så spiller al pc'ens lyd i det headset, du hører Discord i. Du kan skifte tilbage ved højttalerikonet ved uret. |
 | »Discord har ikke fundet Claude Talk-mikrofonen endnu« | Tryk på knappen. Tjek først i Discords lydindstillinger, at »Inputenhed« står på »Standard« (står der navnet på din mikrofon, så vælg »Standard«, så skal Discord ikke genstartes). Ellers tryk **Genstart Discord for mig**. |
 | »Claude Talk-mikrofonen virker ikke lige nu« | Tryk **Åbn lydindstillinger**, find »Claude Talk – intern« eller »Claude Talk – til Discord« under »Alle lydenheder«, og tryk **Tillad**. |
 | »Claude Talk-mikrofonen mangler« | Tryk **Installer Claude Talk-mikrofonen**, eller kør installeren igen. |

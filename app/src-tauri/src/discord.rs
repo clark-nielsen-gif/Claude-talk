@@ -29,7 +29,6 @@ pub fn spawn_watcher(app: AppHandle) {
             // further restart would not help (the guide is shown instead).
             let mut routed_pids: Vec<u32> = Vec::new();
             let mut restarted_since_route = false;
-            let mut empty_filled_for: Vec<u32> = Vec::new();
             let mut last_logged = (u8::MAX, false);
             let mut last_good: [Option<String>; 3] = [None, None, None];
             let mut tick = 0u32;
@@ -61,21 +60,22 @@ pub fn spawn_watcher(app: AppHandle) {
                         .iter()
                         .any(|g| g.eq_ignore_ascii_case(&now));
                     let roots = discord_roots(&exes);
+                    let as_wanted = policy::discord_input_as_wanted(&exes);
                     // an empty value: a new Discord (updated, restarted) has
-                    // none yet – filled once per Discord start; a user who
-                    // clears it while Discord runs is not overridden
-                    let fresh_empty = now.is_empty()
-                        && roots != empty_filled_for
-                        && policy::discord_input_as_wanted(&exes) == Some(false);
-                    if on_cable || fresh_empty {
-                        if fresh_empty {
-                            empty_filled_for = roots;
-                        }
+                    // none yet – filled until it takes, once per Discord start;
+                    // a user who clears it after that is not overridden
+                    let fresh_empty =
+                        now.is_empty() && !filled_for(&roots) && as_wanted == Some(false);
+                    // a value Claude Talk gave earlier that is no longer the
+                    // one to give (the user chose another microphone meanwhile)
+                    let stale_ours = ours && as_wanted == Some(false);
+                    if on_cable || fresh_empty || stale_ours {
                         let n = restore();
                         log::info!("Discord's own microphone given back now that it runs ({n})");
                     } else if !now.is_empty()
                         && !ours
                         && policy::discord_own_input().as_deref() != Some(&now)
+                        && is_a_real_microphone(&now)
                     {
                         // the user picked Discord's input in Windows: theirs
                         log::info!(
@@ -481,8 +481,40 @@ pub fn restore() -> usize {
             let _ = std::fs::rename(&tmp, &file);
         }
     }
+    let exes = ct_engine::win::host::discord_executables();
+    if ct_engine::win::policy::discord_input_as_wanted(&exes) == Some(true) {
+        *FILLED_FOR.lock().unwrap_or_else(|p| p.into_inner()) = discord_roots(&exes);
+    }
     log::info!("restored Discord's microphone ({n} settings cleared)");
     n
+}
+
+/// The Discord start (its main processes) that has its microphone: an empty
+/// value seen later in that same run is the user's "Default".
+static FILLED_FOR: std::sync::Mutex<Vec<u32>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(windows)]
+fn filled_for(roots: &[u32]) -> bool {
+    *FILLED_FOR.lock().unwrap_or_else(|p| p.into_inner()) == roots
+}
+
+/// A per-app input value that is a microphone the user can choose (never
+/// Claude Talk's own devices, nor one that can't be resolved right now).
+#[cfg(windows)]
+fn is_a_real_microphone(path: &str) -> bool {
+    use ct_engine::win::devices::{self, DeviceSelector, NOT_A_MICROPHONE};
+    let Some(id) = endpoint_of(path) else {
+        return false;
+    };
+    match devices::resolve(&DeviceSelector::Id(id)) {
+        Ok((_, e)) => {
+            let n = e.name.to_lowercase();
+            !NOT_A_MICROPHONE
+                .iter()
+                .any(|p| n.contains(&p.to_lowercase()))
+        }
+        Err(_) => false,
+    }
 }
 
 /// Set by the elevated uninstall cleanup: it writes nothing into the user's
@@ -558,8 +590,13 @@ pub fn restore_when_discord_starts() -> i32 {
         crate::autostart::restore_at_next_sign_in(false);
         return 0;
     }
-    if main_running() {
-        // Claude Talk started first at this sign-in: it does the work
+    let parent = std::env::args()
+        .skip_while(|a| a != "--restore-when-discord-starts")
+        .nth(1)
+        .and_then(|p| p.parse::<u32>().ok())
+        .unwrap_or(0);
+    if parent == 0 && main_running() {
+        // started from RunOnce, and Claude Talk already runs: it does the work
         crate::autostart::restore_at_next_sign_in(false);
         return 0;
     }
@@ -568,11 +605,7 @@ pub fn restore_when_discord_starts() -> i32 {
     crate::autostart::restore_at_next_sign_in(true);
     // first wait until the Claude Talk that started us has really ended
     // (until then its "running" mark is still there)
-    if let Some(parent) = std::env::args()
-        .skip_while(|a| a != "--restore-when-discord-starts")
-        .nth(1)
-        .and_then(|p| p.parse::<u32>().ok())
-    {
+    if parent != 0 {
         use windows::Win32::Foundation::CloseHandle;
         use windows::Win32::System::Threading::{
             OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
@@ -592,24 +625,35 @@ pub fn restore_when_discord_starts() -> i32 {
             return 0;
         }
         if !policy::pids_of(&exes).is_empty() {
-            // Discord starts its audio process a little later
-            for wait in [3u64, 10, 30] {
+            // Discord starts its audio process a little later, and Windows
+            // may only take the setting once Discord has used sound (K8):
+            // try until it holds, while Discord runs (up to 30 minutes)
+            let t1 = Instant::now();
+            let mut wait = 3u64;
+            while t1.elapsed() < Duration::from_secs(30 * 60) {
                 std::thread::sleep(Duration::from_secs(wait));
+                wait = (wait * 2).min(30);
                 if main_running() {
                     return 0;
                 }
+                if policy::pids_of(&exes).is_empty() {
+                    break; // Discord closed again: wait for its next start
+                }
                 let n = restore();
                 log::info!("restore helper: Discord's own microphone back ({n})");
+                // done only when confirmed (no cable any more: nothing points
+                // Discord at it); then not again at the next sign-in
+                let cable_gone = policy::cable_capture_id().is_none();
+                let done = (cable_gone || policy::discord_routed_to_cable(&exes) == Some(false))
+                    && policy::discord_input_as_wanted(&exes) == Some(true);
+                if done {
+                    crate::autostart::restore_at_next_sign_in(false);
+                    return 0;
+                }
             }
-            // done only when Discord really has it; else again next sign-in
-            // (no cable any more: nothing points Discord at it)
-            // (confirmed: a value Windows didn't let us read is not done)
-            let done = policy::discord_routed_to_cable(&exes) == Some(false)
-                && policy::discord_input_as_wanted(&exes) == Some(true);
-            if done {
-                crate::autostart::restore_at_next_sign_in(false);
+            if !policy::pids_of(&exes).is_empty() {
+                return 0; // tried for 30 minutes; again at the next sign-in
             }
-            return 0;
         }
         std::thread::sleep(Duration::from_secs(2));
     }

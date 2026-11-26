@@ -48,11 +48,13 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   }
   if (cableBroken) errors.push(<Notice key="cb" kind="error" title={t.errors.cableBrokenTitle} body={t.errors.cableBrokenBody} action={t.errors.cableBrokenAction} onAction={() => api.openPlace('soundSettings')} />);
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
-  if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />);
+  if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
   if (s?.outputFixed) errors.push(<Notice key="of" kind="warn" title={t.notices.outputFixedTitle} body={t.notices.outputFixedBody} />);
   if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onHotkeys} />);
-  if (s?.outputMismatch) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: s.outputMismatch[0], claude: s.outputMismatch[1] })} action={fill(t.notices.outputElsewhereAction, { discord: s.outputMismatch[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
+  // (only while the Claude window is the Claude in the call)
+  const outputElsewhere = on && !config.externalClaude && !!s?.claudeWindowOpen ? s?.outputMismatch : null;
+  if (s && outputElsewhere) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: outputElsewhere[0], claude: outputElsewhere[1] })} action={fill(t.notices.outputElsewhereAction, { discord: outputElsewhere[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.echoAction} onAction={s.echoActive ? undefined : () => { updateConfig({ echo: 'auto' }); onEcho(); }} />);
 
   // The cards never contradict the switch or an error above them.
@@ -80,6 +82,8 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   else if (s.discordUsesCable === 'yes') {
     discordCheck = micBroken
       ? { state: 'warn', text: t.main.discordCantHearYou }
+      : config.micMuted
+      ? { state: 'wait', text: t.main.discordMicMuted }
       : !on
       ? { state: 'wait', text: t.main.discordHearsOnlyYou }
       : config.claudeToDiscordMuted
@@ -122,7 +126,8 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   // The line under the switch says the same as the cards and notices below.
   const discordBroken = discordCheck.state === 'warn';
   const switchText = !on
-    ? (cableMissing || micBroken ? t.main.switchOffProblem
+    ? (micBroken || cableBroken ? t.main.switchOffProblem
+      : cableMissing ? t.main.switchOffSeeBelow
       : config.micMuted && config.routeDiscord && s?.discordUsesCable === 'no' ? t.main.switchOffMutedDiscordHears
       : config.micMuted && config.routeDiscord ? t.main.switchOffMuted : t.main.switchOff)
     : cableMissing ? t.main.switchOnNotReady
@@ -180,7 +185,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
           ) },
           { key: 'claude', first: claudeCheck.state === 'warn' || claudeNeedsYou, card: (
 
-        <section className={`person${!on || !claudeIn ? ' dim' : ''}${claudeCheck.state === 'warn' ? ' attention' : ''}`} aria-label={t.main.claude}>
+        <section className={`person${!on || !claudeIn ? ' dim' : ''}${claudeCheck.state === 'warn' && !micBroken ? ' attention' : ''}`} aria-label={t.main.claude}>
           <div className="head"><h2>{t.main.claude}</h2></div>
           <Meter level={on ? (external ? s?.claudeExternal : s?.claude) ?? quiet : quiet} off={!on || !claudeIn} label={t.main.claude} />
           <div className="sub blank">&nbsp;</div>
@@ -198,7 +203,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
           ) },
           { key: 'discord', first: discordCheck.state === 'warn', card: (
 
-        <section className={`person${!s?.discordRunning ? ' dim' : ''}${discordCheck.state === 'warn' ? ' attention' : ''}`} aria-label={t.main.discord}>
+        <section className={`person${!s?.discordRunning ? ' dim' : ''}${discordCheck.state === 'warn' && !micBroken ? ' attention' : ''}`} aria-label={t.main.discord}>
           <div className="head"><h2>{t.main.discord}</h2></div>
           <Meter level={s?.discord ?? quiet} off={!s?.discordRunning} label={t.main.discord} />
           <div className="sub blank">&nbsp;</div>

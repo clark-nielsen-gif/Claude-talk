@@ -141,7 +141,7 @@ fn tell_restart_discord_yourself(da: bool) {
     let (title, text) = if da {
         (
             "Genstart Discord selv",
-            "Claude Talk kunne ikke genstarte Discord. Luk Discord helt (højreklik på ikonet ved uret, og vælg »Quit Discord«), og start det igen. Ellers kan de andre ikke høre dig.",
+            "Claude Talk kunne ikke genstarte Discord. Luk Discord helt (højreklik på ikonet ved uret, og vælg »Afslut Discord« (på engelsk »Quit Discord«)), og start det igen. Ellers kan de andre ikke høre dig.",
         )
     } else {
         (

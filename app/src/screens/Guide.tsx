@@ -7,8 +7,10 @@ import { fill } from '../i18n';
  *  Deliberately generic: no third-party logos or screenshots. */
 function Sketch({ label, choice }: { label: string; choice: string }) {
   return (
-    <svg className="illustration" viewBox="0 0 480 150" role="img" aria-label={label} width="100%">
-      <rect x="0" y="0" width="480" height="150" rx="12" fill="var(--sunk)" />
+    // only the microphone field: big enough to read (the output field is
+    // left as it is)
+    <svg className="illustration" viewBox="8 10 224 132" role="img" aria-label={label} width="336" height="198">
+      <rect x="8" y="10" width="224" height="132" rx="10" fill="var(--sunk)" />
       <rect x="20" y="20" width="96" height="10" rx="5" fill="var(--line-strong)" />
       <rect x="20" y="44" width="200" height="34" rx="8" fill="var(--card)" stroke="var(--line-strong)" />
       <text x="34" y="66" fontSize="13" fontFamily="Inter Variable, sans-serif" fill="var(--ink)">{label}</text>
@@ -17,9 +19,6 @@ function Sketch({ label, choice }: { label: string; choice: string }) {
       <circle cx="40" cy="111" r="7" fill="var(--clay)" />
       <path d="M36.5 111l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" />
       <text x="56" y="115" fontSize="13" fontWeight="600" fontFamily="Inter Variable, sans-serif" fill="var(--ink)">{choice}</text>
-      <rect x="252" y="20" width="96" height="10" rx="5" fill="var(--line-strong)" />
-      <rect x="252" y="44" width="208" height="34" rx="8" fill="var(--card)" stroke="var(--line)" />
-      <rect x="266" y="58" width="120" height="6" rx="3" fill="var(--line-strong)" />
     </svg>
   );
 }

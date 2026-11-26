@@ -191,6 +191,12 @@ pub fn discord_given_back() -> Vec<String> {
         .clone()
 }
 
+/// A value that must never be taken as the user's own setting again (one the
+/// user replaced with a choice in Claude Talk).
+pub fn forget_as_own(path: &str) {
+    note_given_back(path);
+}
+
 fn note_given_back(path: &str) {
     let mut g = DISCORD_GIVEN_BACK.lock().unwrap_or_else(|p| p.into_inner());
     if !g.iter().any(|v| v.eq_ignore_ascii_case(path)) {

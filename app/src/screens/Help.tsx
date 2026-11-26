@@ -24,7 +24,8 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
     || status.discordNeedsRestart
     || (status.discordUsesCable === 'no' && config.routeDiscord)
     // speakers without echo reduction: the overview warns about echo
-    || (status.speakers && !status.echoActive));
+    || (status.speakers && !status.echoActive)
+    || (!!status.outputMismatch && config.claudeInDiscord && !config.externalClaude && status.claudeWindowOpen));
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<SelfTestResult[] | null>(null);
   // Plain verdict: dropouts in the last ~10 seconds, or a long delay.
