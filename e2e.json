@@ -1,0 +1,176 @@
+{
+  "echo_off": {
+    "to_claude": {
+      "page": {
+        "errors": [],
+        "impulseTimes": [
+          1795689533272.7876,
+          1795689533352.8918,
+          1795689533442.3457,
+          1795689533523.2876,
+          1795689533612.921,
+          1795689533703.317,
+          1795689533782.7168,
+          1795689533873.8125,
+          1795689533952.4126,
+          1795689534043.65,
+          1795689534121.8083,
+          1795689534213.2458,
+          1795689534292.4668,
+          1795689534382.6418,
+          1795689534462.4834,
+          1795689534553.9585,
+          1795689534632.8,
+          1795689534722.3125,
+          1795689534802.5168,
+          1795689534892.7085,
+          1795689534982.433,
+          1795689535061.8667,
+          1795689535152.95,
+          1795689535232.8042,
+          1795689535323.1875,
+          1795689535402.8418,
+          1795689535492.6167,
+          1795689535573.3794,
+          1795689535663.171,
+          1795689535743.2168,
+          1795689535832.3083,
+          1795689535913.2751,
+          1795689536003.1667,
+          1795689536083.5415,
+          1795689536172.2668,
+          1795689536262.579,
+          1795689536344.3584,
+          1795689536432.6377,
+          1795689536513.3333,
+          1795689536602.0957,
+          1795689536682.329,
+          1795689536772.375,
+          1795689536853.1667,
+          1795689536942.8833,
+          1795689537021.8667,
+          1795689537113.5415,
+          1795689537193.1667,
+          1795689537282.3,
+          1795689537362.575,
+          1795689537452.5
+        ],
+        "levels": {
+          "1000": -18,
+          "2500": -130.9,
+          "3000": -152.1,
+          "440": -158.8
+        },
+        "rate": 48000,
+        "samples": 143360,
+        "steps": [
+          {
+            "name": "voice",
+            "state": "running"
+          },
+          {
+            "name": "permission",
+            "state": "granted"
+          },
+          {
+            "audioinput": [
+              "Claude Talk|default",
+              "Claude Talk|claude-talk"
+            ],
+            "name": "devices"
+          },
+          {
+            "label": "Claude Talk",
+            "name": "track",
+            "settings": {
+              "autoGainControl": false,
+              "channelCount": 1,
+              "deviceId": "claude-talk",
+              "echoCancellation": false,
+              "groupId": "claude-talk",
+              "latency": 0.01,
+              "noiseSuppression": false,
+              "sampleRate": 48000,
+              "sampleSize": 32
+            },
+            "state": "live"
+          },
+          {
+            "name": "second_call_ok"
+          },
+          {
+            "name": "analysis_context",
+            "state": "running"
+          },
+          {
+            "1000": -18,
+            "2500": -130.9,
+            "3000": -152.1,
+            "440": -158.8,
+            "name": "levels"
+          },
+          {
+            "bytes": 34067,
+            "name": "mediarecorder"
+          },
+          {
+            "name": "webrtc",
+            "remoteState": "live",
+            "totalAudioEnergy": 0
+          },
+          {
+            "name": "stopped"
+          }
+        ]
+      },
+      "pass": false
+    },
+    "to_discord": {
+      "device": "Claude Talk – til Discord (VB-Audio)",
+      "diag": {
+        "capture_peak_last": 0.5999069213867188,
+        "captured_frames": 188640,
+        "discontinuities": 1,
+        "overflow": 0,
+        "recorded_peak": 0.5999008417129517,
+        "silence_filled": 0,
+        "tap_buffered_ms": 29.14583396911621,
+        "tap_underrun": 6048
+      },
+      "levels_db": {
+        "1000": -91.4,
+        "2500": -67.4,
+        "3000": -112.0,
+        "440": -11.7
+      },
+      "pass": false
+    }
+  },
+  "echo_on": {
+    "to_claude": {
+      "page": null,
+      "pass": false
+    },
+    "to_discord": {
+      "device": "Claude Talk – til Discord (VB-Audio)",
+      "diag": {
+        "capture_peak_last": 0.48613739013671875,
+        "captured_frames": 190560,
+        "discontinuities": 1,
+        "overflow": 0,
+        "recorded_peak": 0.4861323833465576,
+        "silence_filled": 0,
+        "tap_buffered_ms": 28.0625,
+        "tap_underrun": 9600
+      },
+      "levels_db": {
+        "1000": -79.7,
+        "2500": -20.0,
+        "3000": -70.4,
+        "440": -85.4
+      },
+      "pass": false
+    }
+  },
+  "pass": false
+}

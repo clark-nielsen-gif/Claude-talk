@@ -1,0 +1,46 @@
+1795689522.689 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795689530.416 WARN  claude_talk::audio::imp: TEST MODE: microphone replaced by program fakemic.exe
+1795689530.431 INFO  claude_talk::audio::imp: audio engine started
+1795689530.532 INFO  claude_talk::discord: Discord's microphone set to Claude Talk (1 processes)
+1795689530.543 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 2664, hr 0x00000000)
+1795689530.543 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795689530.543 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 8100, hr 0x00000000)
+1795689530.615 INFO  claude_talk::discord: default output is now speakers
+1795689530.615 INFO  claude_talk::discord: Discord microphone: Unknown
+1795689531.682 INFO  claude_talk::claude_window::win: Claude window browser process: 3264
+1795689531.973 INFO  claude_talk::audio::imp: source 2 'Claude' -> Running (device '', pid 3264, hr 0x00000000)
+1795689533.080 INFO  claude_talk::claude_window: bridge source mode: generator
+1795689533.080 INFO  claude_talk::claude_window: Claude window microphone in use
+1795689533.081 INFO  claude_talk::claude_window: Claude window microphone in use
+1795689534.422 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":64800,"mode":"generator","type":"stats"}
+1795689536.250 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=10ms under=0 drift=-9; 1>102 buf=14ms under=2448 drift=861; 2>101 buf=16ms under=1824 drift=1040; 3>102 buf=10ms under=3360 drift=-14] echo None
+1795689536.422 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":160800,"mode":"generator","type":"stats"}
+1795689538.529 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":216960,"mode":"generator","type":"stats"}
+1795689540.422 DEBUG claude_talk::claude_window: bridge stats: {"ct":1,"dropped":0,"framesIn":352800,"mode":"generator","type":"stats"}
+1795689541.329 DEBUG claude_talk::audio::imp: levels dBFS [out101=-4 out102=-4 src1=-10 src2=-10 src3=-10] routes [1>101 buf=10ms under=0 drift=-2; 1>102 buf=19ms under=4128 drift=498; 2>101 buf=13ms under=1824 drift=263; 3>102 buf=19ms under=5280 drift=1128] echo None
+1795689542.039 INFO  claude_talk::claude_window: Claude window microphone released
+1795689544.888 INFO  claude_talk::logging: Claude Talk 1.0.0 starting
+1795689545.616 WARN  claude_talk::audio::imp: TEST MODE: microphone replaced by program fakemic.exe
+1795689545.617 INFO  ct_engine::win::host: echo reduction on
+1795689545.618 INFO  claude_talk::audio::imp: audio engine started
+1795689545.704 INFO  claude_talk::audio::imp: source 1 'Mikrofon' -> Running (device '', pid 2664, hr 0x00000000)
+1795689545.704 INFO  claude_talk::audio::imp: source 2 'Claude' -> WaitingForProcess (device '', pid 0, hr 0x00000000)
+1795689545.704 INFO  claude_talk::audio::imp: source 3 'Discord' -> Running (device '', pid 8100, hr 0x00000000)
+1795689545.718 INFO  claude_talk::discord: default output is now speakers
+1795689545.718 INFO  claude_talk::discord: Discord microphone: Unknown
+1795689546.446 INFO  claude_talk::claude_window::win: Claude window browser process: 5792
+1795689547.169 INFO  claude_talk::audio::imp: source 2 'Claude' -> Running (device '', pid 5792, hr 0x00000000)
+1795689551.533 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=15ms under=528 drift=881; 1>102 buf=14ms under=1488 drift=827; 2>101 buf=16ms under=1248 drift=854; 3>102 buf=12ms under=3408 drift=1168] echo Some(282720)
+1795689556.679 DEBUG claude_talk::audio::imp: levels dBFS [echo=-8 out101=-9 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=646; 1>102 buf=22ms under=1488 drift=660; 2>101 buf=13ms under=1248 drift=158; 3>102 buf=14ms under=3408 drift=758] echo Some(523200)
+1795689561.708 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=18ms under=7632 drift=134; 1>102 buf=18ms under=1488 drift=720; 2>101 buf=13ms under=1248 drift=-184; 3>102 buf=12ms under=3408 drift=81] echo Some(764640)
+1795689566.733 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=18ms under=7632 drift=-197; 1>102 buf=16ms under=1488 drift=29; 2>101 buf=14ms under=1248 drift=-193; 3>102 buf=12ms under=3408 drift=-301] echo Some(1006080)
+1795689571.755 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=19ms under=7632 drift=-210; 1>102 buf=16ms under=1488 drift=-278; 2>101 buf=15ms under=1248 drift=-87; 3>102 buf=14ms under=3408 drift=-278] echo Some(1247040)
+1795689576.790 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=-100; 1>102 buf=8ms under=1488 drift=-284; 2>101 buf=15ms under=1248 drift=-6; 3>102 buf=15ms under=3408 drift=-120] echo Some(1488480)
+1795689581.817 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=-11; 1>102 buf=19ms under=1488 drift=-107; 2>101 buf=15ms under=1248 drift=22; 3>102 buf=15ms under=3408 drift=-4] echo Some(1729920)
+1795689586.841 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=22; 1>102 buf=9ms under=1488 drift=46; 2>101 buf=15ms under=1248 drift=18; 3>102 buf=15ms under=3408 drift=32] echo Some(1970880)
+1795689591.866 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=19; 1>102 buf=19ms under=1488 drift=34; 2>101 buf=15ms under=1248 drift=6; 3>102 buf=15ms under=3408 drift=25] echo Some(2212320)
+1795689596.895 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=7; 1>102 buf=19ms under=1488 drift=7; 2>101 buf=15ms under=1248 drift=-0; 3>102 buf=15ms under=3408 drift=8] echo Some(2453760)
+1795689601.925 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=-0; 1>102 buf=9ms under=1488 drift=40; 2>101 buf=15ms under=1248 drift=-3; 3>102 buf=15ms under=3408 drift=-3] echo Some(2695200)
+1795689606.952 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=-3; 1>102 buf=8ms under=1488 drift=247; 2>101 buf=15ms under=1248 drift=-1; 3>102 buf=15ms under=3408 drift=220] echo Some(2936160)
+1795689611.976 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=-1; 1>102 buf=7ms under=1488 drift=189; 2>101 buf=14ms under=1248 drift=158; 3>102 buf=14ms under=3408 drift=118] echo Some(3177600)
+1795689617.003 DEBUG claude_talk::audio::imp: levels dBFS [echo=-10 out101=-10 out102=-4 src1=-10 src2=-120 src3=-10] routes [1>101 buf=20ms under=7632 drift=221; 1>102 buf=17ms under=1488 drift=-4; 2>101 buf=14ms under=1248 drift=23; 3>102 buf=14ms under=3408 drift=-2] echo Some(3418560)
