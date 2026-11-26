@@ -5,6 +5,7 @@ import { useApp, useT } from '../context';
 import { fill } from '../i18n';
 import { DiscordGuide } from './Guide';
 import { useInstallCable } from '../useInstallCable';
+import { useCableBroken } from '../useCableBroken';
 
 /** True while the user has spoken within the last 1.5 s. */
 function useSpeaking(rms: number): boolean {
@@ -18,7 +19,7 @@ function useSpeaking(rms: number): boolean {
   return speaking;
 }
 
-export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => void }) {
+export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; onSettings: () => void; onHotkeys: () => void; onEcho: () => void }) {
   const t = useT();
   const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
@@ -31,16 +32,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
     setOpening(true);
     api.openClaude().catch(() => toast(t.errors.claudeWindow)).finally(() => setTimeout(() => setOpening(false), 1500));
   };
-  // The cable stopped playing while installed (disabled in Windows' sound
-  // settings, taken by another program): shown after 5 s, not for a blip.
-  const [cableBadSince, setCableBadSince] = useState<number | null>(null);
-  useEffect(() => {
-    if (!status || status.cableOk || !info.cableInstalled) setCableBadSince(null);
-    else setCableBadSince((v) => v ?? Date.now());
-  }, [status, info.cableInstalled]);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { if (cableBadSince === null) return; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [cableBadSince]);
-  const cableBroken = cableBadSince !== null && now - cableBadSince > 5000;
+  // The cable stopped working while installed: shown after 5 s, not for a blip.
+  const cableBroken = useCableBroken(status, info);
   useEffect(() => api.onUpdate(setUpdate), []);
   const s = status;
   const quiet = { peak: 0, rms: 0 };
@@ -58,8 +51,8 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
   if (s?.outputFixed) errors.push(<Notice key="of" kind="warn" title={t.notices.outputFixedTitle} body={t.notices.outputFixedBody} />);
-  if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onSettings} />);
-  if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} />);
+  if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onHotkeys} />);
+  if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.hotkeyAction} onAction={s.echoActive ? undefined : onEcho} />);
 
   // The cards never contradict the switch or an error above them.
   const cableMissing = !info.supported || (!!s && !s.cableOk && !info.cableInstalled) || cableBroken;
@@ -68,6 +61,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   // --- Discord card state
   let discordCheck: { state: 'ok' | 'wait' | 'warn'; text: string; fix?: 'mic' | 'restart' };
   if (!info.supported) discordCheck = { state: 'warn', text: t.main.discordNeedsWindows11 };
+  else if (cableBroken) discordCheck = { state: 'warn', text: t.main.discordCableBroken };
   else if (cableMissing) discordCheck = { state: 'warn', text: t.main.discordNoMic };
   else if (!s?.discordRunning) discordCheck = { state: 'wait', text: t.main.discordNotRunning };
   else if (s.discordNeedsRestart) discordCheck = { state: 'warn', text: t.guide.restartDiscordTitle, fix: 'restart' };
@@ -117,7 +111,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
   const claudeNeedsYou = on && !cableMissing && (!s?.claudeWindowOpen || !!s?.claudeLogin || !s?.claudeListening);
   // The line under the switch says the same as the cards and notices below.
   const discordBroken = discordCheck.state === 'warn';
-  const switchText = !on ? t.main.switchOff
+  const switchText = !on ? (config.micMuted && config.routeDiscord ? t.main.switchOffMuted : t.main.switchOff)
     : cableMissing ? t.main.switchOnNotReady
     : micBroken ? t.main.switchOnMicProblem
     : discordBroken ? t.main.switchOnFixDiscord
@@ -127,6 +121,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
     : !s.claudeListening ? t.main.switchOnClaudeNotListening
     : config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
     : config.micMuted ? t.main.switchOnMicMuted
+    : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })
     : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
     : t.main.switchOn;
   const switchWarn = on && (cableMissing || micBroken || discordBroken);
@@ -153,11 +148,11 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
           {micBroken
             ? <Check state="warn">{t.main.micProblem}</Check>
             : config.micMuted
-              ? <Check state="warn">{t.main.micMuted}</Check>
+              ? <Check state="warn">{!config.routeDiscord || s?.discordUsesCable === 'no' ? t.main.micMutedClaudeOnly : t.main.micMuted}</Check>
               : speaking ? <Check state="ok">{t.main.weHearYou}</Check> : <Check state="wait">{t.main.speakToTest}</Check>}
           <div className="actions">
             {!micBroken && (
-              <button className="iconbtn" aria-pressed={config.micMuted} onClick={() => updateConfig({ micMuted: !config.micMuted })}>
+              <button className="iconbtn" onClick={() => updateConfig({ micMuted: !config.micMuted })}>
                 {config.micMuted ? Icon.micOff() : Icon.mic()} {config.micMuted ? t.main.unmuteMe : t.main.muteMe}
               </button>
             )}
@@ -179,7 +174,7 @@ export function Home({ info, onSettings }: { info: AppInfo; onSettings: () => vo
               ? <button className="btn primary" disabled={opening} onClick={openClaude}>{opening ? t.main.openingClaude : t.main.openClaude}</button>
               : !s.claudeListening && on
                 ? <button className="btn secondary" onClick={openClaude}>{t.main.showClaude}</button>
-                : on && !cableMissing && <button className="iconbtn" title={t.main.muteClaudeHint} aria-pressed={config.claudeToDiscordMuted} onClick={() => updateConfig({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
+                : on && !cableMissing && <button className="iconbtn" title={t.main.muteClaudeHint} onClick={() => updateConfig({ claudeToDiscordMuted: !config.claudeToDiscordMuted })}>
                   {config.claudeToDiscordMuted ? Icon.speakerOff() : Icon.speaker()} {config.claudeToDiscordMuted ? t.main.unmuteClaude : t.main.muteClaude}
                 </button>}
           </div>

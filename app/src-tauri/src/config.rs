@@ -387,10 +387,13 @@ impl Config {
             ));
         }
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(
-            &tmp,
-            serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?,
-        )?;
+        {
+            use std::io::Write;
+            let mut f = std::fs::File::create(&tmp)?;
+            f.write_all(&serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)?;
+            // on disk before it replaces the old file (power loss)
+            f.sync_all()?;
+        }
         std::fs::rename(tmp, path)
     }
 }

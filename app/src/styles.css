@@ -342,3 +342,9 @@ select.field {
 .person .actions { justify-content: flex-start; }
 .person .actions .btn.quiet { text-align: left; padding-inline: 0; }
 .steps li.failed { color: var(--ink); font-weight: 600; }
+.btn.quiet.flush { padding-inline: 0; }
+@media (max-width: 860px) {
+  /* a setting whose control is wide goes under its text */
+  .panel > .row:has(select.field) { flex-wrap: wrap; }
+  .panel > .row:has(select.field) select.field { width: 100%; }
+}

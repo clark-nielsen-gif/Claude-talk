@@ -114,9 +114,10 @@ pub mod imp {
         }
         if let MixerSourceKind::Input { device_id } = &s.kind {
             // never one of Claude Talk's own devices (a loop the graph can't see)
+            // (a device that isn't there now can't be checked: refused)
             let name = ct_engine::win::devices::resolve(&DeviceSelector::Id(device_id.clone()))
                 .map(|(_, e)| e.name.to_lowercase())
-                .unwrap_or_default();
+                .map_err(|_| "error.generic".to_string())?;
             if ct_engine::win::devices::NOT_A_MICROPHONE
                 .iter()
                 .any(|p| name.contains(&p.to_lowercase()))

@@ -99,6 +99,11 @@ fn vb_audio_signer(name: &str) -> bool {
 fn marker() -> PathBuf {
     data_dir().join("installed-by-claude-talk")
 }
+
+/// Claude Talk installed the cable (not a VB-CABLE the user had before).
+pub fn cable_is_ours() -> bool {
+    marker().exists()
+}
 const SETUP_EXE: &str = "VBCABLE_Setup_x64.exe";
 const CATALOG: &str = "vbaudio_cable64_win10.cat";
 const WHCP: &str = "Microsoft Windows Hardware Compatibility Publisher";
@@ -227,6 +232,8 @@ pub fn uninstall_cleanup() -> i32 {
     // are removed (this cleanup gives Discord its microphone back itself)
     stop_other_instances();
     crate::discord::restore();
+    // the program is going away: no helper at the next sign-in
+    crate::autostart::restore_at_next_sign_in(false);
     remove_autostart();
     // VB-CABLE is removed only if Claude Talk installed it, and only with
     // the very setup program that installed it.

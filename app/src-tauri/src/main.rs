@@ -250,8 +250,13 @@ fn shutdown_inner(app: &AppHandle, user_quit: bool) {
                 .is_empty();
         // (also after "Gendan": the audio service may still remember the
         // cable for Discord until Discord runs again)
-        if user_quit && !discord_running {
-            discord::spawn_restore_helper();
+        if (user_quit || !autostart) && !discord_running {
+            // the helper ends with the Windows session: at the next sign-in
+            // it starts again from RunOnce until Discord has run
+            crate::autostart::restore_at_next_sign_in(true);
+            if user_quit {
+                discord::spawn_restore_helper();
+            }
         }
     }
     log::info!("Claude Talk quit");

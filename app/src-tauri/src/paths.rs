@@ -14,6 +14,12 @@ pub fn logs_dir() -> PathBuf {
         .unwrap_or_else(app_dir)
         .join("logs")
 }
+/// What Claude Talk itself last gave Discord as its microphone (D28): read
+/// back later, it is not the user's own setting. Kept apart from the
+/// settings, which the running app may save over at any time.
+pub fn given_back_file() -> PathBuf {
+    app_dir().join("discord-given-back.txt")
+}
 pub fn config_file() -> PathBuf {
     app_dir().join("config.json")
 }

@@ -23,10 +23,6 @@ export function Instructions() {
     if (now) update({ instructions: next });
     else save.current = window.setTimeout(() => update({ instructions: next }), 600);
   };
-  useEffect(() => api.onPrompt((r) => {
-    if (r.ok) toast(t.instructions.sent);
-    else toast(r.reason === 'noComposer' ? t.errors.noComposer : r.reason === 'draft' ? t.errors.promptDraft : t.errors.promptNotSent);
-  }), [t, toast]);
 
   const send = async () => {
     try {

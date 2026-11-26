@@ -116,11 +116,11 @@ export function Settings() {
         </div>
         <div className="row">
           <div className="text"><span className="label">{t.settings.echo}</span></div>
-          {seg<EchoMode>(config.echo, [['auto', t.settings.echoAuto], ['on', t.settings.echoOn], ['off', t.settings.echoOff]], (v) => update({ echo: v }), t.settings.echo)}
+          <div id="echo-group" tabIndex={-1}>{seg<EchoMode>(config.echo, [['auto', t.settings.echoAuto], ['on', t.settings.echoOn], ['off', t.settings.echoOff]], (v) => update({ echo: v }), t.settings.echo)}</div>
         </div>
       </div>
 
-      <h2 className="section-title">{t.settings.hotkeys}</h2>
+      <h2 className="section-title" id="hotkeys-title">{t.settings.hotkeys}</h2>
       <div className="panel">
         <div className="row"><div className="text"><span className="label">{t.settings.hkMuteClaude}</span></div>{picker('muteClaudeToDiscord', t.settings.hkMuteClaude)}</div>
         <div className="row"><div className="text"><span className="label">{t.settings.hkMuteMic}</span></div>{picker('muteMic', t.settings.hkMuteMic)}</div>

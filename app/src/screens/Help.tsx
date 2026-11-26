@@ -3,6 +3,7 @@ import { api, type AppInfo, type SelfTestResult } from '../api';
 import { Check } from '../components';
 import { useApp, useT } from '../context';
 import { fill } from '../i18n';
+import { useCableBroken } from '../useCableBroken';
 
 const routeNames: Record<string, { da: string; en: string }> = {
   micToDiscord: { da: 'Dig → Discord', en: 'You → Discord' },
@@ -15,9 +16,10 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
   const t = useT();
   const { status, lang, toast, config } = useApp();
   // Anything the overview shows as a problem: then the sound is not "fine".
+  const cableBroken = useCableBroken(status, info);
   const problem = !!status && (
     !info.supported
-    || (!status.cableOk && !info.cableInstalled)
+    || (!status.cableOk && !info.cableInstalled) || cableBroken
     || status.micState === 'blocked' || status.micState === 'missing'
     || status.discordNeedsRestart
     || (status.discordUsesCable === 'no' && config.routeDiscord));
@@ -61,6 +63,12 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
         {results?.some((r) => !r.passed) && <p className="muted" style={{ padding: '0 1.25rem 1rem', margin: 0 }}>{t.help.failedNext}</p>}
       </div>
 
+      <div className="panel">
+        <div className="row">
+          <div className="text"><span className="label">{t.help.krispTitle}</span><span className="small">{t.notices.krispBody}</span></div>
+        </div>
+      </div>
+
       <h2 className="section-title">{t.help.health}</h2>
       <div className="panel">
         <div className="row">
@@ -90,7 +98,7 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
           <button className="btn secondary" onClick={() => api.openPlace('support')}>{t.help.contact}</button>
         </div>
         <div className="row">
-          <div className="text"><span className="label">{t.help.logs}</span></div>
+          <div className="text"><span className="label">{t.help.logsTitle}</span></div>
           <button className="btn secondary" onClick={() => api.openPlace('logs')}>{t.help.logs}</button>
         </div>
       </div>

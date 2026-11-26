@@ -55,7 +55,7 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
             {status?.micName && (
               <>
                 <p className="muted">{fill(t.guide.micInUse, { mic: status.micName })}</p>
-                <button className="btn quiet" style={{ alignSelf: 'flex-start' }} onClick={onSettings}>{t.main.otherMic}</button>
+                <button className="btn quiet flush" style={{ alignSelf: 'flex-start' }} onClick={onSettings}>{t.main.otherMic}</button>
               </>
             )}
             <ol>{t.guide.discordSteps.map((s) => <li key={s}>{s}</li>)}</ol>
@@ -68,8 +68,10 @@ export function DiscordGuide({ mode, onClose, onSettings }: { mode: 'mic' | 'res
           <>
             <h2 id="guide-title">{t.guide.restartDiscordTitle}</h2>
             <p className="muted">{t.guide.restartDiscordBody}</p>
+            <p className="muted">{t.guide.restartCheckFirst}</p>
             <div className="buttons">
               <button className="btn secondary" onClick={onClose}>{t.guide.close}</button>
+              <button className="btn secondary" onClick={() => api.openPlace('discordVoice')}>{t.guide.discordButton}</button>
               <button ref={first} className="btn primary" onClick={() => api.restartDiscord().then(onClose, () => { onClose(); toast(t.errors.discordRestart); })}>{t.guide.restartDiscord}</button>
             </div>
           </>

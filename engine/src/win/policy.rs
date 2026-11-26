@@ -175,6 +175,30 @@ pub fn discord_own_input() -> Option<String> {
         .clone()
 }
 
+/// The value Claude Talk itself gave Discord on restore (the user's
+/// microphone, D28). Read back later, it is not the user's own setting.
+static DISCORD_GIVEN_BACK: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn set_discord_given_back(path: Option<String>) {
+    *DISCORD_GIVEN_BACK.lock().unwrap_or_else(|p| p.into_inner()) = path;
+}
+
+pub fn discord_given_back() -> Option<String> {
+    DISCORD_GIVEN_BACK
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+}
+
+/// The cable was installed by Claude Talk (only Claude Talk points programs
+/// at it). For a VB-CABLE the user had before, only Discord's settings for it
+/// are removed.
+static CABLE_IS_OURS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_cable_is_ours(ours: bool) {
+    CABLE_IS_OURS.store(ours, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Points Discord's microphone at our cable. Returns how many processes were
 /// updated (0 if Discord is not running – call again when it starts).
 pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
@@ -191,7 +215,8 @@ pub fn route_discord_to_cable(exes: &[String]) -> windows::core::Result<usize> {
             // (empty: nothing set now – keep what was saved: the entry may
             // have been removed while Discord was closed, before it could be
             // put back)
-            if !d.is_empty() && !d.to_lowercase().contains(&id.to_lowercase()) {
+            let given = discord_given_back().is_some_and(|g| g.eq_ignore_ascii_case(&d));
+            if !d.is_empty() && !given && !d.to_lowercase().contains(&id.to_lowercase()) {
                 set_discord_own_input(Some(d));
             }
         }
@@ -234,11 +259,24 @@ pub fn restore_discord(exes: &[String]) -> usize {
         // microphone Claude Talk recorded as "you" (taken over from Discord,
         // D28): with Discord on "Default", nothing would give it back the
         // headset the user had picked there. Else none (Windows' default).
-        let back = HSTRING::from(
-            discord_own_input()
-                .or_else(|| devices::preferred_microphone().map(|id| interface_path(&id)))
-                .unwrap_or_default(),
-        );
+        // (not when that is Windows' default microphone anyway: no hidden
+        // setting that would outlive a later change of the default)
+        let own = discord_own_input();
+        let mine = if own.is_none() {
+            let defaults = devices::default_ids(Flow::Capture);
+            devices::preferred_microphone()
+                .filter(|id| {
+                    !defaults
+                        .iter()
+                        .flatten()
+                        .any(|d| d.eq_ignore_ascii_case(id))
+                })
+                .map(|id| interface_path(&id))
+        } else {
+            None
+        };
+        set_discord_given_back(mine.clone());
+        let back = HSTRING::from(own.or(mine).unwrap_or_default());
         for pid in pids_of(exes) {
             for role in ROLES {
                 if f.set(pid, role, &back).is_ok() {
@@ -328,6 +366,31 @@ unsafe fn remove_values_pointing_at(store: &str, endpoint_id: &str) -> usize {
         {
             continue;
         }
+        let ours = CABLE_IS_OURS.load(std::sync::atomic::Ordering::Relaxed);
+        // the program a subkey is for: in its name, or in its default value
+        let discord_key = sub.to_lowercase().contains("discord") || {
+            let mut data = vec![0u8; 4096];
+            let mut dlen = data.len() as u32;
+            let r = unsafe {
+                RegQueryValueExW(
+                    key,
+                    windows::core::PCWSTR::null(),
+                    None,
+                    None,
+                    Some(data.as_mut_ptr()),
+                    Some(&mut dlen),
+                )
+            };
+            r.is_ok() && {
+                let words: Vec<u16> = data[..dlen as usize]
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .collect();
+                String::from_utf16_lossy(&words)
+                    .to_lowercase()
+                    .contains("discord")
+            }
+        };
         let mut doomed = Vec::new();
         let mut j = 0u32;
         loop {
@@ -358,9 +421,11 @@ unsafe fn remove_values_pointing_at(store: &str, endpoint_id: &str) -> usize {
                 .chunks_exact(2)
                 .map(|c| u16::from_le_bytes([c[0], c[1]]))
                 .collect();
-            // only Discord's entries: another program's setting that uses a
-            // VB-CABLE the user already had is theirs
-            let is_discord = sub.to_lowercase().contains("discord")
+            // A cable Claude Talk installed: only Claude Talk points programs
+            // at it. A VB-CABLE the user had before: only Discord's entries
+            // (another program's use of it is the user's).
+            let is_discord = ours
+                || discord_key
                 || String::from_utf16_lossy(&vname[..vlen as usize])
                     .to_lowercase()
                     .contains("discord");

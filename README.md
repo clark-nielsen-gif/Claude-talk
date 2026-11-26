@@ -14,7 +14,7 @@ Du skal bruge Windows 11, Discord-programmet på din pc (ikke Discord i browsere
 
 **3. Tryk på knappen.** Claude Talk åbner. Tryk **Sæt det op for mig**, og derefter **Åbn Claude**. Log ind på Claude med din e-mail (kun første gang, se herunder). Start et opkald i Discord. Tryk så på stemme-knappen i Claude-vinduet: den runde knap med lydbølger i højre side af skrivefeltet. Viser feltet **Discord** i Claude Talk en orange knap ved dit første opkald, så tryk på den, og følg den.
 
-**Hver gang du vil have Claude med:** Claude Talk starter selv med Windows og ligger ved uret. Klik på ikonet (tryk på den lille pil ^ ved uret, hvis du ikke kan se det, eller åbn Claude Talk fra Start-menuen), tryk **Åbn Claude**, og tryk på den runde knap med lydbølger i Claude-vinduet.
+**Hver gang du vil have Claude med:** Claude Talk starter selv med Windows og ligger ved uret. (Har du trykket »Gendan normale lydindstillinger«, så tænd først kontakten »Claude i Discord«.) Klik på ikonet (tryk på den lille pil ^ ved uret, hvis du ikke kan se det, eller åbn Claude Talk fra Start-menuen), tryk **Åbn Claude**, og tryk på den runde knap med lydbølger i Claude-vinduet.
 
 | Første gang | Klar |
 |---|---|

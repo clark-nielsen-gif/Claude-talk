@@ -215,6 +215,10 @@ pub fn set_microphone(
     };
     state.save_config();
     crate::audio::use_microphone(&app, cfg.microphone.clone());
+    if !cfg.route_discord {
+        // after "Gendan" Discord uses the user's microphone directly
+        crate::discord::restore();
+    }
     let _ = app.emit("config-changed", &cfg);
     Ok(cfg)
 }
@@ -329,6 +333,9 @@ pub fn restore_audio_settings(app: AppHandle, state: State<AppState>) -> Config 
         let mut c = state.config.lock().unwrap_or_else(|p| p.into_inner());
         c.route_discord = false;
         c.claude_in_discord = false;
+        // Discord now hears the microphone directly: a "muted" switch here
+        // would claim something Claude Talk can't do
+        c.mic_muted = false;
         c.clone()
     };
     state.save_config();

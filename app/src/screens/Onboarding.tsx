@@ -21,12 +21,13 @@ export function Onboarding({ info, initial = 'welcome', onDone }: { info: AppInf
 
   // Each step is ticked off only when the real condition is true.
   const checks = [
-    { label: t.onboarding.stepCable, done: info.cableInstalled || !!status?.cableOk },
+    // (installed is enough until the sound runs; then it must work)
+    { label: t.onboarding.stepCable, done: status?.engineRunning ? !!status.cableOk : info.cableInstalled },
     { label: t.onboarding.stepMic, done: status?.micState === 'ok' },
     { label: t.onboarding.stepEngine, done: !!status?.engineRunning },
     // ready for Discord: the sound runs, Discord's microphone exists, and
     // your microphone works (otherwise Discord would get nothing)
-    { label: t.onboarding.stepDiscord, done: !!status?.engineRunning && (info.cableInstalled || !!status?.cableOk) && status?.micState === 'ok' },
+    { label: t.onboarding.stepDiscord, done: !!status?.engineRunning && !!status?.cableOk && status?.micState === 'ok' },
   ];
   const allDone = checks.every((c) => c.done);
   // What can't finish by itself: shown at once when it is certain, otherwise

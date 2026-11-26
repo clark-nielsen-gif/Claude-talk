@@ -61,6 +61,10 @@ pub fn spawn_watcher(app: AppHandle) {
                         // given Discord its own microphone back)
                         Some(false) if !state.shutting_down.load(Ordering::Relaxed) => {
                             match policy::route_discord_to_cable(&exes) {
+                                // Claude Talk began quitting meanwhile: undo
+                                Ok(n) if n > 0 && state.shutting_down.load(Ordering::Relaxed) => {
+                                    restore();
+                                }
                                 Ok(n) if n > 0 => {
                                     log::info!(
                                         "Discord's microphone set to Claude Talk ({n} processes)"
@@ -334,16 +338,19 @@ fn adopt_discords_microphone(app: &AppHandle, state: &crate::state::Inner, endpo
         chosen.name
     );
     let cfg = state.config.lock().map(|mut c| {
+        // (the user may have chosen one meanwhile)
+        if c.microphone.is_some() || c.microphone_chosen {
+            return None;
+        }
         c.microphone = Some(chosen.id.clone());
         c.microphone_name = Some(chosen.name.clone());
-        c.clone()
+        Some(c.clone())
     });
+    let Ok(Some(cfg)) = cfg else { return };
     state.save_config();
     crate::audio::use_microphone(app, Some(chosen.id));
-    if let Ok(cfg) = cfg {
-        use tauri::Emitter;
-        let _ = app.emit("config-changed", cfg);
-    }
+    use tauri::Emitter;
+    let _ = app.emit("config-changed", cfg);
 }
 
 /// A new default microphone (headset plugged in, chosen in Windows), or the
@@ -386,9 +393,31 @@ pub fn restore() -> usize {
     if ct_engine::win::devices::preferred_microphone().is_none() {
         ct_engine::win::devices::set_preferred_microphone(cfg.microphone.clone());
     }
+    load_given_back();
+    ct_engine::win::policy::set_cable_is_ours(crate::installer::cable_is_ours());
     let n = ct_engine::win::policy::restore_discord(&ct_engine::win::host::discord_executables());
+    // remember what Claude Talk itself gave Discord (not the user's setting)
+    let file = crate::paths::given_back_file();
+    match ct_engine::win::policy::discord_given_back() {
+        Some(v) => {
+            let _ = std::fs::write(&file, v);
+        }
+        None => {
+            let _ = std::fs::remove_file(&file);
+        }
+    }
     log::info!("restored Discord's microphone ({n} settings cleared)");
     n
+}
+
+/// What Claude Talk last gave Discord itself (see `paths::given_back_file`).
+#[cfg(windows)]
+pub fn load_given_back() {
+    let v = std::fs::read_to_string(crate::paths::given_back_file())
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    ct_engine::win::policy::set_discord_given_back(v);
 }
 
 #[cfg(not(windows))]
@@ -473,6 +502,7 @@ pub fn restore_when_discord_starts() -> i32 {
                 let n = restore();
                 log::info!("restore helper: Discord's own microphone back ({n})");
             }
+            crate::autostart::restore_at_next_sign_in(false);
             return 0;
         }
         std::thread::sleep(Duration::from_secs(2));

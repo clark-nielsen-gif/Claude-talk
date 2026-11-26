@@ -1501,7 +1501,12 @@ mod imp {
                     json!({"hkcu": found, "hklm_mmdevices": found_lm}),
                 );
             }
-            let removed_offline = policy::restore_discord(&discord);
+            // a VB-CABLE the user had before: only entries that can be told
+            // to be Discord's (information); then as installed by Claude Talk
+            policy::set_cable_is_ours(false);
+            let removed_as_users_cable = policy::restore_discord(&discord);
+            policy::set_cable_is_ours(true);
+            let removed_offline = removed_as_users_cable + policy::restore_discord(&discord);
             let d = listen("Discord.exe", "0");
             std::thread::sleep(Duration::from_secs(4));
             let offline_after = sessions::discord_mic(&discord, cable.as_deref());
@@ -1512,10 +1517,12 @@ mod imp {
                 // memory; Claude Talk restores it when Discord next runs –
                 // reported, not required, see KNOWN_ISSUES K12)
                 again == sessions::DiscordMic::Cable
-                    && matches!(after, sessions::DiscordMic::Other(_)),
+                    && matches!(after, sessions::DiscordMic::Other(_))
+                    // with Discord closed, its stored setting is removed
+                    && removed_offline > 0,
                 json!({"new_process": format!("{again:?}"), "new_process_records_from": again_where, "restored_entries": restored_n,
                        "after_restore": format!("{after:?}"), "after_restore_records_from": after_where,
-                       "removed_while_closed": removed_offline, "after_offline_restore": format!("{offline_after:?}")}),
+                       "removed_while_closed": removed_offline, "removed_as_users_own_cable": removed_as_users_cable, "after_offline_restore": format!("{offline_after:?}")}),
                 &mut report,
             );
         }

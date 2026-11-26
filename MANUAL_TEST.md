@@ -48,7 +48,7 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
 17. **Gendan.** Indstillinger → »Gendan normale lydindstillinger« (tryk to gange: »Ja, gendan«).
     - [ ] Discord bruger igen din almindelige mikrofon
     - [ ] Feltet Discord siger »Discord bruger din egen mikrofon« uden advarsel, også i et opkald
-17b. **Mikrofon valgt i Discord.** Før installationen: vælg en bestemt mikrofon i Discord (ikke »Standard«), som ikke er Windows' standardmikrofon. Installer Claude Talk, og følg vejledningen.
+17b. **Mikrofon valgt i Discord.** Før installationen: vælg en bestemt mikrofon i Discord (ikke »Standard«), som ikke er Windows' standardmikrofon. Installer Claude Talk, og følg vejledningen. Gentag med et headset, der både er valgt i Discord og er Windows' standard: står der »Discord skal lige genstartes«, skal dialogen bede dig tjekke Discords inputenhed først.
     - [ ] Vejledningen og feltet Dig viser den mikrofon, du valgte i Discord, og din ven hører den mikrofon
     - [ ] Der står ikke »Discord skal lige genstartes« (en genstart ville ikke hjælpe)
     - [ ] Under Indstillinger → Din mikrofon kan du vælge en anden og gå tilbage til »Windows' standard«

@@ -65,6 +65,13 @@ export function App() {
     document.documentElement.lang = lang;
   }, [dark, lang]);
 
+  // Whether the instructions reached Claude: told on every page (an
+  // automatic send can happen while another page is open)
+  useEffect(() => api.onPrompt((r) => {
+    if (r.ok) setToastText(t.instructions.sent);
+    else setToastText(r.reason === 'noComposer' ? t.errors.noComposer : r.reason === 'draft' ? t.errors.promptDraft : t.errors.promptNotSent);
+  }), [t]);
+
   const update = useCallback(async (patch: Partial<Config>) => {
     try {
       await api.setConfig(patch);
@@ -106,7 +113,7 @@ export function App() {
               ))}
             </nav>
             <main className="content">
-              {page === 'home' && <Home info={info} onSettings={() => jump('settings', 'mic-select')} />}
+              {page === 'home' && <Home info={info} onSettings={() => jump('settings', 'mic-select')} onHotkeys={() => jump('settings', 'hotkeys-title')} onEcho={() => jump('settings', 'echo-group')} />}
               {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}

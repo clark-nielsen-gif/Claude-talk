@@ -44,6 +44,48 @@ pub fn apply(_app: &AppHandle, enabled: bool) {
 #[cfg(not(windows))]
 pub fn apply(_app: &AppHandle, _enabled: bool) {}
 
+const RUN_ONCE: &str = r"Software\Microsoft\Windows\CurrentVersion\RunOnce";
+const RESTORE_VALUE: &str = "Claude Talk restore";
+
+/// Discord was closed when Claude Talk gave its microphone back, and Windows
+/// keeps that choice only while it runs: at the next sign-in, a helper gives
+/// Discord its microphone when it starts (also when Claude Talk doesn't start
+/// with Windows). Removed by the helper and by Claude Talk itself.
+#[cfg(windows)]
+pub fn restore_at_next_sign_in(on: bool) {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Registry::{
+        RegDeleteKeyValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ,
+    };
+    unsafe {
+        if !on {
+            let _ = RegDeleteKeyValueW(
+                HKEY_CURRENT_USER,
+                &HSTRING::from(RUN_ONCE),
+                &HSTRING::from(RESTORE_VALUE),
+            );
+            return;
+        }
+        let Ok(exe) = std::env::current_exe() else {
+            return;
+        };
+        let command = format!("\"{}\" --restore-when-discord-starts 0", exe.display());
+        let wide: Vec<u16> = command.encode_utf16().chain([0]).collect();
+        let r = RegSetKeyValueW(
+            HKEY_CURRENT_USER,
+            &HSTRING::from(RUN_ONCE),
+            &HSTRING::from(RESTORE_VALUE),
+            REG_SZ.0,
+            Some(wide.as_ptr() as *const _),
+            (wide.len() * 2) as u32,
+        );
+        log::info!("restore at next sign-in: {}", r.is_ok());
+    }
+}
+
+#[cfg(not(windows))]
+pub fn restore_at_next_sign_in(_on: bool) {}
+
 /// Whether Windows will really start Claude Talk at the next sign-in: our
 /// Run value points at this program, and it is not turned off under the
 /// startup apps (StartupApproved: an odd first byte means disabled).

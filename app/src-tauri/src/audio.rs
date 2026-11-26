@@ -70,6 +70,10 @@ mod imp {
             ct_engine::win::devices::set_preferred_microphone(c.microphone.clone());
             ct_engine::win::policy::set_discord_own_input(c.discord_own_input.clone());
         }
+        crate::discord::load_given_back();
+        ct_engine::win::policy::set_cable_is_ours(crate::installer::cable_is_ours());
+        // Claude Talk runs: it gives Discord its microphone back itself
+        crate::autostart::restore_at_next_sign_in(false);
         #[allow(unused_mut)]
         let mut cfg = HostConfig::standard(state.claude_pid.clone());
         // CI builds only: the "microphone" is a test program's sound.
