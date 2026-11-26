@@ -225,13 +225,24 @@ impl Ctx {
     }
 }
 
-fn supervise(name: &'static str, ctx: Ctx, mut run: impl FnMut(&Ctx) -> Ended + Send + 'static) -> JoinHandle<()> {
+/// `idle` is called every ~10 ms while the stream waits between attempts.
+/// Its argument is true when a new silent stretch begins (the previous run
+/// had been delivering audio); consecutive failed attempts continue the same
+/// stretch. Capture streams use it to keep delivering silence so the routes
+/// downstream stay primed while a program or device is away.
+fn supervise(
+    name: &'static str,
+    ctx: Ctx,
+    mut run: impl FnMut(&Ctx) -> Ended + Send + 'static,
+    mut idle: impl FnMut(bool) + Send + 'static,
+) -> JoinHandle<()> {
     std::thread::Builder::new()
         .name(format!("audio-{name}"))
         .spawn(move || {
             let _com = ComGuard::new();
             let _mmcss = Mmcss::enter();
             let mut backoff = Duration::from_millis(100);
+            let mut first_wait = true;
             loop {
                 if ctx.stopping() {
                     break;
@@ -239,6 +250,8 @@ fn supervise(name: &'static str, ctx: Ctx, mut run: impl FnMut(&Ctx) -> Ended + 
                 ctx.status.set(StreamState::Starting);
                 let started = Instant::now();
                 let ended = catch_unwind(AssertUnwindSafe(|| run(&ctx))).unwrap_or(Ended::Failed(HRESULT(-1)));
+                let mut new_stretch = ctx.status.state() == StreamState::Running || first_wait;
+                first_wait = false;
                 match ended {
                     Ended::Stop => break,
                     Ended::Restart => {
@@ -259,7 +272,21 @@ fn supervise(name: &'static str, ctx: Ctx, mut run: impl FnMut(&Ctx) -> Ended + 
                 if started.elapsed() > Duration::from_secs(5) {
                     backoff = Duration::from_millis(100);
                 }
-                if !ctx.sleep(backoff) {
+                // wait for `backoff`, in 10 ms steps, feeding `idle`
+                let t0 = Instant::now();
+                let mut stopped = false;
+                while t0.elapsed() < backoff {
+                    idle(new_stretch);
+                    new_stretch = false;
+                    if !ctx.sleep(Duration::from_millis(10)) {
+                        stopped = true;
+                        break;
+                    }
+                    if ctx.status.restart_requested.load(Ordering::Relaxed) {
+                        break;
+                    }
+                }
+                if stopped {
                     break;
                 }
                 backoff = (backoff * 2).min(Duration::from_secs(2));
@@ -277,16 +304,44 @@ fn new_ctx() -> (Ctx, Arc<AtomicBool>, Arc<Event>, Arc<StreamStatus>) {
 }
 
 /// Starts a capture stream feeding `fanout`.
-pub fn spawn_capture(name: &'static str, target: CaptureTarget, mut fanout: SourceFanout) -> StreamHandle {
+pub fn spawn_capture(name: &'static str, target: CaptureTarget, fanout: SourceFanout) -> StreamHandle {
     let (ctx, stop, wake, status) = new_ctx();
-    let thread = supervise(name, ctx, move |ctx| run_capture(ctx, &target, &mut fanout));
+    // The fanout is used by the run loop and, between runs, for silence.
+    let shared = Arc::new(Mutex::new(fanout));
+    let run_fanout = shared.clone();
+    let mut silence_sent = 0u64;
+    let mut idle_start: Option<Instant> = None;
+    let thread = supervise(
+        name,
+        ctx,
+        move |ctx| {
+            let mut f = run_fanout.lock().unwrap_or_else(|p| p.into_inner());
+            run_capture(ctx, &target, &mut f)
+        },
+        move |new_stretch| {
+            // real-time silence while waiting (one lock per 10 ms, not on a
+            // running audio path)
+            if new_stretch || idle_start.is_none() {
+                idle_start = Some(Instant::now());
+                silence_sent = 0;
+            }
+            let start = idle_start.expect("set above");
+            let due = (start.elapsed().as_secs_f64() * ENGINE_RATE as f64) as u64;
+            let n = due.saturating_sub(silence_sent).min(ENGINE_RATE as u64 / 10) as usize;
+            if n > 0 {
+                let mut f = shared.lock().unwrap_or_else(|p| p.into_inner());
+                f.push(None, ENGINE_CHANNELS, n);
+                silence_sent += n as u64;
+            }
+        },
+    );
     StreamHandle { stop, wake, thread: Some(thread), status }
 }
 
 /// Starts a render stream pulling from `mixer`.
 pub fn spawn_render(name: &'static str, device: DeviceSelector, mut mixer: OutputMixer) -> StreamHandle {
     let (ctx, stop, wake, status) = new_ctx();
-    let thread = supervise(name, ctx, move |ctx| run_render(ctx, &device, &mut mixer));
+    let thread = supervise(name, ctx, move |ctx| run_render(ctx, &device, &mut mixer), |_: bool| {});
     StreamHandle { stop, wake, thread: Some(thread), status }
 }
 
