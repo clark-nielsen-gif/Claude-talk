@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Claude Talk",
+  "mainBinaryName": "claude-talk",
+  "version": "1.0.0",
+  "identifier": "dk.claudetalk.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Claude Talk",
+        "width": 980,
+        "height": 700,
+        "minWidth": 760,
+        "minHeight": 580,
+        "decorations": false,
+        "visible": false,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost",
+      "capabilities": ["main-window"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "publisher": "Claude Talk",
+    "shortDescription": "Claude i dine Discord-opkald",
+    "longDescription": "Claude Talk bringer Claudes stemme ind i dine Discord-opkald – uden ekko.",
+    "copyright": "MIT License",
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["Danish", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}
