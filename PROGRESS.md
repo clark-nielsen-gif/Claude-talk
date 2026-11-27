@@ -23,6 +23,7 @@ Forside med tre kort og stor kontakt, opsætning i 3 skærme, avanceret mixer (t
 - Installeren henter VB-CABLE fra vb-audio.com, tjekker pakkens SHA-256 og Microsofts signatur, installerer lydløst, omdøber enhederne og bevarer brugerens standardenheder rolle for rolle. Afinstallation gendanner Discords mikrofon og fjerner kablet, hvis Claude Talk installerede det. En opgradering rører ikke kablet (K27).
 - `install-test` ([#45950436442](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950436442), grøn) kører den rigtige `ClaudeTalk-Setup.exe` lydløst på en ren runner: opstart 0,23 s, CPU 1,3 % af hele maskinen og RAM 20 MB, når Claude Talk er startet med Windows (intet vindue åbent). Driveren er produktionssigneret, kablet omdøbes og mærkes som Claude Talks. Autostart kun for brugeren, med citeret sti. Ren afinstallation (program, autostart, kabel og driverfiler væk).
 - Opdateringer er slået fra, indtil der er en signeringsnøgle (`SIGNING.md`, K17).
+- **Udgivet:** [v1.0.0](https://github.com/clark-nielsen-gif/Claude-talk/releases/tag/v1.0.0) med `ClaudeTalk-Setup.exe` og `ClaudeTalk-portable.zip`, bygget af `release` [#45966927722](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45966927722) fra 5e55278 (samme programkode som de endelige kørsler på 33aa3ba; kun dokumenter og udgivelses-workflowet er ændret siden). Filerne er ikke kodesigneret (K26).
 
 ## Målinger mod kravene (endelige kørsler på 33aa3ba, samme kode som de to rene review-runder)
 
