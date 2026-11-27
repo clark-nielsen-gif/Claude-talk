@@ -374,9 +374,22 @@ pub fn show_main_quietly(app: &AppHandle) {
         return;
     };
     let _ = w.set_focusable(false);
-    // a minimised window stays minimised: restoring it would activate it
-    if !w.is_minimized().unwrap_or(false) {
+    // A hidden window is shown – one closed while minimised stays minimised
+    // (Windows keeps it iconic), with its taskbar button back to flash. A
+    // minimised window is not restored: that would activate it.
+    if !w.is_visible().unwrap_or(false) {
         let _ = w.show();
+    }
+    // over a full-screen game or a presentation only the taskbar button
+    // flashes: a window on top would catch the clicks meant for the game
+    let busy = {
+        use windows::Win32::UI::Shell::{
+            SHQueryUserNotificationState, QUNS_ACCEPTS_NOTIFICATIONS, QUNS_APP, QUNS_QUIET_TIME,
+        };
+        unsafe { SHQueryUserNotificationState() }
+            .is_ok_and(|s| s != QUNS_ACCEPTS_NOTIFICATIONS && s != QUNS_QUIET_TIME && s != QUNS_APP)
+    };
+    if !busy && !w.is_minimized().unwrap_or(false) {
         // above the others, then back among them (never activated)
         let _ = w.set_always_on_top(true);
         let _ = w.set_always_on_top(false);

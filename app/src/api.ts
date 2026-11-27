@@ -74,6 +74,8 @@ export interface AudioStatus {
   micFixed?: boolean;
   /** a Discord call started while the microphone is muted (D32) */
   mutedCall?: boolean;
+  /** which muted call (a new id is a new call) */
+  mutedCallId?: number | null;
   /** the devices the output and microphone were set to */
   fixedOutput?: string | null;
   fixedMic?: string | null;
@@ -147,8 +149,8 @@ function scenarioStatus(t: number): AudioStatus {
     case 'error-cable-missing': return { ...ok, cableOk: false };
     case 'main-speakers': return { ...ok, speakers: true, echoActive: true, micName: 'Mikrofon (Realtek High Definition Audio)' };
     case 'main-muted': return { ...ok, mic: quiet };
-    case 'main-muted-call': return { ...ok, mic: quiet, mutedCall: true };
-    case 'main-muted-call-no-claude': return { ...ok, mic: quiet, mutedCall: true, claudeWindowOpen: false, claudeListening: false };
+    case 'main-muted-call': return { ...ok, mic: quiet, mutedCall: true, mutedCallId: 1 };
+    case 'main-muted-call-no-claude': return { ...ok, mic: quiet, mutedCall: true, mutedCallId: 1, claudeWindowOpen: false, claudeListening: false };
     case 'main-output-elsewhere': return { ...ok, outputMismatch: ['Headset (Jabra Evolve2)', 'Højttalere (Realtek High Definition Audio)'] };
     case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
     case 'main-restored-still-on-cable': return { ...ok, discordUsesCable: 'yes', discordStillOnCable: true, claudeListening: false };

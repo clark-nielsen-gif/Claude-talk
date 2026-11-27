@@ -46,6 +46,7 @@ pub struct AudioStatus {
     /// a Discord call started while the microphone was muted (shown while
     /// it still is, for 2 minutes)
     pub muted_call: bool,
+    pub muted_call_id: Option<u64>,
     /// Shortcuts that could not be registered ("" = all fine).
     pub hotkey_problem: String,
     /// Claude in another program (Chrome, Edge, the app): its sound and
@@ -234,6 +235,10 @@ mod imp {
     /// or Claude Talk's window is open (its "we hear you" meter). Otherwise
     /// the device stays closed – Windows' microphone indicator goes off and
     /// Bluetooth headsets keep their good sound.
+    /// A fixed start for numbering moments in the status.
+    static STATUS_EPOCH: std::sync::LazyLock<std::time::Instant> =
+        std::sync::LazyLock::new(std::time::Instant::now);
+
     pub fn refresh_mic(app: &AppHandle) {
         let state = app.state::<AppState>();
         let window_open = window_shown(app);
@@ -438,15 +443,18 @@ mod imp {
                 st.output_fixed = true;
                 st.fixed_output = name;
             }
-            // while the call that started muted goes on, and the user is
-            // still muted (unmuting clears it)
-            st.muted_call = state
-                .muted_call_at
-                .lock()
-                .ok()
-                .is_some_and(|t| t.is_some())
-                && state.discord_recording.load(Ordering::Relaxed)
-                && state.config.lock().map(|c| c.mic_muted).unwrap_or(false);
+            // while the call that started muted goes on (until 5 s without
+            // recording; a short gap is the same call), and the user is still
+            // muted (unmuting clears it); the id tells the page a new one
+            let at = state.muted_call_at.lock().ok().and_then(|t| *t);
+            st.muted_call = at.is_some()
+                && state
+                    .config
+                    .lock()
+                    .map(|c| c.mic_muted && c.route_discord)
+                    .unwrap_or(false);
+            st.muted_call_id =
+                at.map(|t| t.saturating_duration_since(*STATUS_EPOCH).as_millis() as u64);
             if let Some((_, name)) = recent(&state.mic_fixed) {
                 st.mic_fixed = true;
                 st.fixed_mic = name;

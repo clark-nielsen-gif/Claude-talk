@@ -66,4 +66,4 @@ Hvis noget fejler: Hjælp → »Gem fejlrapport«, og send filen fra skriveborde
 1. Slå din mikrofon fra i Claude Talk, og luk vinduet med X. Gør Discord til fuld skærm (maksimeret).
 2. Gå ind i et opkald i Discord. **Forventet:** inden for et par sekunder ligger Claude Talk-vinduet øverst på Oversigt med »Din mikrofon er slået fra«, og knappen på proceslinjen blinker. Discord har stadig tastaturet: skriv i Discords chat – intet sker i Claude Talk.
 3. Tryk »Slå min mikrofon til«. **Forventet:** beskeden forsvinder, og de andre hører dig.
-4. Gentag med vinduet åbent på Indstillinger, og med vinduet minimeret (kun knappen på proceslinjen blinker).
+4. Gentag med vinduet åbent på Indstillinger, med vinduet minimeret (kun knappen på proceslinjen blinker), med vinduet minimeret og derefter lukket fra proceslinjen (knappen kommer tilbage og blinker), og med et spil i fuld skærm (kun knappen blinker; spillet beholder musen).

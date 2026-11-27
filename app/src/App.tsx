@@ -74,17 +74,23 @@ export function App() {
   const mutedCall = useCallback(() => {
     setPage('home');
     setFocusMutedCall(true);
+    // (given up if the notice doesn't come: unmuted meanwhile)
+    setTimeout(() => setFocusMutedCall(false), 3000);
     // for a moment, a click meant for the program behind presses nothing
     setGuarded(true);
     setTimeout(() => setGuarded(false), 1500);
   }, []);
   useEffect(() => api.onMutedCall(mutedCall), [mutedCall]);
-  const mutedCallNow = !!status?.mutedCall;
-  const [seenMutedCall, setSeenMutedCall] = useState(false);
+  // each muted call has its own id: a new one, not a flicker of the same
+  // call, brings Oversigt forward
+  const mutedCallId = status?.mutedCall ? status.mutedCallId ?? null : null;
+  const [seenMutedCallId, setSeenMutedCallId] = useState<number | null>(null);
   useEffect(() => {
-    if (mutedCallNow && !seenMutedCall) mutedCall();
-    setSeenMutedCall(mutedCallNow);
-  }, [mutedCallNow, seenMutedCall, mutedCall]);
+    if (mutedCallId == null || mutedCallId === seenMutedCallId) return;
+    setSeenMutedCallId(mutedCallId);
+    // (the event already did it for this call)
+    if (!focusMutedCall) mutedCall();
+  }, [mutedCallId, seenMutedCallId, focusMutedCall, mutedCall]);
   const mutedCallFocused = useCallback(() => setFocusMutedCall(false), []);
 
   // Whether the instructions reached Claude: told on every page (an

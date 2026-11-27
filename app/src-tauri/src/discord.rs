@@ -71,6 +71,12 @@ fn recording_seen(
         *since = Some(Instant::now());
     }
     let new_call = recording && !was && since.is_none_or(|t| t.elapsed() >= Duration::from_secs(5));
+    // the call has ended (5 s without recording): its notice goes
+    if !recording && since.is_some_and(|t| t.elapsed() >= Duration::from_secs(5)) {
+        if let Ok(mut t) = state.muted_call_at.lock() {
+            *t = None;
+        }
+    }
     drop(since);
     // only when the mute really silences the user in Discord (Discord
     // records Claude Talk's microphone); told at every call that starts

@@ -344,3 +344,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | 1 major, 5 minor | `SW_SHOWNOACTIVATE` løfter ikke vinduet, så det kunne vises bag Discord; `unminimize` aktiverede; klik kunne falde igennem; fokus på overskriften ramte ofte forbi, og den første hændelse kunne gå tabt. |
 
 **Rettet efter runde 26:** »nyt opkald« kræver, at Discord ikke optog før, og at pausen var mindst 5 s; beskeden kommer ved hvert opkald, der starter med mikrofonen slået fra, og står, mens opkaldet varer; vinduet vises kun gennem Tauri (ikke-aktiverbart i 1,5 s, løftet øverst uden aktivering, blinkende knap på proceslinjen, et minimeret vindue forbliver minimeret); klik gør intet i 1,5 s; siden reagerer også på status (hvis hændelsen kom, før siden lyttede) og lægger fokus på overskriften, når beskeden er der; kontaktlinjen siger »Din mikrofon er slået fra, så de andre i opkaldet kan ikke høre dig« før alt om Claude (ny test). MANUAL_TEST har et punkt for D32.
+
+## Runde 27 – 2026-11-27 – ikke ren (lyd, design og »min mor« rene)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 5 minor | Et vindue, der blev lukket, mens det var minimeret, blev aldrig vist (Windows holder det minimeret, og et skjult vindue har ingen knap at blinke). |
+| Lyd | **Ren** (0 major, 5 minor) | To mikrofon-opdateringer i forkert rækkefølge; et fejlslået opslag lukker mikrofonen et øjeblik; et automatisk vist vindue holder mikrofonen åben. |
+| Design | **Ren** (0 major, 9 minor) | Et kort hul i Discords optagelse sendte brugeren tilbage til Oversigt; et efterladt fokus-flag; overskriftens fokusramme lignede et tekstfelt. |
+| "Min mor" | **Ren** (0 major, 6 minor) | »Gør Claude stille« varer til næste opkald; fokusrammen på overskriften. |
+| "Bryd det" | 1 major, 4 minor | Samme major som koden; en gammel mute-tid kunne vise en forkert besked; over et spil i fuld skærm kunne vinduet fange klik efter 1,5 s. |
+
+**Rettet efter runde 27:** et skjult vindue vises altid (minimeret, hvis det var det, med blinkende knap); over et spil eller en præsentation i fuld skærm løftes det ikke, kun knappen blinker; beskeden hører til ét opkald (ryddes, når Discord har været stille i 5 s), og siden reagerer på et nyt opkald (et id), ikke på korte huller; fokus-flaget opgives efter 3 s; beskedens overskrift får ingen fokusramme ved programmatisk fokus (som vejledningens).
