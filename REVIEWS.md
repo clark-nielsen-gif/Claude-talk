@@ -356,3 +356,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | 1 major, 4 minor | Samme major som koden; en gammel mute-tid kunne vise en forkert besked; over et spil i fuld skærm kunne vinduet fange klik efter 1,5 s. |
 
 **Rettet efter runde 27:** et skjult vindue vises altid (minimeret, hvis det var det, med blinkende knap); over et spil eller en præsentation i fuld skærm løftes det ikke, kun knappen blinker; beskeden hører til ét opkald (ryddes, når Discord har været stille i 5 s), og siden reagerer på et nyt opkald (et id), ikke på korte huller; fokus-flaget opgives efter 3 s; beskedens overskrift får ingen fokusramme ved programmatisk fokus (som vejledningens).
+
+## Runde 28 – 2026-11-27 – **ren** (alle fem roller)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | **Ren** (0 major, 6 minor) | Beskeden kan komme igen efter mute–slå til–mute inden for 0,5 s; gamle timere i siden; klik-spærringen kan sluge brugerens eget første klik efter en gendannelse fra proceslinjen. |
+| Lyd | **Ren** (0 major, 3 minor) | Et automatisk vist vindue holder mikrofonen åben efter opkaldet (kendt fra runde 27); dokumentationskommentarer. |
+| Design | **Ren** (0 major, 6 minor) | En vejledning, der lukkes af et opkald med mute, kan lægge fokus tilbage på en knap (næsten uopnåeligt); fokus efter »Slå min mikrofon til« i beskeden. |
+| "Min mor" | **Ren** (0 major, 6 minor) | README siger »kommer frem«, men et minimeret vindue blinker kun; et grønt flueben ved »Claude hører Discord, men ikke dig«. |
+| "Bryd det" | **Ren** (0 major, 6 minor) | Et skjult vindue vises over et spil i fuld skærm (K40); et smalt kapløb ved luk; onboarding skjuler beskeden; et omdøbt kabel (K41); selvtesten tjekker kun for et opkald ved start. |
+
+Ingen kodeændringer efter runde 28: de mindre fund er noteret her, og de, der kan mærkes, står i KNOWN_ISSUES (K40, K41).

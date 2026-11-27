@@ -120,3 +120,9 @@ Lukkes Claude Talk, mens Discord er lukket, sætter hjælperen Discords mikrofon
 
 ## K39 – Standardenheden, mens Claude Talk er lukket
 Claude Talk holder kun Windows' standardudgang og -mikrofon væk fra kablet, mens det kører. Tages et headset ud, mens Claude Talk er lukket, kan Windows vælge »Claude Talk – intern« eller »Claude Talk – til Discord« som standard; så er der ingen lyd (eller andre programmer optager et tavst kabel), indtil headsettet sættes i igen, en anden enhed vælges ved højttalerikonet ved uret, eller Claude Talk startes (det retter det inden for 2 sekunder). Afinstalleres Claude Talk, mens en afløser står som standard, bliver den stående, også når headsettet kommer igen; vælg det så ved højttalerikonet. README nævner det under »Jeg hører ingen lyd«.
+
+## K40 – Vinduet for et opkald med mikrofonen slået fra (D32) over spil i fuld skærm
+Er Claude Talk-vinduet skjult (ved uret), og starter et opkald med mikrofonen slået fra, mens et spil kører i fuld skærm uden kant, vises vinduet stadig (det løftes bare ikke ekstra); det kan derfor ligge over spillet, og efter 1,5 sekund kan klik ramme det. Et maksimeret vindue kan blive løftet, når det gøres midlertidigt ikke-aktiverbart. Det er kun gennemgået i kode (Windows' vinduesrækkefølge kan ikke testes i CI); MANUAL_TEST har et punkt for det. Under onboarding vises beskeden ikke (onboarding står i vinduet i stedet).
+
+## K41 – Omdøbes »Claude Talk – til Discord« i Windows
+Claude Talk finder kablet på navnet. Omdøber brugeren det i Windows' lydindstillinger, kan Claude Talk ikke længere finde det: Discord sættes ikke på kablet, og oprydning og standardenheds-vagten (D31) ser det ikke. Kablets navn sættes igen ved næste installation.
