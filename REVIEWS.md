@@ -260,3 +260,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | 1 major, 4 minor | Runde 18's »brugeren har levet med afløseren« gjorde afløseren permanent efter en nat i dockingstationen; et tomt stik kunne blive afløser; »virtual« udelukkede rigtige headsets; Bluetooth-opkaldsdelen kunne vælges. |
 
 **Rettet efter runde 19:** en gemt afløser, der stadig er standard ved start, går tilbage til brugerens enhed, når den er der (som Windows selv ville); afløseren er den tilsluttede enhed, Windows senest havde som standard, før der vælges efter type; typerækkefølgen afhænger af rollen; mål fra Windows' historik springer slåede-fra og uegnede enheder over (navnet læses fra registreringsdatabasen); ordlisten for virtuelle enheder er præcis; tilbageskift giver ingen forkert besked; output og mikrofon har hver sin besked i 2 minutter, mikrofonen med »Vælg en anden mikrofon«, og kontaktlinjen peger på dem. Vejledningens fokusfælde dækker overskriften (ny test); »Ja, gendan« står i 20 s; »Discord kunne ikke lukkes« nævner »Quit Discord«; samme navn for højttalerikonet.
+
+## Runde 20 – 2026-11-27 – **ren** (alle fem roller)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | **Ren** (0 major, 5 minor) | Mikrofon-beskedens knap ændrer Claude Talks mikrofon, ikke Windows'; installationstestens nød-tjek kunne bestå, hvis enhedslisten selv fejlede; nogle virtuelle enheder slipper gennem navnefilteret. |
+| Lyd | **Ren** (0 major, 3 minor) | Ekkodæmpning til/fra midt i tale giver et klik og ~20 ms hul (som K19); mikrofonskift sammenlignes på navn; højttalertjekket ser kun på konsol-standarden. |
+| Design | **Ren** (0 major, 6 minor) | Mikrofon-beskeden og dens knap taler om forskellige mikrofoner; kontaktlinjen blev ravgul for en besked, der kun fortæller; Hjælp sagde »fint« samtidig. |
+| "Min mor" | **Ren** (0 major, 8 minor) | »Vi har sat din lyd tilbage« lød som en fejl; genstart-vejledningen har en omvej; lange første-gangs-tekster. |
+| "Bryd det" | **Ren** (0 major, 6 minor) | Et bevidst genvalg af afløseren, mens Claude Talk var lukket, overstyres; brugerens egen VoiceMeeter blev ikke sat tilbage; ingen beskyttelse, mens Claude Talk er lukket; filen lå i den roamende profil. |
+
+**Rettet efter runde 20 (mindre ting):** mikrofon-beskeden siger »til Claude og Discord«; »sat tilbage«-beskederne gør ikke kontaktlinjen ravgul, men peger stadig ned (»Se herunder«); output-beskeden forklarer roligt, at det typisk sker, når et headset tages ud; brugerens oprindelige enhed sættes tilbage, også når den ikke selv kunne være afløser; id'er sammenlignes uden hensyn til store/små bogstaver; filen ligger i `%LOCALAPPDATA%` og tåler BOM; installationstestens nød-tjek fejler, hvis enhedslisten fejler. K39 og README beskriver standardenheden, mens Claude Talk er lukket; D31 nævner genvalg af afløseren som kendt begrænsning.

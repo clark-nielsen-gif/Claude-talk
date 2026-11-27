@@ -117,3 +117,6 @@ Vælger brugeren selv »Claude Talk – til Discord« som inputenhed i Discord (
 
 ## K38 – Discord i et opkald, mens hjælperen giver mikrofonen tilbage
 Lukkes Claude Talk, mens Discord er lukket, sætter hjælperen Discords mikrofon, når Discord starter. Går brugeren ind i et opkald, før Windows har taget værdien i brug (K8, K12), kan Discord blive ved med at optage fra kablet, til det genstarter. Hjælperen ser efter det, når værdien er sat, og viser i så fald en besked om at genstarte Discord. Om det sker, afhænger af Windows' timing, som ikke kan testes i CI.
+
+## K39 – Standardenheden, mens Claude Talk er lukket
+Claude Talk holder kun Windows' standardudgang og -mikrofon væk fra kablet, mens det kører. Tages et headset ud, mens Claude Talk er lukket, kan Windows vælge »Claude Talk – intern« eller »Claude Talk – til Discord« som standard; så er der ingen lyd (eller andre programmer optager et tavst kabel), indtil headsettet sættes i igen, en anden enhed vælges ved højttalerikonet ved uret, eller Claude Talk startes (det retter det inden for 2 sekunder). Afinstalleres Claude Talk, mens en afløser står som standard, bliver den stående, også når headsettet kommer igen; vælg det så ved højttalerikonet. README nævner det under »Jeg hører ingen lyd«.

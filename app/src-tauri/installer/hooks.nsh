@@ -64,7 +64,7 @@
     ; Which device stood in for a headset describes devices of this PC as
     ; they were with the cable installed: never kept for a later install.
     SetShellVarContext current
-    Delete "$APPDATA\Claude Talk\default-stand-ins.txt"
+    Delete "$LOCALAPPDATA\Claude Talk\default-stand-ins.txt"
     SetShellVarContext all
     ${If} $DeleteAppDataCheckboxState = 1
       SetShellVarContext current

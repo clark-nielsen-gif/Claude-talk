@@ -159,7 +159,8 @@ try {
     $left = @($end | Where-Object { $_.FriendlyName -like '*Claude Talk*' -or $_.FriendlyName -like '*VB-Audio Virtual Cable*' })
     Check 'virtual_microphone_removed' ($left.Count -eq 0) @($left | ForEach-Object FriendlyName)
 } catch {
-    $pnp = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -like '*VB-Audio*' -or $_.FriendlyName -like '*Claude Talk*' })
+    # (-ErrorAction Stop: a failed device listing must fail the check, not pass it)
+    $pnp = @(Get-PnpDevice -PresentOnly -ErrorAction Stop | Where-Object { $_.FriendlyName -like '*VB-Audio*' -or $_.FriendlyName -like '*Claude Talk*' })
     $r.endpoints_end = 'listing failed after the driver was removed; checked the present devices instead'
     Check 'virtual_microphone_removed' ($pnp.Count -eq 0) @{ via = 'Get-PnpDevice -PresentOnly'; left = @($pnp | ForEach-Object FriendlyName) }
 }

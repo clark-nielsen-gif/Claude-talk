@@ -56,7 +56,9 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   // (only while the Claude window is the Claude in the call)
   const outputElsewhere = on && !config.externalClaude && !!s?.claudeWindowOpen ? s?.outputMismatch : null;
   // an amber notice about where the sound plays
-  const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive) || !!s?.outputFixed || !!s?.micFixed;
+  // amber: something to act on; the "set back" notices only point below
+  const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive);
+  const fixedNotice = !!s?.outputFixed || (!!s?.micFixed && !!s.fixedMic);
   if (s && outputElsewhere) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: outputElsewhere[0], claude: outputElsewhere[1] })} action={fill(t.notices.outputElsewhereAction, { discord: outputElsewhere[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.echoAction} onAction={s.echoActive ? undefined : () => { updateConfig({ echo: 'auto' }); onEcho(); }} />);
 
@@ -145,7 +147,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : !external && !s.claudeListening ? t.main.switchOnClaudeNotListening
     : external && !s.claudeExternalRunning ? t.main.switchOnExternalWaiting
     : s.discordUsesCable !== 'yes' ? t.main.switchOnNoCall
-    : soundNotice ? t.main.switchOnSeeBelow
+    : soundNotice || fixedNotice ? t.main.switchOnSeeBelow
     : config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
     : config.micMuted ? t.main.switchOnMicMuted
     : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })

@@ -372,7 +372,11 @@ struct StandIn {
 
 #[cfg(windows)]
 pub fn stand_in_file() -> std::path::PathBuf {
-    crate::paths::app_dir().join("default-stand-ins.txt")
+    // device ids belong to this PC: not in the roaming profile
+    std::env::var_os("LOCALAPPDATA")
+        .map(|p| std::path::PathBuf::from(p).join("Claude Talk"))
+        .unwrap_or_else(crate::paths::app_dir)
+        .join("default-stand-ins.txt")
 }
 
 #[cfg(windows)]
@@ -394,7 +398,11 @@ impl DefaultGuard {
         let mut g = Self::default();
         let text = std::fs::read_to_string(stand_in_file()).unwrap_or_default();
         for line in text.lines() {
-            let f: Vec<&str> = line.trim().split('\t').collect();
+            let f: Vec<&str> = line
+                .trim_start_matches('\u{feff}')
+                .trim()
+                .split('\t')
+                .collect();
             if f.len() != 4 || f[0] != flow_tag(flow) || f[2].is_empty() || f[3].is_empty() {
                 continue;
             }
@@ -432,7 +440,9 @@ impl DefaultGuard {
                 lines.push(format!("{tag}\t{role}\t{}\t{}", si.id, si.wanted));
             }
         }
-        let _ = std::fs::create_dir_all(crate::paths::app_dir());
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
         let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
         if std::fs::write(&tmp, lines.join("\n")).is_ok() {
             if let Err(e) = std::fs::rename(&tmp, &file) {
@@ -475,7 +485,7 @@ fn guard_default(
                 .iter()
                 .any(|e| e.id == id && host::is_own_device(&e.name))
     };
-    let present = |id: &str| devs.iter().any(|e| e.id == id);
+    let present = |id: &str| devs.iter().any(|e| e.id.eq_ignore_ascii_case(id));
     // a device that can stand in: no virtual or streaming device, and for
     // recording no loopback input ("Stereo Mix" would send the computer's
     // sound); headsets, headphones, speakers and microphones before the rest
@@ -501,7 +511,11 @@ fn guard_default(
                     .any(|p| n.contains(&p.to_lowercase())))
     };
     let fit = |e: &devices::Endpoint| !bad(&e.id) && fit_name(&e.name);
-    let fit_id = |id: &str| devs.iter().find(|e| e.id == id).is_none_or(&fit);
+    let fit_id = |id: &str| {
+        devs.iter()
+            .find(|e| e.id.eq_ignore_ascii_case(id))
+            .is_none_or(&fit)
+    };
     let set = |id: &str, role: usize| match policy::set_default_endpoint_role(id, role) {
         Ok(()) => {
             log::warn!("default {flow:?} (role {role}) set to {id}");
@@ -523,11 +537,7 @@ fn guard_default(
                 // device as soon as it is there again
                 // (no notice: Windows would have done the same by itself)
                 Some(si) if *id == si.id => {
-                    if present(&si.wanted)
-                        && !bad(&si.wanted)
-                        && fit_id(&si.wanted)
-                        && set(&si.wanted, role)
-                    {
+                    if present(&si.wanted) && !bad(&si.wanted) && set(&si.wanted, role) {
                         guard.stand_in[role] = None;
                         guard.last_good[role] = Some(si.wanted.clone());
                     }
@@ -556,7 +566,7 @@ fn guard_default(
                     &|i: &str, name: &str| i != id && !bad(i) && fit_id(i) && fit_name(name),
                 )
             })
-            .filter(|g| !bad(g) && fit_id(g));
+            .filter(|g| !bad(g));
         // what stands in: the user's device if it is there; else what
         // Windows itself would fall back to – the present device it had as
         // the default most recently; else by type (a headset's hands-free
