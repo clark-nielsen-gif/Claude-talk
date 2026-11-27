@@ -126,3 +126,6 @@ Er Claude Talk-vinduet skjult (ved uret), og starter et opkald med mikrofonen sl
 
 ## K41 – Omdøbes »Claude Talk – til Discord« i Windows
 Claude Talk finder kablet på navnet. Omdøber brugeren det i Windows' lydindstillinger, kan Claude Talk ikke længere finde det: Discord sættes ikke på kablet, og oprydning og standardenheds-vagten (D31) ser det ikke. Kablets navn sættes igen ved næste installation.
+
+## K42 – Forsinkelsen til Claude kan springe op efter lang tid
+I den endelige 2-timers kørsel (`endurance` #45950430723) lå forsinkelsen fra Discord og mikrofonen til Claude-siden på 55–72 ms i 80 minutter og steg så til 106–120 ms, hvor den blev resten af kørslen. Isolation og hukommelse var uændrede. Springet passer til en ekstra skrivning, der bliver stående i Chromiums kø mellem Claude Talk og Claude-siden (K25: køen begrænses i antal, ikke i alder); det er ikke bevist. Lukkes og åbnes Claude-vinduet, starter køen forfra. Retningen til Discord måles ikke i den lange kørsel.

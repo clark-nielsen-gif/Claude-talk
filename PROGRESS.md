@@ -21,24 +21,25 @@ Forside med tre kort og stor kontakt, opsætning i 3 skærme, avanceret mixer (t
 
 ## M4 – Installation, opdatering, udgivelse
 - Installeren henter VB-CABLE fra vb-audio.com, tjekker pakkens SHA-256 og Microsofts signatur, installerer lydløst, omdøber enhederne og bevarer brugerens standardenheder rolle for rolle. Afinstallation gendanner Discords mikrofon og fjerner kablet, hvis Claude Talk installerede det. En opgradering rører ikke kablet (K27).
-- `install-test` ([#45851616080](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45851616080), grøn) kører den rigtige `ClaudeTalk-Setup.exe` lydløst på en ren runner: opstart 0,4 s, CPU 2,0–2,8 % af hele maskinen (2 kerner) og RAM ca. 20 MB, når Claude Talk er startet med Windows (intet vindue åbent). Autostart kun for brugeren, med citeret sti. Ren afinstallation.
+- `install-test` ([#45950436442](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950436442), grøn) kører den rigtige `ClaudeTalk-Setup.exe` lydløst på en ren runner: opstart 0,23 s, CPU 1,3 % af hele maskinen og RAM 20 MB, når Claude Talk er startet med Windows (intet vindue åbent). Driveren er produktionssigneret, kablet omdøbes og mærkes som Claude Talks. Autostart kun for brugeren, med citeret sti. Ren afinstallation (program, autostart, kabel og driverfiler væk).
 - Opdateringer er slået fra, indtil der er en signeringsnøgle (`SIGNING.md`, K17).
 
-## Målinger mod kravene (seneste kørsler)
+## Målinger mod kravene (endelige kørsler på 33aa3ba, samme kode som de to rene review-runder)
 
 | Krav | Resultat | Kørsel |
 |---|---|---|
-| Discord hører Claude og dig, aldrig sig selv | ✔ Discords tone > 140 dB under (uden ekkodæmpning), > 90 dB (med) | `app-e2e` [#45851609329](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45851609329) |
-| Claude hører dig og Discord, aldrig sig selv | ✔ Claudes tone > 65 dB under på siden | samme |
-| Robusthed (kabel væk og tilbage, 44,1 kHz, programmer og lydtjeneste genstartet) | ✔ alle trin | samme |
-| Start under 2 s | ✔ 0,4 s | `install-test` [#45851616080](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45851616080) |
-| CPU under 3 % | ✔ 2,0–2,8 % (hele maskinen, i baggrunden) | samme |
-| RAM under 150 MB | ✔ ca. 20 MB uden vindue. Med hovedvindue og Claude-vindue åbne kommer WebView2 oveni (ca. 200–270 MB for hele træet). | samme og `endurance` |
-| Forsinkelse under 40 ms | ✘ Ikke dokumenteret opfyldt. Claude Talks egen del måles til 20 ms alene (`audio-e2e`), men til 60–68 ms i hele programmet uden ekkodæmpning og 88–100 ms med. Fra mikrofon til Discord i alt ca. 105–160 ms. Til Claude-siden 45–75 ms. Se K9, K25, K29. | `app-e2e` og `audio-e2e` [#45851622079](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45851622079) |
-| Stabil i 2 timer | ✔ for isolation, hukommelse og at programmet kører: 25 målinger over 120 min, isolation hver gang, hukommelse uden vækst. Kørslen er markeret som fejlet, fordi den også kræver under 40 ms til Claude (45–75 ms) | `endurance` [#45839660338](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45839660338) |
-| Review-runder (to rene i træk) | ✘ Ikke nået. 8 runder; design ren i runde 7 og 8, "min mor" ren i runde 7. Se `REVIEWS.md`. | |
+| Discord hører Claude og dig, aldrig sig selv | ✔ I Discords mikrofon: Claude og du ved −10,5/−10,9 dB, Discords egen lyd −153,6 dB (uden ekkodæmpning) og −124,8 dB (med), et andet program −145 dB | `app-e2e` [#45950428099](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950428099) |
+| Claude hører dig og Discord, aldrig sig selv | ✔ På Claude-siden: du og Discord ved −10,5/−10,8 dB, Claudes egen stemme −162,3 dB (uden) og −135,9 dB (med) | samme |
+| Robusthed (kabel væk og tilbage, 44,1 kHz, mikrofonprogram og lydtjeneste genstartet) | ✔ alle trin | samme |
+| Start under 2 s | ✔ 0,23 s | `install-test` [#45950436442](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950436442) |
+| CPU under 3 % | ✔ 1,3 % i baggrunden (hele maskinen). Med begge vinduer åbne og lyd i gang 2,3–5,7 % (`endurance`) | samme |
+| RAM under 150 MB | ✔ 20 MB uden vindue. ✘ med hovedvindue og Claude-vindue åbne: ca. 305–316 MB for hele træet (WebView2) | samme og `endurance` |
+| Forsinkelse under 40 ms | ✘ Ikke opfyldt. Til Claude-siden median 62 ms (uden ekkodæmpning) og 70 ms (med); Claude Talks egen andel mod Discord 56 ms og 86 ms. Se K9, K25, K29. | `app-e2e` [#45950428099](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950428099), `audio-e2e` [#45950433528](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950433528) |
+| Stabil i 2 timer | Delvist ✔: 25 målinger over 120 min, programmet kørte hele vejen, isolationen holdt hver gang (Discord −148 til −154 dB, én gang −128 dB), hukommelsen flad (305–316 MB efter start). ✘ Forsinkelsen til Claude var 55–72 ms de første 80 min og steg derefter til 106–120 ms og blev der (K42). Kørslen er markeret som fejlet, fordi den kræver under 40 ms til Claude. | `endurance` [#45950430723](https://github.com/clark-nielsen-gif/Claude-talk/actions/runs/45950430723) |
+| Review-runder (to rene i træk) | ✔ Runde 28 og 29 rene i alle fem roller (29 runder i alt). Se `REVIEWS.md`. | |
+| Alle tests grønne | ✔ `ci`, `audio-e2e`, `install-test` grønne. `app-e2e` og `endurance` grønne på alt undtagen forsinkelseskravet. | |
 
 ## Tilbage
-- Forsinkelsen (K29): årsagen til forskellen mellem måling alene og i hele programmet er ikke fundet.
-- To rene review-runder i træk.
+- Forsinkelsen (K29) og springet i forsinkelse til Claude efter lang tid (K42): årsagen er ikke fundet.
+- RAM med begge vinduer åbne er over 150 MB (WebView2).
 - Kodesignering (K26) og offentligt projekt (K17) kræver ejerens handling.
