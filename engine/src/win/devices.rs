@@ -86,6 +86,8 @@ pub const NOT_A_MICROPHONE: &[&str] = &[
     "claude talk",
     "(vb-audio virtual cable)",
     "stereo mix",
+    // silent outside a Remote Play session
+    "steam streaming",
     "stereomix",
     "what u hear",
     "wave out",

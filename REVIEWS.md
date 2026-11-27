@@ -284,3 +284,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | **Ren** (0 major, 4 minor) | »Brugerens enhed« kunne være »Stereo Mix« eller »Steam Streaming«, hvis Windows kort havde valgt den; op til 2 s ekko, før vagten reagerer (K31-tilfældet); filerne skrives uden `sync_all`. |
 
 **Rettet efter runde 21:** kontaktlinjen siger altid, hvem der hører hvad i opkaldet, og tilføjer »Se herunder.«, når der er en besked (ny test); beskederne om flyttet lyd og mikrofon er neutrale (ikke ravgule), har titlen »Vi har flyttet …« og lover kun »normalt«; mikrofon-beskeden har kun knappen og »Claude og Discord hører dig igennem«, når »Din mikrofon« følger Windows. »Brugerens enhed« huskes kun, når det er en rigtig enhed; alle id-sammenligninger i vagten ser bort fra store/små bogstaver; filen tåler BOM også ved skrivning; begge filer skrives igennem til disken før omdøbning. README: »start Claude Talk, så retter det det selv« og en enklere linje efter afinstallation.
+
+## Runde 22 – 2026-11-27 – **ren** (alle fem roller)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | **Ren** (0 major, 3 minor) | En afløser blev glemt, hvis en uægte enhed kortvarigt blev standard; en midlertidig fil blev liggende, hvis skrivningen fejlede. |
+| Lyd | **Ren** (0 major, 4 minor) | Ekkodæmpningen genopbygges ved hver fjernelse/tilføjelse af en kilde (preset-skift, Chrome-tilstand), også når kilden ikke findes; hårde klip ved efterslæb i ekkotråden og latensvagten (K10/K19). |
+| Design | **Ren** (0 major, 7 minor) | Standardlinjen mistede halvdelen af »hvem hører hvad«, når der var en besked; ikke alle beskeder fik »Se herunder.«; flere beskeder læses højt på én gang. |
+| "Min mor" | **Ren** (0 major, 5 minor) | Menupunktet »Min mikrofon er slået fra« lyder som en alarm; »Den må kun Claude Talk bruge« lyder som en regel, hun har brudt; to næsten ens README-linjer efter afinstallation. |
+| "Bryd det" | **Ren** (0 major, 7 minor) | Efter Gendan sættes Discords værdi igen ved hver Discord-genstart, hvis brugeren har ryddet den i Windows; en gemt `discord_own_input` overlever afinstallation uden sletning; mikrofon-fallback i opremsningsrækkefølge kunne tage »Steam Streaming«. |
+
+**Rettet efter runde 22 (små, sikre rettelser):** en afløser venter, mens en uægte enhed kortvarigt er standard; en standard, der ikke er i listen endnu, ses på igen næste gang; en mislykket skrivning logges og fjerner den midlertidige fil; »Steam Streaming« kan aldrig blive mikrofonen; kontaktlinjen beholder hele sætningen og tilføjer »Se herunder.«; »Den er kun til Claude Talk«; »Luk Claude Talk« i anførselstegn i installeren; én README-linje efter afinstallation. De øvrige mindre fund er noteret her og ændrer ikke, hvad brugeren hører i almindelig brug.

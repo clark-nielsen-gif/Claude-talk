@@ -551,18 +551,23 @@ fn guard_default(
                 // or the recording side of the extra cable, which Windows or
                 // another program may have made the default for a moment)
                 _ => {
-                    guard.stand_in[role] = None;
-                    let name = devs
+                    // a default not in this tick's list (it appeared between
+                    // the two calls): look again next time
+                    let Some(name) = devs
                         .iter()
                         .find(|e| e.id.eq_ignore_ascii_case(id))
                         .map(|e| e.name.to_lowercase())
-                        .unwrap_or_default();
+                    else {
+                        continue;
+                    };
                     let real = !name.contains("steam streaming")
                         && (flow == devices::Flow::Render
                             || !devices::NOT_A_MICROPHONE
                                 .iter()
                                 .any(|p| name.contains(&p.to_lowercase())));
+                    // (a stand-in waits through a moment on such a device)
                     if real {
+                        guard.stand_in[role] = None;
                         guard.last_good[role] = Some(id.clone());
                     }
                 }
@@ -898,12 +903,17 @@ fn is_a_real_microphone(path: &str) -> bool {
 #[cfg(windows)]
 fn write_durably(path: &std::path::Path, data: &[u8]) -> bool {
     use std::io::Write;
-    std::fs::File::create(path)
+    let ok = std::fs::File::create(path)
         .and_then(|mut f| {
             f.write_all(data)?;
             f.sync_all()
         })
-        .is_ok()
+        .is_ok();
+    if !ok {
+        log::warn!("could not write {}", path.display());
+        let _ = std::fs::remove_file(path);
+    }
+    ok
 }
 
 /// Set when the main thread panicked: the watcher must not point Discord at

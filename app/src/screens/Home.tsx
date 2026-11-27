@@ -144,7 +144,6 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
     : t.main.switchOn;
   const callLine = !(soundNotice || fixedNotice) ? callText
-    : callText === t.main.switchOn ? t.main.switchOnSeeBelow
     : `${callText} ${t.main.seeBelow}`;
   const switchText = !on
     ? (micBroken || cableBroken ? t.main.switchOffProblem
