@@ -87,3 +87,13 @@ test('a call that starts while the microphone is muted says so, with a way to tu
   await page.getByRole('button', { name: 'Slå min mikrofon til' }).first().click();
   await expect(page.getByText('Du er gået ind i et opkald i Discord', { exact: false })).toHaveCount(0);
 });
+
+test('a muted call brings Oversigt forward with focus on the notice’s heading, whatever page was open', async ({ page }) => {
+  await page.goto('/?scenario=main-muted-call&theme=light&freeze=1');
+  await page.getByRole('button', { name: 'Indstillinger' }).click();
+  await expect(page.getByRole('combobox', { name: 'Din mikrofon' })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('ct-muted-call')));
+  await expect(page.locator('#muted-call-title')).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#muted-call-title')).toBeVisible();
+});

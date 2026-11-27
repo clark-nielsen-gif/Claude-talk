@@ -528,6 +528,10 @@ mod win {
                 st.claude_pid.store(0, Ordering::Relaxed);
                 st.claude_mic_active.store(false, Ordering::Relaxed);
                 st.claude_login.store(false, Ordering::Relaxed);
+                // the microphone closes now if nothing else needs it (off
+                // the main thread: it waits for the audio lock)
+                let app = app3.clone();
+                std::thread::spawn(move || crate::audio::refresh_mic(&app));
             }
         });
     }

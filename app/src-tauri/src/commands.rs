@@ -358,6 +358,32 @@ pub fn quit(app: AppHandle) {
     crate::request_quit(&app);
 }
 
+/// Shows the main window without taking focus from the program in front
+/// (a muted call, D32): no keystroke meant for a game or Discord lands here.
+#[cfg(windows)]
+pub fn show_main_quietly(app: &AppHandle) {
+    if app.get_webview_window("main").is_none() {
+        if let Err(e) = crate::create_main_window(app) {
+            log::warn!("main window: {e}");
+        }
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        if let Ok(hwnd) = w.hwnd() {
+            use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+            unsafe {
+                let _ = ShowWindow(
+                    windows::Win32::Foundation::HWND(hwnd.0 as _),
+                    SW_SHOWNOACTIVATE,
+                );
+            }
+        } else {
+            let _ = w.show();
+        }
+    }
+    crate::audio::refresh_mic(app);
+}
+
 #[tauri::command(async)]
 pub fn show_main(app: AppHandle) {
     // started with Windows: the window (and its WebView2) is made only

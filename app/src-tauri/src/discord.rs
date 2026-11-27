@@ -37,22 +37,62 @@ pub fn spawn_watcher(app: AppHandle) {
 /// ago, with the window hidden) would be silent with nothing in Discord
 /// showing why: the window comes forward and says so (D32).
 #[cfg(windows)]
-fn recording_seen(app: &AppHandle, state: &crate::state::Inner, recording: bool) {
-    if state.discord_recording.swap(recording, Ordering::Relaxed) == recording {
-        return;
-    }
-    crate::audio::refresh_mic(app);
+fn recording_seen(
+    app: &AppHandle,
+    state: &crate::state::Inner,
+    mic: &ct_engine::win::sessions::DiscordMic,
+) {
+    use ct_engine::win::sessions;
+    let recording = *mic != sessions::DiscordMic::Unknown;
     let muted_for_discord = state
         .config
         .lock()
         .map(|c| c.mic_muted && c.route_discord)
         .unwrap_or(false);
-    if recording && muted_for_discord {
+    // unmuted: the next muted call is told again; the notice goes
+    if !muted_for_discord {
+        state.muted_call_told.store(false, Ordering::Relaxed);
+        if let Ok(mut t) = state.muted_call_at.lock() {
+            *t = None;
+        }
+    }
+    let mut since = state
+        .not_recording_since
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    if !recording && since.is_none() {
+        *since = Some(Instant::now());
+    }
+    // a new call: Discord had not recorded for 5 s (a short gap is Discord
+    // reopening its microphone, or a failed look, within the same call)
+    let new_call = recording && since.is_none_or(|t| t.elapsed() >= Duration::from_secs(5));
+    if recording {
+        *since = None;
+    }
+    drop(since);
+    if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
+        crate::audio::refresh_mic(app);
+    }
+    // once per mute, and only when the mute really silences the user in
+    // Discord (Discord records Claude Talk's microphone)
+    if new_call
+        && muted_for_discord
+        && *mic == sessions::DiscordMic::Cable
+        && !state.muted_call_told.swap(true, Ordering::Relaxed)
+    {
         log::info!("a call started while the microphone is muted: showing the window");
         if let Ok(mut t) = state.muted_call_at.lock() {
             *t = Some(Instant::now());
         }
-        crate::commands::show_main(app.clone());
+        // (its own thread: the first window can take seconds to build, and
+        // the watcher keeps guarding meanwhile; shown without taking focus,
+        // so a key meant for another program presses nothing here)
+        let app = app.clone();
+        std::thread::spawn(move || {
+            crate::commands::show_main_quietly(&app);
+            use tauri::Emitter;
+            let _ = app.emit("muted-call", ());
+        });
     }
 }
 
@@ -79,8 +119,7 @@ fn watch(app: &AppHandle) {
             tick += 1;
             let cable = policy::cable_capture_id();
             let mic = sessions::discord_mic(&exes, cable.as_deref());
-            let recording = mic != sessions::DiscordMic::Unknown;
-            recording_seen(app, &state, recording);
+            recording_seen(app, &state, &mic);
             std::thread::sleep(Duration::from_millis(500));
             continue;
         }
@@ -243,7 +282,7 @@ fn watch(app: &AppHandle) {
             }
         }
         state.discord_uses_cable.store(uses, Ordering::Relaxed);
-        recording_seen(app, &state, mic != sessions::DiscordMic::Unknown);
+        recording_seen(app, &state, &mic);
         crate::audio::refresh_mic(app);
         follow_default_microphone(&state);
         // Windows says "cable" but Discord still records elsewhere for

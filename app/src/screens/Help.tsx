@@ -22,6 +22,7 @@ export function Help({ info, onHome }: { info: AppInfo; onHome: () => void }) {
     || (!status.cableOk && !info.cableInstalled) || cableBroken
     || status.micState === 'blocked' || status.micState === 'missing'
     || status.discordNeedsRestart
+    || (!!status.mutedCall && config.micMuted)
     || (!config.routeDiscord && !!status.discordCableChosen)
     || (status.discordUsesCable === 'no' && config.routeDiscord)
     // speakers without echo reduction: the overview warns about echo

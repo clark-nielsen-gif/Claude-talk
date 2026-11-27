@@ -65,6 +65,11 @@ export function App() {
     document.documentElement.lang = lang;
   }, [dark, lang]);
 
+  // A call started while the microphone is muted: the window came forward,
+  // so it shows why – on Oversigt, whatever page was open (D32)
+  const [mutedCallSeq, setMutedCallSeq] = useState(0);
+  useEffect(() => api.onMutedCall(() => { setPage('home'); setMutedCallSeq((n) => n + 1); }), []);
+
   // Whether the instructions reached Claude: told on every page (an
   // automatic send can happen while another page is open)
   useEffect(() => api.onPrompt((r) => {
@@ -113,7 +118,7 @@ export function App() {
               ))}
             </nav>
             <main className="content">
-              {page === 'home' && <Home info={info} onSettings={() => jump('settings', 'mic-select')} onHotkeys={() => jump('settings', 'hotkeys-title')} onEcho={() => jump('settings', 'echo-group')} />}
+              {page === 'home' && <Home info={info} mutedCallSeq={mutedCallSeq} onSettings={() => jump('settings', 'mic-select')} onHotkeys={() => jump('settings', 'hotkeys-title')} onEcho={() => jump('settings', 'echo-group')} />}
               {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}

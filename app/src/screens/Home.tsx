@@ -19,10 +19,19 @@ function useSpeaking(rms: number): boolean {
   return speaking;
 }
 
-export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; onSettings: () => void; onHotkeys: () => void; onEcho: () => void }) {
+export function Home({ info, mutedCallSeq = 0, onSettings, onHotkeys, onEcho }: { info: AppInfo; mutedCallSeq?: number; onSettings: () => void; onHotkeys: () => void; onEcho: () => void }) {
   const t = useT();
   const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
+  // a muted call brought the window forward: no guide over the notice, and
+  // focus on its heading – never on a button a stray key would press
+  useEffect(() => {
+    if (!mutedCallSeq) return;
+    setGuide(null);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    const id = setTimeout(() => document.getElementById('muted-call-title')?.focus(), 50);
+    return () => clearTimeout(id);
+  }, [mutedCallSeq]);
   const [update, setUpdate] = useState<string | null>(null);
   const { installing, install: installCable } = useInstallCable();
   // "Åbn Claude" waits for the window (seconds on a first start): one press
@@ -50,7 +59,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
-  if (s?.mutedCall && config.micMuted) errors.push(<Notice key="mc" kind="warn" title={t.notices.mutedCallTitle} body={t.notices.mutedCallBody} action={t.main.unmuteMe} onAction={() => updateConfig({ micMuted: false })} />);
+  if (s?.mutedCall && config.micMuted) errors.push(<Notice key="mc" id="muted-call-title" kind="warn" title={t.notices.mutedCallTitle} body={t.notices.mutedCallBody} action={t.main.unmuteMe} onAction={() => updateConfig({ micMuted: false })} />);
   if (s?.outputFixed) errors.push(<Notice key="of" kind="info" title={t.notices.outputFixedTitle} body={s.fixedOutput ? fill(t.notices.outputFixedBodyNamed, { name: s.fixedOutput }) : t.notices.outputFixedBody} />);
   // (only when "Din mikrofon" follows Windows does this change what Claude
   // and Discord hear)
@@ -64,6 +73,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   // amber: something to act on; the "set back" notices only point below
   const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive);
   const fixedNotice = !!s?.outputFixed || (!!s?.micFixed && !!s.fixedMic);
+  const mutedCallNotice = !!s?.mutedCall && config.micMuted;
   if (s && outputElsewhere) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: outputElsewhere[0], claude: outputElsewhere[1] })} action={fill(t.notices.outputElsewhereAction, { discord: outputElsewhere[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.echoAction} onAction={s.echoActive ? undefined : () => { updateConfig({ echo: 'auto' }); onEcho(); }} />);
 
@@ -144,7 +154,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })
     : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
     : t.main.switchOn;
-  const callLine = !(soundNotice || fixedNotice) ? callText
+  const callLine = !(soundNotice || fixedNotice || mutedCallNotice) ? callText
     : `${callText} ${t.main.seeBelow}`;
   const switchText = !on
     ? (micBroken || cableBroken ? t.main.switchOffProblem
@@ -162,7 +172,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : external && !s.claudeExternalRunning ? t.main.switchOnExternalWaiting
     : s.discordUsesCable !== 'yes' ? t.main.switchOnNoCall
     : callLine;
-  const switchWarn = cableMissing || micBroken || discordBroken || (on && soundNotice)
+  const switchWarn = cableMissing || micBroken || discordBroken || (on && soundNotice) || mutedCallNotice
     || (config.micMuted && s?.discordUsesCable === 'no');
 
   return (

@@ -221,6 +221,18 @@ export const api = {
     if (inTauri) await invoke('send_instructions');
   },
   /** Whether the Claude window accepted the instructions. */
+  /** A Discord call started while the microphone is muted (D32). */
+  onMutedCall(cb: () => void): () => void {
+    // (the scenario backend: a page event stands in for the app's)
+    if (!inTauri) {
+      window.addEventListener('ct-muted-call', cb);
+      return () => window.removeEventListener('ct-muted-call', cb);
+    }
+    let un: UnlistenFn | undefined;
+    let dead = false;
+    listen('muted-call', () => cb()).then((u) => (dead ? u() : (un = u)));
+    return () => { dead = true; un?.(); };
+  },
   onPrompt(cb: (r: { ok: boolean; reason: string }) => void): () => void {
     if (!inTauri) return () => {};
     let un: UnlistenFn | undefined;

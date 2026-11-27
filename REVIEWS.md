@@ -320,3 +320,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | 1 major, 3 minor | Samme som koden; en mute trykket mellem opkald blev ophævet inden for 30 s. |
 
 **Rettet efter runde 24:** den automatiske ophævelse er fjernet (den kunne slå mikrofonen til mod brugerens vilje). I stedet ses Discords optagelse ét sted for alle tjek, og starter et opkald, mens mikrofonen er slået fra over for Discord, kommer vinduet frem med »Din mikrofon er slået fra« og knappen »Slå min mikrofon til« (D32, ny test, README). UI-testene kører med 2 browsere ad gangen.
+
+## Runde 25 – 2026-11-27 – ikke ren (lyd ren)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 4 minor | Vinduet kom frem på den side, der sidst var åben, men beskeden fandtes kun på Oversigt. |
+| Lyd | **Ren** (0 major, 4 minor) | Lukket Claude-vindue lukkede ikke mikrofonen med det samme; vinduet blev bygget på overvågningstråden. |
+| Design | 1 major, 8 minor | Samme som koden; beskeden kom igen efter en ny mute; kontaktlinjen pegede ikke på den. |
+| "Min mor" | 1 major, 5 minor | Samme som koden. |
+| "Bryd det" | 1 major, 5 minor | Vinduet tog fokus (Windows' Alt-trick) og lagde det på mute-knappen, så ét tastetryk i et spil kunne slå mikrofonen til; korte huller i Discords optagelse kunne vise vinduet igen og igen; beskeden kunne komme, selv om Discord ikke optog Claude Talk-mikrofonen. |
+
+**Rettet efter runde 25:** vinduet skifter til Oversigt og lukker en åben vejledning; det vises uden at tage fokus, og fokus i vinduet lægges på beskedens overskrift (ny test); det sker én gang pr. mute og kun, når Discord optager Claude Talk-mikrofonen efter mindst 5 sekunder uden optagelse; beskeden forsvinder, når mikrofonen slås til; kontaktlinjen peger på den, og Hjælp regner den med; vinduet bygges på sin egen tråd; et lukket Claude-vindue lukker mikrofonen med det samme, hvis intet andet bruger den.

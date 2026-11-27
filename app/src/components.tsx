@@ -79,10 +79,10 @@ export function Switch({ on, onChange, label, small = false }: { on: boolean; on
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`switch${small ? ' small' : ''}`} onClick={() => onChange(!on)} />;
 }
 
-export function Notice({ kind = 'info', title, body, action, onAction }: { kind?: 'info' | 'warn' | 'error'; title: string; body: string; action?: string; onAction?: () => void }) {
+export function Notice({ kind = 'info', title, body, action, onAction, id }: { kind?: 'info' | 'warn' | 'error'; title: string; body: string; action?: string; onAction?: () => void; id?: string }) {
   return (
     <div className={`notice ${kind === 'info' ? '' : kind}`} role={kind === 'error' ? 'alert' : 'status'}>
-      <div className="text"><h3>{title}</h3><p>{body}</p></div>
+      <div className="text"><h3 id={id} tabIndex={id ? -1 : undefined}>{title}</h3><p>{body}</p></div>
       {action && <button className="btn secondary" onClick={onAction} disabled={!onAction}>{action}</button>}
     </div>
   );
