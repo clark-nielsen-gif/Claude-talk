@@ -70,7 +70,13 @@ test('Shift+Tab from the guide’s heading stays in the dialog', async ({ page }
 
 test('a microphone set back from the cable is named, with a way to choose another', async ({ page }) => {
   await page.goto('/?scenario=main-mic-fixed&theme=light&freeze=1');
-  await expect(page.getByText('Nu er »Mikrofon (Logitech BRIO)« Windows’ mikrofon.', { exact: false })).toBeVisible();
+  await expect(page.getByText('så nu er »Mikrofonmatrix (Realtek(R) Audio)« Windows’ mikrofon', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Vælg en anden mikrofon' }).first().click();
   await expect(page.getByRole('combobox', { name: 'Din mikrofon' })).toBeFocused();
+});
+
+test('with a notice below, the switch line still says that Claude is muted in Discord', async ({ page }) => {
+  await page.goto('/?scenario=main-output-elsewhere&theme=light&freeze=1');
+  await page.getByRole('button', { name: 'Gør Claude stille' }).click();
+  await expect(page.locator('#switch-title + p')).toHaveText('Tændt. Claude er gjort stille i Discord, men lytter stadig med. Se herunder.');
 });

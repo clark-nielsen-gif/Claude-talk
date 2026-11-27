@@ -50,8 +50,12 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
-  if (s?.outputFixed) errors.push(<Notice key="of" kind="warn" title={t.notices.outputFixedTitle} body={s.fixedOutput ? fill(t.notices.outputFixedBodyNamed, { name: s.fixedOutput }) : t.notices.outputFixedBody} />);
-  if (s?.micFixed && s.fixedMic) errors.push(<Notice key="mf" kind="warn" title={t.notices.micFixedTitle} body={fill(t.notices.micFixedBody, { name: s.fixedMic })} action={t.main.otherMic} onAction={onSettings} />);
+  if (s?.outputFixed) errors.push(<Notice key="of" kind="info" title={t.notices.outputFixedTitle} body={s.fixedOutput ? fill(t.notices.outputFixedBodyNamed, { name: s.fixedOutput }) : t.notices.outputFixedBody} />);
+  // (only when "Din mikrofon" follows Windows does this change what Claude
+  // and Discord hear)
+  if (s?.micFixed && s.fixedMic) errors.push(config.microphone
+    ? <Notice key="mf" kind="info" title={t.notices.micFixedTitle} body={fill(t.notices.micFixedBody, { name: s.fixedMic })} />
+    : <Notice key="mf" kind="info" title={t.notices.micFixedTitle} body={fill(t.notices.micFixedBodyOurs, { name: s.fixedMic })} action={t.main.otherMic} onAction={onSettings} />);
   if (s?.hotkeyProblem) errors.push(<Notice key="hk" kind="warn" title={t.notices.hotkeyTitle} body={s.hotkeyProblem === 'duplicate' ? t.notices.hotkeyDuplicateBody : fill(t.notices.hotkeyBody, { keys: s.hotkeyProblem })} action={t.notices.hotkeyAction} onAction={onHotkeys} />);
   // (only while the Claude window is the Claude in the call)
   const outputElsewhere = on && !config.externalClaude && !!s?.claudeWindowOpen ? s?.outputMismatch : null;
@@ -132,6 +136,16 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   const claudeNeedsYou = on && !cableMissing && !external && (!s?.claudeWindowOpen || !!s?.claudeLogin || !s?.claudeListening);
   // The line under the switch says the same as the cards and notices below.
   const discordBroken = discordCheck.state === 'warn';
+  // In a call: who hears what – never hidden by a notice below; the line
+  // only adds that there is one.
+  const callText = config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
+    : config.micMuted ? t.main.switchOnMicMuted
+    : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })
+    : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
+    : t.main.switchOn;
+  const callLine = !(soundNotice || fixedNotice) ? callText
+    : callText === t.main.switchOn ? t.main.switchOnSeeBelow
+    : `${callText} ${t.main.seeBelow}`;
   const switchText = !on
     ? (micBroken || cableBroken ? t.main.switchOffProblem
       : cableMissing ? t.main.switchOffSeeBelow
@@ -147,12 +161,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
     : !external && !s.claudeListening ? t.main.switchOnClaudeNotListening
     : external && !s.claudeExternalRunning ? t.main.switchOnExternalWaiting
     : s.discordUsesCable !== 'yes' ? t.main.switchOnNoCall
-    : soundNotice || fixedNotice ? t.main.switchOnSeeBelow
-    : config.claudeToDiscordMuted ? t.main.switchOnClaudeMuted
-    : config.micMuted ? t.main.switchOnMicMuted
-    : config.pushToTalk ? fill(t.main.switchOnPtt, { key: config.hotkeys.pushToTalkClaude })
-    : !config.claudeHearsDiscord ? t.main.switchOnOnlyYou
-    : t.main.switchOn;
+    : callLine;
   const switchWarn = cableMissing || micBroken || discordBroken || (on && soundNotice)
     || (config.micMuted && s?.discordUsesCable === 'no');
 

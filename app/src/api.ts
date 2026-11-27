@@ -149,7 +149,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
     case 'main-restored-still-on-cable': return { ...ok, discordUsesCable: 'yes', discordStillOnCable: true, claudeListening: false };
     case 'main-restored-cable-chosen': return { ...ok, discordUsesCable: 'yes', discordCableChosen: true, claudeListening: false };
-    case 'main-mic-fixed': return { ...ok, micFixed: true, fixedMic: 'Mikrofon (Logitech BRIO)' };
+    case 'main-mic-fixed': return { ...ok, micFixed: true, micName: 'Mikrofonmatrix (Realtek(R) Audio)', fixedMic: 'Mikrofonmatrix (Realtek(R) Audio)' };
     case 'main-output-fixed': return { ...ok, outputFixed: true, fixedOutput: 'Højttalere (Realtek(R) Audio)' };
     case 'main-hotkey-taken': return { ...ok, hotkeyProblem: 'Ctrl+Shift+F9' };
     case 'onboarding-cable-missing': return { ...ok, cableOk: false };

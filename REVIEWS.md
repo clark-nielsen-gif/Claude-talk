@@ -272,3 +272,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | **Ren** (0 major, 6 minor) | Et bevidst genvalg af afløseren, mens Claude Talk var lukket, overstyres; brugerens egen VoiceMeeter blev ikke sat tilbage; ingen beskyttelse, mens Claude Talk er lukket; filen lå i den roamende profil. |
 
 **Rettet efter runde 20 (mindre ting):** mikrofon-beskeden siger »til Claude og Discord«; »sat tilbage«-beskederne gør ikke kontaktlinjen ravgul, men peger stadig ned (»Se herunder«); output-beskeden forklarer roligt, at det typisk sker, når et headset tages ud; brugerens oprindelige enhed sættes tilbage, også når den ikke selv kunne være afløser; id'er sammenlignes uden hensyn til store/små bogstaver; filen ligger i `%LOCALAPPDATA%` og tåler BOM; installationstestens nød-tjek fejler, hvis enhedslisten fejler. K39 og README beskriver standardenheden, mens Claude Talk er lukket; D31 nævner genvalg af afløseren som kendt begrænsning.
+
+## Runde 21 – 2026-11-27 – ikke ren (kode, lyd, »min mor« og »bryd det« rene)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | **Ren** (0 major, 4 minor) | Id'er kun delvist sammenlignet uden hensyn til store/små bogstaver; `save()` fjernede ikke BOM; output-beskedens løfte holder ikke altid. |
+| Lyd | **Ren** (0 major, 3 minor) | Intet fade, når mikrofonen lukkes eller skiftes midt i tale, eller når et program slutter midt i lyd; hårdt trin ved underløb i meget korte blokke. |
+| Design | 1 major, 7 minor | Med en besked herunder sagde kontaktlinjen »De andre i opkaldet hører Claude«, selv om Claude var gjort stille i Discord (fejlen var ældre, men ikke fundet før). |
+| "Min mor" | **Ren** (0 major, 6 minor) | »Nej« i luk-dialogen lukker; beskeden og »Dig«-feltet nævnte forskellige mikrofoner; README om afinstallation. |
+| "Bryd det" | **Ren** (0 major, 4 minor) | »Brugerens enhed« kunne være »Stereo Mix« eller »Steam Streaming«, hvis Windows kort havde valgt den; op til 2 s ekko, før vagten reagerer (K31-tilfældet); filerne skrives uden `sync_all`. |
+
+**Rettet efter runde 21:** kontaktlinjen siger altid, hvem der hører hvad i opkaldet, og tilføjer »Se herunder.«, når der er en besked (ny test); beskederne om flyttet lyd og mikrofon er neutrale (ikke ravgule), har titlen »Vi har flyttet …« og lover kun »normalt«; mikrofon-beskeden har kun knappen og »Claude og Discord hører dig igennem«, når »Din mikrofon« følger Windows. »Brugerens enhed« huskes kun, når det er en rigtig enhed; alle id-sammenligninger i vagten ser bort fra store/små bogstaver; filen tåler BOM også ved skrivning; begge filer skrives igennem til disken før omdøbning. README: »start Claude Talk, så retter det det selv« og en enklere linje efter afinstallation.

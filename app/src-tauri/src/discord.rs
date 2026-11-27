@@ -432,6 +432,7 @@ impl DefaultGuard {
         let mut lines: Vec<String> = std::fs::read_to_string(&file)
             .unwrap_or_default()
             .lines()
+            .map(|l| l.trim_start_matches('\u{feff}'))
             .filter(|l| !l.is_empty() && !l.starts_with(&format!("{tag}\t")))
             .map(String::from)
             .collect();
@@ -444,7 +445,9 @@ impl DefaultGuard {
             let _ = std::fs::create_dir_all(dir);
         }
         let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
-        if std::fs::write(&tmp, lines.join("\n")).is_ok() {
+        // (written through to the disk before the rename, as the settings
+        // are: a power cut must not leave an empty file)
+        if write_durably(&tmp, lines.join("\n").as_bytes()) {
             if let Err(e) = std::fs::rename(&tmp, &file) {
                 log::warn!("could not save {}: {e}", file.display());
                 let _ = std::fs::remove_file(&tmp);
@@ -483,7 +486,7 @@ fn guard_default(
         extra.as_deref() == Some(id)
             || devs
                 .iter()
-                .any(|e| e.id == id && host::is_own_device(&e.name))
+                .any(|e| e.id.eq_ignore_ascii_case(id) && host::is_own_device(&e.name))
     };
     let present = |id: &str| devs.iter().any(|e| e.id.eq_ignore_ascii_case(id));
     // a device that can stand in: no virtual or streaming device, and for
@@ -536,16 +539,32 @@ fn guard_default(
                 // still the stand-in Claude Talk picked: back to the user's
                 // device as soon as it is there again
                 // (no notice: Windows would have done the same by itself)
-                Some(si) if *id == si.id => {
+                Some(si) if id.eq_ignore_ascii_case(&si.id) => {
                     if present(&si.wanted) && !bad(&si.wanted) && set(&si.wanted, role) {
                         guard.stand_in[role] = None;
                         guard.last_good[role] = Some(si.wanted.clone());
                     }
                 }
                 // the user (or Windows) chose something else meanwhile
+                // (remembered as the user's device to go back to only if it
+                // is a real one: never a loopback input, "Steam Streaming"
+                // or the recording side of the extra cable, which Windows or
+                // another program may have made the default for a moment)
                 _ => {
                     guard.stand_in[role] = None;
-                    guard.last_good[role] = Some(id.clone());
+                    let name = devs
+                        .iter()
+                        .find(|e| e.id.eq_ignore_ascii_case(id))
+                        .map(|e| e.name.to_lowercase())
+                        .unwrap_or_default();
+                    let real = !name.contains("steam streaming")
+                        && (flow == devices::Flow::Render
+                            || !devices::NOT_A_MICROPHONE
+                                .iter()
+                                .any(|p| name.contains(&p.to_lowercase())));
+                    if real {
+                        guard.last_good[role] = Some(id.clone());
+                    }
                 }
             }
             continue;
@@ -588,7 +607,10 @@ fn guard_default(
                 policy::last_default_by_windows(
                     flow == devices::Flow::Render,
                     role,
-                    &|i: &str, _: &str| i != id && devs.iter().any(|e| e.id == i && fit(e)),
+                    &|i: &str, _: &str| {
+                        !i.eq_ignore_ascii_case(id)
+                            && devs.iter().any(|e| e.id.eq_ignore_ascii_case(i) && fit(e))
+                    },
                 )
             })
             .or_else(|| {
@@ -615,7 +637,10 @@ fn guard_default(
     }
     // tell the user, naming the device the sound or microphone is on now
     if let Some(id) = fixed {
-        let name = devs.iter().find(|e| e.id == id).map(|e| e.name.clone());
+        let name = devs
+            .iter()
+            .find(|e| e.id.eq_ignore_ascii_case(&id))
+            .map(|e| e.name.clone());
         let slot = if flow == devices::Flow::Render {
             &state.output_fixed
         } else {
@@ -790,7 +815,9 @@ pub fn save_given_back() {
         );
         let list = lines.join("\n");
         // (a file per process: the helper and the app may write at once)
-        if std::fs::write(&tmp, list).is_ok() {
+        // (written through to the disk before the rename, as the settings
+        // are: a power cut must not leave an empty file)
+        if write_durably(&tmp, list.as_bytes()) {
             if let Err(e) = std::fs::rename(&tmp, &file) {
                 log::warn!("could not save {}: {e}", file.display());
                 let _ = std::fs::remove_file(&tmp);
@@ -866,6 +893,17 @@ fn is_a_real_microphone(path: &str) -> bool {
         }
         Err(_) => false,
     }
+}
+
+#[cfg(windows)]
+fn write_durably(path: &std::path::Path, data: &[u8]) -> bool {
+    use std::io::Write;
+    std::fs::File::create(path)
+        .and_then(|mut f| {
+            f.write_all(data)?;
+            f.sync_all()
+        })
+        .is_ok()
 }
 
 /// Set when the main thread panicked: the watcher must not point Discord at
