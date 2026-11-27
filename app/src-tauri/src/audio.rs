@@ -43,6 +43,9 @@ pub struct AudioStatus {
     /// the devices the output and microphone were set to
     pub fixed_output: Option<String>,
     pub fixed_mic: Option<String>,
+    /// a Discord call started while the microphone was muted (shown while
+    /// it still is, for 2 minutes)
+    pub muted_call: bool,
     /// Shortcuts that could not be registered ("" = all fine).
     pub hotkey_problem: String,
     /// Claude in another program (Chrome, Edge, the app): its sound and
@@ -435,6 +438,13 @@ mod imp {
                 st.output_fixed = true;
                 st.fixed_output = name;
             }
+            st.muted_call = state
+                .muted_call_at
+                .lock()
+                .ok()
+                .and_then(|t| *t)
+                .is_some_and(|t| t.elapsed() < Duration::from_secs(120))
+                && state.config.lock().map(|c| c.mic_muted).unwrap_or(false);
             if let Some((_, name)) = recent(&state.mic_fixed) {
                 st.mic_fixed = true;
                 st.fixed_mic = name;

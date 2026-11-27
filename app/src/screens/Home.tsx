@@ -50,6 +50,7 @@ export function Home({ info, onSettings, onHotkeys, onEcho }: { info: AppInfo; o
   if (s?.micState === 'blocked') errors.push(<Notice key="b" kind="error" title={t.errors.micBlockedTitle} body={t.errors.micBlockedBody} action={t.errors.micBlockedAction} onAction={() => api.openPlace('micPrivacy')} />);
   if (s?.micState === 'missing') errors.push(<Notice key="m" kind="warn" title={t.errors.micMissingTitle} body={t.errors.micMissingBody} action={t.errors.micMissingAction} onAction={() => api.openPlace('soundSettings')} />);
   if (update) errors.push(<Notice key="up" title={t.notices.updateTitle} body={t.notices.updateBody} action={t.notices.updateAction} onAction={() => api.installUpdate().catch(() => toast(t.errors.update))} />);
+  if (s?.mutedCall && config.micMuted) errors.push(<Notice key="mc" kind="warn" title={t.notices.mutedCallTitle} body={t.notices.mutedCallBody} action={t.main.unmuteMe} onAction={() => updateConfig({ micMuted: false })} />);
   if (s?.outputFixed) errors.push(<Notice key="of" kind="info" title={t.notices.outputFixedTitle} body={s.fixedOutput ? fill(t.notices.outputFixedBodyNamed, { name: s.fixedOutput }) : t.notices.outputFixedBody} />);
   // (only when "Din mikrofon" follows Windows does this change what Claude
   // and Discord hear)

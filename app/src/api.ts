@@ -72,6 +72,8 @@ export interface AudioStatus {
   /** Windows' default output was our cable and was just set back */
   outputFixed: boolean;
   micFixed?: boolean;
+  /** a Discord call started while the microphone is muted (D32) */
+  mutedCall?: boolean;
   /** the devices the output and microphone were set to */
   fixedOutput?: string | null;
   fixedMic?: string | null;
@@ -114,7 +116,7 @@ const scenario = params.get('scenario') ?? 'main-ok';
 const defaultConfig: Config = {
   version: 1, language: (params.get('lang') as 'da' | 'en') ?? 'da', theme: (params.get('theme') as Theme) ?? 'light',
   autostart: true, onboardingDone: !scenario.startsWith('onboarding'), claudeInDiscord: scenario !== 'main-off' && !scenario.startsWith('main-restored'), routeDiscord: !scenario.startsWith('main-restored'), microphone: null,
-  micMuted: scenario === 'main-muted', claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
+  micMuted: scenario.startsWith('main-muted'), claudeToDiscordMuted: false, pushToTalk: false, echo: 'auto',
   hotkeys: { muteClaudeToDiscord: 'Ctrl+Shift+F9', muteMic: 'Ctrl+Shift+F10', pushToTalkClaude: 'Ctrl+Shift+F11' },
   advancedUnlocked: false,
   presets: [{ name: 'Musik' }],
@@ -145,6 +147,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'error-cable-missing': return { ...ok, cableOk: false };
     case 'main-speakers': return { ...ok, speakers: true, echoActive: true, micName: 'Mikrofon (Realtek High Definition Audio)' };
     case 'main-muted': return { ...ok, mic: quiet };
+    case 'main-muted-call': return { ...ok, mic: quiet, mutedCall: true };
     case 'main-output-elsewhere': return { ...ok, outputMismatch: ['Headset (Jabra Evolve2)', 'Højttalere (Realtek High Definition Audio)'] };
     case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
     case 'main-restored-still-on-cable': return { ...ok, discordUsesCable: 'yes', discordStillOnCable: true, claudeListening: false };

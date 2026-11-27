@@ -42,7 +42,7 @@ Nogle nye pc'er har Smart App Control slået til. Den stopper programmer, der en
 
 **Hører Claude sig selv?** Nej. Claude får kun din mikrofon og Discord, aldrig sin egen stemme. Discord får din mikrofon og Claude, aldrig sig selv.
 
-**Kan jeg gøre Claude stille i Discord uden at lukke noget?** Ja. Tryk **Gør Claude stille** i feltet med overskriften **Claude**, eller brug **Ctrl+Shift+F9**. **Ctrl+Shift+F10** slår din egen mikrofon fra og til; har du slået den fra, slås den til igen af sig selv et halvt minut efter, at opkaldet i Discord er slut, så næste opkald ikke bliver tavst. På en bærbar skal du måske også holde **Fn** nede.
+**Kan jeg gøre Claude stille i Discord uden at lukke noget?** Ja. Tryk **Gør Claude stille** i feltet med overskriften **Claude**, eller brug **Ctrl+Shift+F9**. **Ctrl+Shift+F10** slår din egen mikrofon fra og til. Går du ind i et opkald i Discord, mens din mikrofon er slået fra i Claude Talk, kommer Claude Talk-vinduet frem og siger det, med en knap til at slå den til. På en bærbar skal du måske også holde **Fn** nede.
 
 **Kan jeg bruge Claude i Chrome eller Claude-appen i stedet?** Som udgangspunkt nej: Claude Talk bruger sit eget Claude-vindue, så Claude kun hører det, den skal. Har du selv installeret et ekstra virtuelt lydkabel (VB-CABLE A, B, C, D eller Hi-Fi Cable), kan det slås til under **Avanceret**. VoiceMeeter kan ikke bruges til det.
 

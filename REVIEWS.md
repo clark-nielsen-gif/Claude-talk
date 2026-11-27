@@ -308,3 +308,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | **Ren** (0 major, 4 minor) | Efter Gendan blev et bevidst A→B→A-valg i Windows rettet én gang; luk inden for 2 s efter at gå ind i et opkald sprang dialogen over; hjælperen giver op for en Discord uden for `%LOCALAPPDATA%`. |
 
 **Rettet efter runde 23:** mikrofon-muten slås til igen 30 sekunder efter, at opkaldet i Discord er slut (D32, README); luk-dialogen spørger Windows direkte, om Discord optager fra kablet; et værdi, brugeren selv vælger i Windows, bliver »det senest skrevne«, så et senere genvalg af en ældre værdi også er brugerens.
+
+## Runde 24 – 2026-11-27 – ikke ren (D32 var forkert bygget)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 1 major, 3 minor | Den automatiske ophævelse af muten så kun skift på de hurtige tjek; det langsomme tjek »spiste« ca. hvert fjerde skift, så muten enten aldrig blev ophævet eller blev ophævet midt i et nyt opkald. |
+| Lyd | 1 major, 2 minor | Samme fund. |
+| Design | 1 major, 4 minor | Brugerfladen sagde aldrig, at muten kun gjaldt til opkaldet sluttede; testene var ustabile med 4 samtidige browsere. |
+| "Min mor" | 1 major, 5 minor | En mute trykket uden for et opkald gjorde stadig næste opkald tavst. |
+| "Bryd det" | 1 major, 3 minor | Samme som koden; en mute trykket mellem opkald blev ophævet inden for 30 s. |
+
+**Rettet efter runde 24:** den automatiske ophævelse er fjernet (den kunne slå mikrofonen til mod brugerens vilje). I stedet ses Discords optagelse ét sted for alle tjek, og starter et opkald, mens mikrofonen er slået fra over for Discord, kommer vinduet frem med »Din mikrofon er slået fra« og knappen »Slå min mikrofon til« (D32, ny test, README). UI-testene kører med 2 browsere ad gangen.

@@ -80,3 +80,10 @@ test('with a notice below, the switch line still says that Claude is muted in Di
   await page.getByRole('button', { name: 'Gør Claude stille' }).click();
   await expect(page.locator('#switch-title + p')).toHaveText('Tændt. Claude er gjort stille i Discord, men lytter stadig med. Se herunder.');
 });
+
+test('a call that starts while the microphone is muted says so, with a way to turn it on', async ({ page }) => {
+  await page.goto('/?scenario=main-muted-call&theme=light&freeze=1');
+  await expect(page.getByText('Du er gået ind i et opkald i Discord, men din mikrofon er slået fra', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Slå min mikrofon til' }).first().click();
+  await expect(page.getByText('Du er gået ind i et opkald i Discord', { exact: false })).toHaveCount(0);
+});

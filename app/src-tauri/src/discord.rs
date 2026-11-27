@@ -31,6 +31,31 @@ pub fn spawn_watcher(app: AppHandle) {
         .expect("spawn discord watcher");
 }
 
+/// Whether Discord records (is in a call), seen by any of the watcher's
+/// checks: one place for what follows a change. A call that starts while
+/// "Slå min mikrofon fra" is on (pressed in an earlier call, perhaps days
+/// ago, with the window hidden) would be silent with nothing in Discord
+/// showing why: the window comes forward and says so (D32).
+#[cfg(windows)]
+fn recording_seen(app: &AppHandle, state: &crate::state::Inner, recording: bool) {
+    if state.discord_recording.swap(recording, Ordering::Relaxed) == recording {
+        return;
+    }
+    crate::audio::refresh_mic(app);
+    let muted_for_discord = state
+        .config
+        .lock()
+        .map(|c| c.mic_muted && c.route_discord)
+        .unwrap_or(false);
+    if recording && muted_for_discord {
+        log::info!("a call started while the microphone is muted: showing the window");
+        if let Ok(mut t) = state.muted_call_at.lock() {
+            *t = Some(Instant::now());
+        }
+        crate::commands::show_main(app.clone());
+    }
+}
+
 #[cfg(windows)]
 fn watch(app: &AppHandle) {
     use ct_engine::win::host::discord_executables;
@@ -49,40 +74,13 @@ fn watch(app: &AppHandle) {
     let mut guard_out = DefaultGuard::load(devices::Flow::Render);
     let mut guard_in = DefaultGuard::load(devices::Flow::Capture);
     let mut tick = 0u32;
-    // when Discord stopped recording (the call ended)
-    let mut call_ended_at: Option<Instant> = None;
     while !state.shutting_down.load(Ordering::Relaxed) {
         if !tick.is_multiple_of(4) {
             tick += 1;
             let cable = policy::cable_capture_id();
             let mic = sessions::discord_mic(&exes, cable.as_deref());
             let recording = mic != sessions::DiscordMic::Unknown;
-            if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
-                crate::audio::refresh_mic(app);
-                call_ended_at = (!recording).then(Instant::now);
-            }
-            // "Slå min mikrofon fra" is for the call it was pressed in: half
-            // a minute after the call ended it is undone, or the next call
-            // (perhaps without Claude, days later) would be silent with
-            // nothing in Discord showing why
-            if call_ended_at.is_some_and(|t| t.elapsed() >= Duration::from_secs(30)) {
-                call_ended_at = None;
-                let was_muted = state
-                    .config
-                    .lock()
-                    .map(|mut c| std::mem::replace(&mut c.mic_muted, false))
-                    .unwrap_or(false);
-                if was_muted {
-                    log::info!("the call ended: microphone mute undone");
-                    state.save_config();
-                    crate::audio::apply_switches(app);
-                    crate::tray::refresh(app);
-                    if let Ok(c) = state.config.lock().map(|c| c.clone()) {
-                        use tauri::Emitter;
-                        let _ = app.emit("config-changed", c);
-                    }
-                }
-            }
+            recording_seen(app, &state, recording);
             std::thread::sleep(Duration::from_millis(500));
             continue;
         }
@@ -245,9 +243,7 @@ fn watch(app: &AppHandle) {
             }
         }
         state.discord_uses_cable.store(uses, Ordering::Relaxed);
-        state
-            .discord_recording
-            .store(mic != sessions::DiscordMic::Unknown, Ordering::Relaxed);
+        recording_seen(app, &state, mic != sessions::DiscordMic::Unknown);
         crate::audio::refresh_mic(app);
         follow_default_microphone(&state);
         // Windows says "cable" but Discord still records elsewhere for

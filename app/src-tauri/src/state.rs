@@ -35,6 +35,8 @@ pub struct Inner {
     /// and the device's name.
     pub output_fixed: Mutex<Option<(std::time::Instant, Option<String>)>>,
     pub mic_fixed: Mutex<Option<(std::time::Instant, Option<String>)>>,
+    /// When a Discord call started while the microphone was muted (D32).
+    pub muted_call_at: Mutex<Option<std::time::Instant>>,
     /// Shortcuts that could not be registered (shown in the app).
     pub hotkey_problem: Mutex<String>,
     /// Discord plays on another device than Windows' default (where the
@@ -67,6 +69,7 @@ impl Inner {
             added_speakers: AtomicBool::new(false),
             output_fixed: Mutex::new(None),
             mic_fixed: Mutex::new(None),
+            muted_call_at: Mutex::new(None),
             hotkey_problem: Mutex::new(String::new()),
             output_mismatch: Mutex::new(None),
             bridge_probe: Mutex::new(None),
