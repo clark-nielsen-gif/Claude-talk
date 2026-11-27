@@ -117,6 +117,8 @@ jobs:
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
           $files = Get-ChildItem dist-release | ForEach-Object FullName
-          gh release view $env:TAG 2>$null
+          # (through cmd: PowerShell turns a native program's "not found" on
+          # stderr into a terminating error)
+          cmd /c "gh release view $env:TAG >nul 2>&1"
           if ($LASTEXITCODE -eq 0) { gh release upload $env:TAG $files --clobber }
           else { gh release create $env:TAG $files --title "Claude Talk $env:TAG" --notes-file RELEASE_NOTES.md }
