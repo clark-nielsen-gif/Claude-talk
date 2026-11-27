@@ -148,6 +148,7 @@ function scenarioStatus(t: number): AudioStatus {
     case 'main-speakers': return { ...ok, speakers: true, echoActive: true, micName: 'Mikrofon (Realtek High Definition Audio)' };
     case 'main-muted': return { ...ok, mic: quiet };
     case 'main-muted-call': return { ...ok, mic: quiet, mutedCall: true };
+    case 'main-muted-call-no-claude': return { ...ok, mic: quiet, mutedCall: true, claudeWindowOpen: false, claudeListening: false };
     case 'main-output-elsewhere': return { ...ok, outputMismatch: ['Headset (Jabra Evolve2)', 'Højttalere (Realtek High Definition Audio)'] };
     case 'main-restored': return { ...ok, discordUsesCable: 'no', claudeListening: false };
     case 'main-restored-still-on-cable': return { ...ok, discordUsesCable: 'yes', discordStillOnCable: true, claudeListening: false };

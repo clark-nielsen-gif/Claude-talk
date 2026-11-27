@@ -358,30 +358,38 @@ pub fn quit(app: AppHandle) {
     crate::request_quit(&app);
 }
 
-/// Shows the main window without taking focus from the program in front
-/// (a muted call, D32): no keystroke meant for a game or Discord lands here.
-#[cfg(windows)]
+/// Shows the main window in front without taking focus from the program
+/// the user is in (a muted call, D32): for a moment it can't be activated
+/// at all (no keystroke or click meant for a game or Discord lands here),
+/// it is raised above other windows without being activated, and its
+/// taskbar button flashes. Only through Tauri, so the window's own state
+/// stays right (minimise, maximise, DPI changes).
 pub fn show_main_quietly(app: &AppHandle) {
     if app.get_webview_window("main").is_none() {
         if let Err(e) = crate::create_main_window(app) {
             log::warn!("main window: {e}");
         }
     }
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.unminimize();
-        if let Ok(hwnd) = w.hwnd() {
-            use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
-            unsafe {
-                let _ = ShowWindow(
-                    windows::Win32::Foundation::HWND(hwnd.0 as _),
-                    SW_SHOWNOACTIVATE,
-                );
-            }
-        } else {
-            let _ = w.show();
-        }
+    let Some(w) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = w.set_focusable(false);
+    // a minimised window stays minimised: restoring it would activate it
+    if !w.is_minimized().unwrap_or(false) {
+        let _ = w.show();
+        // above the others, then back among them (never activated)
+        let _ = w.set_always_on_top(true);
+        let _ = w.set_always_on_top(false);
     }
+    let _ = w.request_user_attention(Some(tauri::UserAttentionType::Informational));
     crate::audio::refresh_mic(app);
+}
+
+/// Lets the window be activated again (after `show_main_quietly`).
+pub fn end_quiet_show(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_focusable(true);
+    }
 }
 
 #[tauri::command(async)]

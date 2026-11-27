@@ -67,8 +67,25 @@ export function App() {
 
   // A call started while the microphone is muted: the window came forward,
   // so it shows why – on Oversigt, whatever page was open (D32)
-  const [mutedCallSeq, setMutedCallSeq] = useState(0);
-  useEffect(() => api.onMutedCall(() => { setPage('home'); setMutedCallSeq((n) => n + 1); }), []);
+  // (from the app's event, or from the status if the event came before the
+  // page listened – the first window is built for it)
+  const [focusMutedCall, setFocusMutedCall] = useState(false);
+  const [guarded, setGuarded] = useState(false);
+  const mutedCall = useCallback(() => {
+    setPage('home');
+    setFocusMutedCall(true);
+    // for a moment, a click meant for the program behind presses nothing
+    setGuarded(true);
+    setTimeout(() => setGuarded(false), 1500);
+  }, []);
+  useEffect(() => api.onMutedCall(mutedCall), [mutedCall]);
+  const mutedCallNow = !!status?.mutedCall;
+  const [seenMutedCall, setSeenMutedCall] = useState(false);
+  useEffect(() => {
+    if (mutedCallNow && !seenMutedCall) mutedCall();
+    setSeenMutedCall(mutedCallNow);
+  }, [mutedCallNow, seenMutedCall, mutedCall]);
+  const mutedCallFocused = useCallback(() => setFocusMutedCall(false), []);
 
   // Whether the instructions reached Claude: told on every page (an
   // automatic send can happen while another page is open)
@@ -104,7 +121,7 @@ export function App() {
 
   return (
     <AppContext.Provider value={ctx}>
-      <div className="shell">
+      <div className="shell" style={guarded ? { pointerEvents: 'none' } : undefined}>
         <TitleBar />
         {onboarding ? (
           <Onboarding info={info} initial={initialStep} onDone={() => update({ onboardingDone: true })} />
@@ -118,7 +135,7 @@ export function App() {
               ))}
             </nav>
             <main className="content">
-              {page === 'home' && <Home info={info} mutedCallSeq={mutedCallSeq} onSettings={() => jump('settings', 'mic-select')} onHotkeys={() => jump('settings', 'hotkeys-title')} onEcho={() => jump('settings', 'echo-group')} />}
+              {page === 'home' && <Home info={info} focusMutedCall={focusMutedCall} onMutedCallFocused={mutedCallFocused} onSettings={() => jump('settings', 'mic-select')} onHotkeys={() => jump('settings', 'hotkeys-title')} onEcho={() => jump('settings', 'echo-group')} />}
               {page === 'instructions' && <Instructions />}
               {page === 'advanced' && <Advanced info={info} />}
               {page === 'settings' && <Settings />}

@@ -438,12 +438,14 @@ mod imp {
                 st.output_fixed = true;
                 st.fixed_output = name;
             }
+            // while the call that started muted goes on, and the user is
+            // still muted (unmuting clears it)
             st.muted_call = state
                 .muted_call_at
                 .lock()
                 .ok()
-                .and_then(|t| *t)
-                .is_some_and(|t| t.elapsed() < Duration::from_secs(120))
+                .is_some_and(|t| t.is_some())
+                && state.discord_recording.load(Ordering::Relaxed)
                 && state.config.lock().map(|c| c.mic_muted).unwrap_or(false);
             if let Some((_, name)) = recent(&state.mic_fixed) {
                 st.mic_fixed = true;

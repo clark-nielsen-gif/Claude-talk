@@ -97,3 +97,8 @@ test('a muted call brings Oversigt forward with focus on the notice’s heading,
   await page.keyboard.press('Space');
   await expect(page.locator('#muted-call-title')).toBeVisible();
 });
+
+test('a call without Claude that starts muted: the line says the microphone is off, not "open Claude"', async ({ page }) => {
+  await page.goto('/?scenario=main-muted-call-no-claude&theme=light&freeze=1');
+  await expect(page.locator('#switch-title + p')).toHaveText('Din mikrofon er slået fra, så de andre i opkaldet kan ikke høre dig. Se herunder.');
+});

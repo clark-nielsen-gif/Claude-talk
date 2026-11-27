@@ -332,3 +332,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | 1 major, 5 minor | Vinduet tog fokus (Windows' Alt-trick) og lagde det på mute-knappen, så ét tastetryk i et spil kunne slå mikrofonen til; korte huller i Discords optagelse kunne vise vinduet igen og igen; beskeden kunne komme, selv om Discord ikke optog Claude Talk-mikrofonen. |
 
 **Rettet efter runde 25:** vinduet skifter til Oversigt og lukker en åben vejledning; det vises uden at tage fokus, og fokus i vinduet lægges på beskedens overskrift (ny test); det sker én gang pr. mute og kun, når Discord optager Claude Talk-mikrofonen efter mindst 5 sekunder uden optagelse; beskeden forsvinder, når mikrofonen slås til; kontaktlinjen peger på den, og Hjælp regner den med; vinduet bygges på sin egen tråd; et lukket Claude-vindue lukker mikrofonen med det samme, hvis intet andet bruger den.
+
+## Runde 26 – 2026-11-27 – ikke ren (lyd, design og »min mor« rene)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | 2 major, 4 minor | »Nyt opkald« var altid sandt under et opkald (`is_none_or` på et tomt tidspunkt), så en mute midt i et opkald viste vinduet og brugte »én gang pr. mute« op; den rå `ShowWindow` fik Tauri til at tro, at vinduet var skjult, så Minimer/Maksimer skjulte det. |
+| Lyd | **Ren** (0 major, 2 minor) | To samtidige mikrofon-opdateringer kan anvendes i forkert rækkefølge; ét fejlslået opslag lukker mikrofonen et øjeblik. |
+| Design | **Ren** (0 major, 7 minor) | Kontaktlinjen sagde »Åbn Claude« i et opkald uden Claude med mikrofonen slået fra; fokus gik tabt ved senere besøg på Oversigt. |
+| "Min mor" | **Ren** (0 major, 4 minor) | Samme kontaktlinje; »én gang pr. mute« kunne lade et senere opkald være tavst. |
+| "Bryd det" | 1 major, 5 minor | `SW_SHOWNOACTIVATE` løfter ikke vinduet, så det kunne vises bag Discord; `unminimize` aktiverede; klik kunne falde igennem; fokus på overskriften ramte ofte forbi, og den første hændelse kunne gå tabt. |
+
+**Rettet efter runde 26:** »nyt opkald« kræver, at Discord ikke optog før, og at pausen var mindst 5 s; beskeden kommer ved hvert opkald, der starter med mikrofonen slået fra, og står, mens opkaldet varer; vinduet vises kun gennem Tauri (ikke-aktiverbart i 1,5 s, løftet øverst uden aktivering, blinkende knap på proceslinjen, et minimeret vindue forbliver minimeret); klik gør intet i 1,5 s; siden reagerer også på status (hvis hændelsen kom, før siden lyttede) og lægger fokus på overskriften, når beskeden er der; kontaktlinjen siger »Din mikrofon er slået fra, så de andre i opkaldet kan ikke høre dig« før alt om Claude (ny test). MANUAL_TEST har et punkt for D32.

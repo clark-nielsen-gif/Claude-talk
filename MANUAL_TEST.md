@@ -61,3 +61,9 @@ Tag en ven med i et Discord-opkald. Brug høretelefoner, medmindre du tester tri
     - [ ] Claude Talk, »Claude Talk – til Discord«-mikrofonen og autostart er væk. Discord bruger din almindelige mikrofon. Åbner du Claude Talk igen efter en ny installation, skal du logge ind på Claude igen.
 
 Hvis noget fejler: Hjælp → »Gem fejlrapport«, og send filen fra skrivebordet.
+
+## D32 – Opkald, der starter med mikrofonen slået fra
+1. Slå din mikrofon fra i Claude Talk, og luk vinduet med X. Gør Discord til fuld skærm (maksimeret).
+2. Gå ind i et opkald i Discord. **Forventet:** inden for et par sekunder ligger Claude Talk-vinduet øverst på Oversigt med »Din mikrofon er slået fra«, og knappen på proceslinjen blinker. Discord har stadig tastaturet: skriv i Discords chat – intet sker i Claude Talk.
+3. Tryk »Slå min mikrofon til«. **Forventet:** beskeden forsvinder, og de andre hører dig.
+4. Gentag med vinduet åbent på Indstillinger, og med vinduet minimeret (kun knappen på proceslinjen blinker).

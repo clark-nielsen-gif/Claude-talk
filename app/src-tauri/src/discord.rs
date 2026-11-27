@@ -49,49 +49,46 @@ fn recording_seen(
         .lock()
         .map(|c| c.mic_muted && c.route_discord)
         .unwrap_or(false);
-    // unmuted: the next muted call is told again; the notice goes
+    // unmuted: the notice goes
     if !muted_for_discord {
-        state.muted_call_told.store(false, Ordering::Relaxed);
         if let Ok(mut t) = state.muted_call_at.lock() {
             *t = None;
         }
     }
+    let was = state.discord_recording.swap(recording, Ordering::Relaxed);
+    if was != recording {
+        crate::audio::refresh_mic(app);
+    }
+    // A call starts: Discord records again after at least 5 s without
+    // (a shorter gap is Discord reopening its microphone, or one failed
+    // look, within the same call). The gap is timed from when recording
+    // stopped; at start nothing was recording.
     let mut since = state
         .not_recording_since
         .lock()
         .unwrap_or_else(|p| p.into_inner());
-    if !recording && since.is_none() {
+    if !recording && (was || since.is_none()) {
         *since = Some(Instant::now());
     }
-    // a new call: Discord had not recorded for 5 s (a short gap is Discord
-    // reopening its microphone, or a failed look, within the same call)
-    let new_call = recording && since.is_none_or(|t| t.elapsed() >= Duration::from_secs(5));
-    if recording {
-        *since = None;
-    }
+    let new_call = recording && !was && since.is_none_or(|t| t.elapsed() >= Duration::from_secs(5));
     drop(since);
-    if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
-        crate::audio::refresh_mic(app);
-    }
-    // once per mute, and only when the mute really silences the user in
-    // Discord (Discord records Claude Talk's microphone)
-    if new_call
-        && muted_for_discord
-        && *mic == sessions::DiscordMic::Cable
-        && !state.muted_call_told.swap(true, Ordering::Relaxed)
-    {
+    // only when the mute really silences the user in Discord (Discord
+    // records Claude Talk's microphone); told at every call that starts
+    // muted
+    if new_call && muted_for_discord && *mic == sessions::DiscordMic::Cable {
         log::info!("a call started while the microphone is muted: showing the window");
         if let Ok(mut t) = state.muted_call_at.lock() {
             *t = Some(Instant::now());
         }
         // (its own thread: the first window can take seconds to build, and
-        // the watcher keeps guarding meanwhile; shown without taking focus,
-        // so a key meant for another program presses nothing here)
+        // the watcher keeps guarding meanwhile)
         let app = app.clone();
         std::thread::spawn(move || {
             crate::commands::show_main_quietly(&app);
             use tauri::Emitter;
             let _ = app.emit("muted-call", ());
+            std::thread::sleep(Duration::from_millis(1500));
+            crate::commands::end_quiet_show(&app);
         });
     }
 }

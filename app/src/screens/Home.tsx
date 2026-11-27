@@ -19,19 +19,22 @@ function useSpeaking(rms: number): boolean {
   return speaking;
 }
 
-export function Home({ info, mutedCallSeq = 0, onSettings, onHotkeys, onEcho }: { info: AppInfo; mutedCallSeq?: number; onSettings: () => void; onHotkeys: () => void; onEcho: () => void }) {
+export function Home({ info, focusMutedCall = false, onMutedCallFocused, onSettings, onHotkeys, onEcho }: { info: AppInfo; focusMutedCall?: boolean; onMutedCallFocused?: () => void; onSettings: () => void; onHotkeys: () => void; onEcho: () => void }) {
   const t = useT();
   const { config, status, update: updateConfig, toast } = useApp();
   const [guide, setGuide] = useState<null | 'mic' | 'restart'>(null);
   // a muted call brought the window forward: no guide over the notice, and
-  // focus on its heading – never on a button a stray key would press
+  // focus on its heading once it is there – never on a button a stray key
+  // would press
+  const mutedCallShown = !!status?.mutedCall && config.micMuted;
   useEffect(() => {
-    if (!mutedCallSeq) return;
+    if (!focusMutedCall) return;
     setGuide(null);
     (document.activeElement as HTMLElement | null)?.blur?.();
-    const id = setTimeout(() => document.getElementById('muted-call-title')?.focus(), 50);
-    return () => clearTimeout(id);
-  }, [mutedCallSeq]);
+    if (!mutedCallShown) return;
+    document.getElementById('muted-call-title')?.focus();
+    onMutedCallFocused?.();
+  }, [focusMutedCall, mutedCallShown, onMutedCallFocused]);
   const [update, setUpdate] = useState<string | null>(null);
   const { installing, install: installCable } = useInstallCable();
   // "Åbn Claude" waits for the window (seconds on a first start): one press
@@ -73,7 +76,7 @@ export function Home({ info, mutedCallSeq = 0, onSettings, onHotkeys, onEcho }: 
   // amber: something to act on; the "set back" notices only point below
   const soundNotice = !!outputElsewhere || (!!s?.speakers && !s.echoActive);
   const fixedNotice = !!s?.outputFixed || (!!s?.micFixed && !!s.fixedMic);
-  const mutedCallNotice = !!s?.mutedCall && config.micMuted;
+  const mutedCallNotice = mutedCallShown;
   if (s && outputElsewhere) errors.push(<Notice key="om" kind="warn" title={t.notices.outputElsewhereTitle} body={fill(t.notices.outputElsewhereBody, { discord: outputElsewhere[0], claude: outputElsewhere[1] })} action={fill(t.notices.outputElsewhereAction, { discord: outputElsewhere[0] })} onAction={() => api.useDiscordOutput().catch(() => toast(t.errors.generic))} />);
   if (s?.speakers) errors.push(<Notice key="s" kind={s.echoActive ? 'info' : 'warn'} title={t.notices.speakersTitle} body={s.echoActive ? t.notices.speakersBody : t.notices.speakersBodyOff} action={s.echoActive ? undefined : t.notices.echoAction} onAction={s.echoActive ? undefined : () => { updateConfig({ echo: 'auto' }); onEcho(); }} />);
 
@@ -159,11 +162,14 @@ export function Home({ info, mutedCallSeq = 0, onSettings, onHotkeys, onEcho }: 
   const switchText = !on
     ? (micBroken || cableBroken ? t.main.switchOffProblem
       : cableMissing ? t.main.switchOffSeeBelow
+      : mutedCallNotice ? t.main.switchMutedCall
       : config.micMuted && config.routeDiscord && s?.discordUsesCable === 'no' ? t.main.switchOffMutedDiscordHears
       : config.micMuted && config.routeDiscord ? t.main.switchOffMuted
       : discordBroken ? t.main.switchOffSeeBelow : t.main.switchOff)
     : cableMissing ? t.main.switchOnNotReady
     : micBroken ? t.main.switchOnMicProblem
+    // (before anything about Claude: the others can't hear you right now)
+    : mutedCallNotice ? t.main.switchMutedCall
     : discordBroken ? t.main.switchOnFixDiscord
     : !s?.discordRunning ? t.main.switchOnNoDiscord
     : !external && !s.claudeWindowOpen ? t.main.switchOnClaudeClosed
