@@ -296,3 +296,15 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | **Ren** (0 major, 7 minor) | Efter Gendan sættes Discords værdi igen ved hver Discord-genstart, hvis brugeren har ryddet den i Windows; en gemt `discord_own_input` overlever afinstallation uden sletning; mikrofon-fallback i opremsningsrækkefølge kunne tage »Steam Streaming«. |
 
 **Rettet efter runde 22 (små, sikre rettelser):** en afløser venter, mens en uægte enhed kortvarigt er standard; en standard, der ikke er i listen endnu, ses på igen næste gang; en mislykket skrivning logges og fjerner den midlertidige fil; »Steam Streaming« kan aldrig blive mikrofonen; kontaktlinjen beholder hele sætningen og tilføjer »Se herunder.«; »Den er kun til Claude Talk«; »Luk Claude Talk« i anførselstegn i installeren; én README-linje efter afinstallation. De øvrige mindre fund er noteret her og ændrer ikke, hvad brugeren hører i almindelig brug.
+
+## Runde 23 – 2026-11-27 – ikke ren (kode, lyd, design og »bryd det« rene)
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | **Ren** (0 major, 3 minor) | En afløser overlever nu enhver uægte standard; et id, der aldrig kommer i listen, springes over for altid; en valgt »Steam Streaming«-mikrofon vises som »ikke tilsluttet«. |
+| Lyd | **Ren** (0 major, 5 minor) | »Når-til«-tiden offentliggøres i to trin; en udgang, der har været nede over 500 ms, spiller lidt gammel lyd (runde 14); forkert fejltekst for et ikke-mikrofon-input i Avanceret. |
+| Design | **Ren** (0 major, 4 minor) | Genvejs-advarslen får ikke »Se herunder.«; »Den« er lidt tvetydig i mikrofon-beskeden. |
+| "Min mor" | 1 major, 6 minor | »Slå min mikrofon fra« blev ved at gælde i senere opkald (også uden Claude, med vinduet skjult), indtil Claude Talk blev genstartet. |
+| "Bryd det" | **Ren** (0 major, 4 minor) | Efter Gendan blev et bevidst A→B→A-valg i Windows rettet én gang; luk inden for 2 s efter at gå ind i et opkald sprang dialogen over; hjælperen giver op for en Discord uden for `%LOCALAPPDATA%`. |
+
+**Rettet efter runde 23:** mikrofon-muten slås til igen 30 sekunder efter, at opkaldet i Discord er slut (D32, README); luk-dialogen spørger Windows direkte, om Discord optager fra kablet; et værdi, brugeren selv vælger i Windows, bliver »det senest skrevne«, så et senere genvalg af en ældre værdi også er brugerens.

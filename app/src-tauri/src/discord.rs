@@ -49,6 +49,8 @@ fn watch(app: &AppHandle) {
     let mut guard_out = DefaultGuard::load(devices::Flow::Render);
     let mut guard_in = DefaultGuard::load(devices::Flow::Capture);
     let mut tick = 0u32;
+    // when Discord stopped recording (the call ended)
+    let mut call_ended_at: Option<Instant> = None;
     while !state.shutting_down.load(Ordering::Relaxed) {
         if !tick.is_multiple_of(4) {
             tick += 1;
@@ -57,6 +59,29 @@ fn watch(app: &AppHandle) {
             let recording = mic != sessions::DiscordMic::Unknown;
             if state.discord_recording.swap(recording, Ordering::Relaxed) != recording {
                 crate::audio::refresh_mic(app);
+                call_ended_at = (!recording).then(Instant::now);
+            }
+            // "Slå min mikrofon fra" is for the call it was pressed in: half
+            // a minute after the call ended it is undone, or the next call
+            // (perhaps without Claude, days later) would be silent with
+            // nothing in Discord showing why
+            if call_ended_at.is_some_and(|t| t.elapsed() >= Duration::from_secs(30)) {
+                call_ended_at = None;
+                let was_muted = state
+                    .config
+                    .lock()
+                    .map(|mut c| std::mem::replace(&mut c.mic_muted, false))
+                    .unwrap_or(false);
+                if was_muted {
+                    log::info!("the call ended: microphone mute undone");
+                    state.save_config();
+                    crate::audio::apply_switches(app);
+                    crate::tray::refresh(app);
+                    if let Ok(c) = state.config.lock().map(|c| c.clone()) {
+                        use tauri::Emitter;
+                        let _ = app.emit("config-changed", c);
+                    }
+                }
             }
             std::thread::sleep(Duration::from_millis(500));
             continue;
@@ -98,6 +123,7 @@ fn watch(app: &AppHandle) {
                 // the user picked Discord's input in Windows: theirs
                 log::info!("Discord's input was changed in Windows; kept as the user's own");
                 policy::set_discord_own_input(Some(now.clone()));
+                policy::note_users_own_value(&now);
                 if let Ok(mut c) = state.config.lock() {
                     c.discord_own_input = Some(now);
                 }

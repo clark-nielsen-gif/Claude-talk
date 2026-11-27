@@ -231,6 +231,13 @@ fn note_given_back(path: &str) {
 /// and the user's own value, which are not kept in the given-back list).
 static LAST_WRITTEN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
+/// The user set Discord's input to `value` in Windows (taken as their own):
+/// a value Claude Talk wrote before that is no longer "the last written",
+/// so the user going back to it later is their choice too.
+pub fn note_users_own_value(value: &str) {
+    *LAST_WRITTEN.lock().unwrap_or_else(|p| p.into_inner()) = Some(value.to_string());
+}
+
 /// The value Claude Talk wrote for Discord most recently, if any (from an
 /// earlier run: the newest in the given-back list).
 pub fn last_given_back() -> Option<String> {

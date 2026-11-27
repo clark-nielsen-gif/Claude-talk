@@ -105,8 +105,17 @@ pub fn request_quit(app: &AppHandle) {
     #[cfg(windows)]
     {
         let st = app.state::<AppState>();
-        let in_call = st.discord_recording.load(Ordering::Relaxed)
-            && st.discord_uses_cable.load(Ordering::Relaxed) == discord::YES;
+        // (asked Windows directly too: the watcher's view can be up to 2 s
+        // old right after joining a call)
+        let in_call = (st.discord_recording.load(Ordering::Relaxed)
+            && st.discord_uses_cable.load(Ordering::Relaxed) == discord::YES)
+            || {
+                let _com = ct_engine::win::ComGuard::new();
+                let exes = ct_engine::win::host::discord_executables();
+                let cable = ct_engine::win::policy::cable_capture_id();
+                ct_engine::win::sessions::discord_mic(&exes, cable.as_deref())
+                    == ct_engine::win::sessions::DiscordMic::Cable
+            };
         if in_call {
             let da = st.config.lock().map(|c| c.language != "en").unwrap_or(true);
             match ask_restart_discord(da) {
