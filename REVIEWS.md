@@ -368,3 +368,17 @@ Hver runde laves af fem nye, uafhængige reviewere (ingen kender de tidligere ru
 | "Bryd det" | **Ren** (0 major, 6 minor) | Et skjult vindue vises over et spil i fuld skærm (K40); et smalt kapløb ved luk; onboarding skjuler beskeden; et omdøbt kabel (K41); selvtesten tjekker kun for et opkald ved start. |
 
 Ingen kodeændringer efter runde 28: de mindre fund er noteret her, og de, der kan mærkes, står i KNOWN_ISSUES (K40, K41).
+
+## Runde 29 – 2026-11-27 – **ren** (alle fem roller) – anden rene runde i træk
+
+Samme kode som runde 28 (25b447b; 05fc888 ændrede kun dokumenter). Nye, friske gennemgange i alle fem roller.
+
+| Rolle | Resultat | Vigtigste fund |
+|---|---|---|
+| Kode | **Ren** (0 major, 2 minor) | Når selvhøring låses igen, står de fjernede ruter stadig i indstillingerne til næste ændring; et preset gemmes som gemt, ikke som anvendt. |
+| Lyd | **Ren** (0 major, 2 minor) | Kun én Discord-variant ad gangen kan optages (stabil + PTB samtidig); tilføjede udgange tjekkes kun i brugerfladen. |
+| Design | **Ren** (0 major, 5 minor) | Kontaktlinjen peger ikke på Claude-feltets advarsel med kontakten slået fra; kortenes rækkefølge i et opkald med mute uden Claude; et komma; navigationens skærmlæser-navn. |
+| "Min mor" | **Ren** (0 major, 4 minor) | Første-luk-dialogen nævner Claude, også efter Gendan; Discord-feltet er gråt under en mute; lange README-afsnit. |
+| "Bryd det" | **Ren** (0 major, 4 minor) | Et kabel, hvis enheder dukker op meget sent, regnes aldrig for Claude Talks; Gendan under en mute i et opkald slår mikrofonen til i Discord med det samme (K12-vinduet); Discord Development kan ikke genstartes af Claude Talk; autostart-stien sammenlignes som tekst. |
+
+**To rene runder i træk (28 og 29) – gennemgangen er afsluttet.** De mindre fund er noteret her og ændrer ikke, hvad brugeren hører i almindelig brug.
